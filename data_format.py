@@ -79,8 +79,7 @@ def get_bitcoin_dominance() -> pd.DataFrame:
     """
     url = "https://api.coingecko.com/api/v3/global"
     try:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
+        response = requests.get(url)
 
         data = response.json()
         bitcoin_dominance = data["data"]["market_cap_percentage"]["btc"]
@@ -89,6 +88,9 @@ def get_bitcoin_dominance() -> pd.DataFrame:
         df = pd.DataFrame(
             {"bitcoin_dominance": [bitcoin_dominance], "time": [timestamp]}
         )
+        # Ensure timestamp is in the correct format
+        df["time"] = pd.to_datetime(df["time"])
+
         return df
 
     except requests.RequestException as e:
@@ -431,6 +433,9 @@ def get_data(tickers, start_date):
         "https://docs.google.com/spreadsheets/d/1GXaY6XE2mx5jnCu5uJFejwV95a0gYDJYHtDE0lmkGeA/edit?usp=sharing"
     )  # Fetch miner data
     bitcoin_dominance = get_bitcoin_dominance()  # Fetch Bitcoin dominance data
+    # Fix: Normalize the 'time' column directly, preserving the full DataFrame
+    bitcoin_dominance["time"] = bitcoin_dominance["time"].dt.normalize()
+
     btc_trade_volume_14d = get_btc_trade_volume_14d()  # Fetch Fear and Greed Index data
     crypto_data = get_crypto_data(tickers["crypto"])  # Crypto price data
 
@@ -465,7 +470,6 @@ def get_data(tickers, start_date):
 
     # Forward fill missing values to handle gaps in data availability
     data.ffill(inplace=True)
-
     return data
 
 
@@ -2054,7 +2058,7 @@ def style_bucket_counts_table(bucket_counts_df):
     return styled_table
 
 
-def monthly_heatmap(data, export_csv=False):
+def monthly_heatmap(data, export_csv=True):
     """
     Creates a monthly and yearly returns heatmap for Bitcoin price data.
 
