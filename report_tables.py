@@ -1851,8 +1851,6 @@ def create_summary_table_weekly_bitcoin_recap(report_data, report_date):
     """
 
     # Extract the necessary data for the specified date from report_data
-    report_date_data = report_data.loc[report_date].name
-
     price_usd = report_data.loc[report_date, "PriceUSD"]
     market_cap = report_data.loc[report_date, "CapMrktCurUSD"]
     sats_per_dollar = 100000000 / price_usd  # Calculates satoshis per dollar
@@ -1860,9 +1858,7 @@ def create_summary_table_weekly_bitcoin_recap(report_data, report_date):
     bitcoin_supply = report_data.loc[report_date, "SplyCur"]
     miner_revenue_30d = report_data.loc[report_date, "30_day_ma_RevUSD"]
     tx_volume_30d = report_data.loc[report_date, "30_day_ma_TxTfrValAdjUSD"]
-
-    btc_dominance = report_data.loc[report_date, "bitcoin_dominance"]
-    # Placeholder values for market sentiment, trend, and valuation; can be dynamically assigned in the future
+    btc_dominance = report_data["bitcoin_dominance"].iloc[-1]    # Placeholder values for market sentiment, trend, and valuation; can be dynamically assigned in the future
     fear_greed = "Neutral"  # Example sentiment
     bitcoin_valuation = "Fair Value"  # Example valuation status
 
