@@ -292,7 +292,7 @@ report_layout_weekly = generate_report_layout_weekly(
 
 ## Weekly Bitcoin Recap
 
-# Create the difficulty update table
+# Create the summary update table
 summary_table = report_tables.create_summary_table_weekly_bitcoin_recap(
     report_data, report_date
 )
@@ -381,7 +381,6 @@ custom_formatting = dp.Formatting(
 # Create CSV Files
 difficulty_update_table.to_csv("csv/difficulty_table.csv", index=False)
 styled_performance_table.data.to_csv("csv/performance_table.csv", index=False)
-styled_weekly_bitcoin_recap_performance_table.data.to_csv("csv/weekly_bitcoin_recap_performance_table.csv", index=False)
 styled_fundamentals_table.data.to_csv("csv/fundamentals_table.csv", index=False)
 styled_valuation_table.data.to_csv("csv/valuation_table.csv", index=False)
 styled_model_table.data.to_csv("csv/model_table.csv", index=False)
@@ -402,6 +401,11 @@ styled_equities_performance_table.data.to_csv(
 bucket_counts_df.to_csv("csv/5k_bucket_table.csv")
 bucket_counts_df.to_csv("csv/1k_bucket_table.csv")
 table_df.to_csv("csv/fundamentals_valuation_table.csv", index=False)
+
+# Weekly Bitcoin Recap CSV
+summary_table.to_csv("csv/weekly_bitcoin_recap_summary.csv", index=False)
+styled_weekly_bitcoin_recap_performance_table.data.to_csv("csv/weekly_bitcoin_recap_performance_table.csv", index=False)
+heatmap_data.to_csv('monthly_heatmap_data.csv')
 
 # Create Weekly Market Summary Report
 dp.save_report(
