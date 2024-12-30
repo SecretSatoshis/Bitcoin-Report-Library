@@ -405,7 +405,6 @@ table_df.to_csv("csv/fundamentals_valuation_table.csv", index=False)
 # Weekly Bitcoin Recap CSV
 summary_table.to_csv("csv/weekly_bitcoin_recap_summary.csv", index=False)
 styled_weekly_bitcoin_recap_performance_table.data.to_csv("csv/weekly_bitcoin_recap_performance_table.csv", index=False)
-heatmap_data.to_csv('monthly_heatmap_data.csv')
 
 # Create Weekly Market Summary Report
 dp.save_report(
