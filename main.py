@@ -90,7 +90,6 @@ correlation_data = correlation_data.dropna()
 correlation_results = data_format.create_btc_correlation_tables(
     report_date, tickers, correlation_data
 )
-
 ### Tabel Creation
 
 # Import Report Table Functions
@@ -262,6 +261,15 @@ table_df = table_df.data
 # Create OHLC Table
 latest_weekly_ohlc = data_format.calculate_weekly_ohlc(ohlc_data)
 
+# Create MTD Return Comparison Table
+mtd_return_comp = data_format.create_monthly_returns_table(report_data)
+
+# Create YTD Return Comparison Table
+ytd_return_comp = data_format.create_yearly_returns_table(report_data)
+
+# Create Relative Valuation Table
+rv_table = data_format.create_asset_valuation_table(data)
+
 # Creat Heat Maps
 plotly_monthly_heatmap_chart = data_format.monthly_heatmap(data)
 plotly_weekly_heatmap_chart = data_format.weekly_heatmap(data)
@@ -353,19 +361,21 @@ report_layout_weekly_bitcoin_recap = generate_report_layout_weekl_bitcoin_recap(
 )
 
 # Create the performance table
-weekly_bitcoin_recap_performance_table = report_tables.create_full_weekly_bitcoin_recap_performance(
-    report_data,
-    difficulty_period_changes,
-    report_date,
-    weekly_high_low,
-    cagr_results,
-    sharpe_results,
-    correlation_results,
+weekly_bitcoin_recap_performance_table = (
+    report_tables.create_full_weekly_bitcoin_recap_performance(
+        report_data,
+        difficulty_period_changes,
+        report_date,
+        weekly_high_low,
+        cagr_results,
+        sharpe_results,
+        correlation_results,
+    )
 )
 
 # Create the styled performance table
-styled_weekly_bitcoin_recap_performance_table = report_tables.style_performance_table_weekly(
-    weekly_bitcoin_recap_performance_table
+styled_weekly_bitcoin_recap_performance_table = (
+    report_tables.style_performance_table_weekly(weekly_bitcoin_recap_performance_table)
 )
 
 # DataPane Styling
@@ -404,7 +414,16 @@ table_df.to_csv("csv/fundamentals_valuation_table.csv", index=False)
 
 # Weekly Bitcoin Recap CSV
 summary_table.to_csv("csv/weekly_bitcoin_recap_summary.csv", index=False)
-styled_weekly_bitcoin_recap_performance_table.data.to_csv("csv/weekly_bitcoin_recap_performance_table.csv", index=False)
+styled_weekly_bitcoin_recap_performance_table.data.to_csv(
+    "csv/weekly_bitcoin_recap_performance_table.csv", index=False
+)
+
+# Indexed Return Comparison Tables
+mtd_return_comp.to_csv("csv/mtd_return_comparison.csv", index=False)
+ytd_return_comp.to_csv("csv/ytd_return_comparison.csv", index=False)
+
+# Relative Value Comparison Table
+rv_table.to_csv("csv/relative_value_comparison.csv", index=False)
 
 # Create Weekly Market Summary Report
 dp.save_report(
