@@ -2913,3 +2913,266 @@ def create_btc_correlation_tables(report_date, tickers, correlations_data):
     }
 
     return btc_correlations
+
+
+def create_monthly_returns_table(selected_metrics):
+    today = datetime.today().date()
+    current_year = today.year
+    current_month = today.month
+
+    # Ensure the data is filtered to entries from January 1, 2014, onwards
+    selected_metrics = selected_metrics.loc[selected_metrics.index >= "2014-01-01"]
+
+    monthly_returns = {}
+
+    # Calculate monthly returns for each year
+    for year in selected_metrics.index.year.unique():
+        monthly_data = selected_metrics[
+            (selected_metrics.index.year == year)
+            & (selected_metrics.index.month == current_month)
+        ]
+        if not monthly_data.empty:
+            start_price = monthly_data["PriceUSD"].iloc[0]
+            end_price = monthly_data["PriceUSD"].iloc[-1]
+            return_pct = (end_price / start_price - 1) * 100
+
+            monthly_returns[(year, current_month)] = (
+                start_price,
+                end_price,
+                return_pct,
+            )
+
+    # Create DataFrame from calculated returns
+    df = pd.DataFrame.from_dict(
+        monthly_returns,
+        orient="index",
+        columns=["Start Price ($)", "End Price ($)", "Return (%)"],
+    )
+    df.index = pd.MultiIndex.from_tuples(df.index, names=["Year", "Month"])
+
+    # Calculate Indexed Price to Current Year
+    for (year, month), row in df.iterrows():
+        if (current_year, month) in df.index:
+            current_start = df.loc[(current_year, month), "Start Price ($)"]
+            df.loc[(year, month), "End of Period Indexed to Current Price ($)"] = (
+                row["End Price ($)"] / row["Start Price ($)"] * current_start
+            )
+
+    # Calculate Median and Average
+    median_return = df["Return (%)"].median()
+    avg_return = df["Return (%)"].mean()
+
+    if (current_year, current_month) in df.index:
+        current_start = df.loc[(current_year, current_month), "Start Price ($)"]
+        median_indexed_price = current_start * (1 + median_return / 100)
+        avg_indexed_price = current_start * (1 + avg_return / 100)
+
+        median_row = pd.DataFrame(
+            {
+                "Year": ["Median"],
+                "Month": [current_month],
+                "Start Price ($)": [None],
+                "End Price ($)": [None],
+                "Return (%)": [None],
+                "End of Period Indexed to Current Price ($)": [median_indexed_price],
+            }
+        )
+
+        avg_row = pd.DataFrame(
+            {
+                "Year": ["Average"],
+                "Month": [current_month],
+                "Start Price ($)": [None],
+                "End Price ($)": [None],
+                "Return (%)": [None],
+                "End of Period Indexed to Current Price ($)": [avg_indexed_price],
+            }
+        )
+
+        df = pd.concat([df.reset_index(), median_row, avg_row], ignore_index=True)
+
+    # Round all numerical values to 2 decimal places
+    df = df.round(2)
+
+    # Separate and retain median/average labels
+    non_numeric = df[df["Year"].isin(["Median", "Average"])]
+    numeric_df = df[~df["Year"].isin(["Median", "Average"])]
+
+    # Sort numeric values (current year at top)
+    numeric_df["Year"] = pd.to_numeric(numeric_df["Year"])
+    numeric_df = numeric_df.sort_values(by=["Year", "Month"], ascending=[False, False])
+
+    # Concatenate sorted numeric data with labeled rows
+    df = pd.concat([numeric_df, non_numeric]).reset_index(drop=True)
+
+    return df
+
+
+def create_yearly_returns_table(selected_metrics):
+    today = datetime.today().date()
+    current_year = today.year
+
+    # Ensure the data is filtered to entries from January 1, 2014, onwards
+    selected_metrics = selected_metrics.loc[selected_metrics.index >= "2014-01-01"]
+
+    yearly_returns = {}
+
+    # Calculate yearly returns
+    for year in selected_metrics.index.year.unique():
+        yearly_data = selected_metrics[selected_metrics.index.year == year]
+        if not yearly_data.empty:
+            start_price = yearly_data["PriceUSD"].iloc[0]
+            end_price = yearly_data["PriceUSD"].iloc[-1]
+            return_pct = (end_price / start_price - 1) * 100
+
+            yearly_returns[year] = (start_price, end_price, return_pct)
+
+    # Create DataFrame from calculated returns
+    df = pd.DataFrame.from_dict(
+        yearly_returns,
+        orient="index",
+        columns=["Start Price ($)", "End Price ($)", "Return (%)"],
+    )
+    df.index.name = "Year"
+
+    # Calculate Indexed Price to Current Year
+    for year, row in df.iterrows():
+        if current_year in df.index:
+            current_start = df.loc[current_year, "Start Price ($)"]
+            df.loc[year, "End of Period Indexed to Current Price ($)"] = (
+                row["End Price ($)"] / row["Start Price ($)"] * current_start
+            )
+
+    # Calculate Median and Average
+    median_return = df["Return (%)"].median()
+    avg_return = df["Return (%)"].mean()
+
+    if current_year in df.index:
+        current_start = df.loc[current_year, "Start Price ($)"]
+        median_indexed_price = current_start * (1 + median_return / 100)
+        avg_indexed_price = current_start * (1 + avg_return / 100)
+
+        median_row = pd.DataFrame(
+            {
+                "Year": ["Median"],
+                "Start Price ($)": [None],
+                "End Price ($)": [None],
+                "Return (%)": [None],
+                "End of Period Indexed to Current Price ($)": [median_indexed_price],
+            }
+        )
+
+        avg_row = pd.DataFrame(
+            {
+                "Year": ["Average"],
+                "Start Price ($)": [None],
+                "End Price ($)": [None],
+                "Return (%)": [None],
+                "End of Period Indexed to Current Price ($)": [avg_indexed_price],
+            }
+        )
+
+        df = pd.concat([df.reset_index(), median_row, avg_row], ignore_index=True)
+
+    # Round all numerical values to 2 decimal places
+    df = df.round(2)
+
+    # Separate and retain median/average labels
+    non_numeric = df[df["Year"].isin(["Median", "Average"])]
+    numeric_df = df[~df["Year"].isin(["Median", "Average"])]
+
+    # Sort numeric values
+    numeric_df["Year"] = pd.to_numeric(numeric_df["Year"])
+    numeric_df = numeric_df.sort_values(by="Year", ascending=False)
+
+    # Concatenate sorted numeric data with labeled rows
+    df = pd.concat([numeric_df, non_numeric]).reset_index(drop=True)
+
+    return df
+
+
+def create_asset_valuation_table(report_data):
+    """
+    Generates a valuation table for various assets compared to Bitcoin.
+
+    Parameters:
+    - report_data (pd.DataFrame): DataFrame containing asset market cap and BTC price data.
+
+    Returns:
+    - pd.DataFrame: DataFrame summarizing asset valuations and Bitcoin price targets.
+    """
+    assets = [
+        {"name": "Bitcoin", "data": "PriceUSD", "marketcap": "CapMrktCurUSD"},
+        {
+            "name": "Total Silver Market",
+            "data": "silver_marketcap_btc_price",
+            "marketcap": "silver_marketcap_billion_usd",
+        },
+        {
+            "name": "UK M0",
+            "data": "United_Kingdom_btc_price",
+            "marketcap": "United_Kingdom_cap",
+        },
+        {"name": "Meta", "data": "META_mc_btc_price", "marketcap": "META_MarketCap"},
+        {"name": "Amazon", "data": "AMZN_mc_btc_price", "marketcap": "AMZN_MarketCap"},
+        {
+            "name": "Gold Country Holdings",
+            "data": "gold_official_country_holdings_marketcap_btc_price",
+            "marketcap": "gold_marketcap_official_country_holdings_billion_usd",
+        },
+        {"name": "NVIDIA", "data": "NVDA_mc_btc_price", "marketcap": "NVDA_MarketCap"},
+        {
+            "name": "Gold Private Investment",
+            "data": "gold_private_investment_marketcap_btc_price",
+            "marketcap": "gold_marketcap_private_investment_billion_usd",
+        },
+        {"name": "Apple", "data": "AAPL_mc_btc_price", "marketcap": "AAPL_MarketCap"},
+        {
+            "name": "US M0",
+            "data": "United_States_btc_price",
+            "marketcap": "United_States_cap",
+        },
+        {
+            "name": "Total Gold Market",
+            "data": "gold_marketcap_btc_price",
+            "marketcap": "gold_marketcap_billion_usd",
+        },
+    ]
+
+    # Get the latest values (last row)
+    latest_data = report_data.iloc[-1]
+    bitcoin_price = latest_data.get("PriceUSD", float("nan"))
+
+    valuation_data = []
+    for asset in assets:
+        marketcap_btc_price = latest_data.get(asset["data"], float("nan"))
+        marketcap_value = latest_data.get(asset["marketcap"], float("nan"))
+
+        # Avoid division by zero or invalid values
+        if (
+            pd.notna(bitcoin_price)
+            and pd.notna(marketcap_btc_price)
+            and bitcoin_price > 0
+        ):
+            percent_move = ((marketcap_btc_price - bitcoin_price) / bitcoin_price) * 100
+        else:
+            percent_move = "N/A"
+
+        valuation_data.append(
+            {
+                "Asset": asset["name"],
+                "Market Cap (USD)": f"${marketcap_value:,.0f}"
+                if pd.notna(marketcap_value)
+                else "N/A",
+                "Market Cap BTC Price": f"${marketcap_btc_price:,.0f}"
+                if pd.notna(marketcap_btc_price)
+                else "N/A",
+                "BTC % Move to Marketcap BTC Price": f"{percent_move:.0f}%"
+                if percent_move != "N/A"
+                else "N/A",
+            }
+        )
+
+    valuation_df = pd.DataFrame(valuation_data)
+
+    return valuation_df
