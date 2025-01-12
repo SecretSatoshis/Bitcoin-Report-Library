@@ -2061,20 +2061,19 @@ def style_bucket_counts_table(bucket_counts_df):
 def monthly_heatmap(data, export_csv=True):
     """
     Creates a monthly and yearly returns heatmap for Bitcoin price data.
-
-    Parameters:
-    data (pd.DataFrame): DataFrame containing the Bitcoin price data with a DateTime index.
-    export_csv (bool): Whether to export the heatmap data to a CSV file.
-
-    Returns:
-    dp.Plot: A Datapane Plot object with the returns heatmap.
     """
     # Filter data to start from January 2011
     data = data[data.index >= pd.to_datetime("2011-01-01")]
 
-    # Calculate monthly and yearly returns
+    # Calculate monthly returns
     monthly_returns = data["PriceUSD"].resample("M").last().pct_change()
-    yearly_returns = data["PriceUSD"].resample("A").last().pct_change()
+
+    # Calculate YTD returns based on the first price of the year
+    start_of_year = data["PriceUSD"].groupby(data.index.year).transform("first")
+    ytd_returns = (data["PriceUSD"] / start_of_year) - 1
+
+    # Aggregate YTD returns by year
+    yearly_returns = ytd_returns.groupby(data.index.year).last()
 
     # Prepare the data for the heatmap: years as rows, months as columns
     heatmap_data = (
@@ -2085,28 +2084,44 @@ def monthly_heatmap(data, export_csv=True):
         .unstack()
     )
 
-    # Add the yearly returns as a separate column
-    heatmap_data[13] = yearly_returns.groupby(yearly_returns.index.year).mean()
+    # Add the YTD returns as a separate column
+    heatmap_data[13] = yearly_returns
 
     # Get the last date in the data to check if the current month is complete
     last_date = data.index[-1]
     current_year, current_month = last_date.year, last_date.month
 
-    # If the current month is incomplete, include it in the plot but exclude it from the average calculation
-    if last_date.day != (last_date + MonthEnd(0)).day:
-        # Show current month in the heatmap but exclude it from the "Average" calculation
-        heatmap_data_excluded = heatmap_data.copy()
-        heatmap_data_excluded.loc[current_year, current_month] = (
-            pd.NA
-        )  # Mark as NA in excluded version
+    # Check if the current month is incomplete
+    is_incomplete_month = last_date.day != (last_date + MonthEnd(0)).day
 
-        # Calculate average row, ignoring the NA for incomplete current month
-        heatmap_data.loc["Average"] = heatmap_data_excluded.apply(
-            lambda col: col[~col.isna()].mean(), axis=0
-        )
-    else:
-        # If the month is complete, simply calculate the average as usual
-        heatmap_data.loc["Average"] = heatmap_data.mean(axis=0)
+    if is_incomplete_month:
+        # Get the first price of the current month
+        start_of_month = data["PriceUSD"].loc[last_date.strftime("%Y-%m")].iloc[0]
+        # Calculate the MTD return for the incomplete month
+        current_month_return = (data["PriceUSD"].iloc[-1] / start_of_month) - 1
+        # Add the MTD return to the heatmap for display
+        if current_year in heatmap_data.index:
+            heatmap_data.loc[current_year, current_month] = current_month_return
+
+    # Create a copy of the data excluding the incomplete month for additional calculations
+    heatmap_data_excluded = heatmap_data.copy()
+    if is_incomplete_month and current_year in heatmap_data.index:
+        heatmap_data_excluded.loc[current_year, current_month] = pd.NA
+
+    # Add the "4-Year Average" row (last 4 years for each month)
+    heatmap_data.loc["4-Year Average"] = heatmap_data_excluded.iloc[-4:].apply(
+        lambda col: col[~col.isna()].mean(), axis=0
+    )
+
+    # Add the "Median" row, excluding the incomplete month
+    heatmap_data.loc["Median"] = heatmap_data_excluded.apply(
+        lambda col: col[~col.isna()].median(), axis=0
+    )
+
+    # Add the "Average" row, excluding the incomplete month
+    heatmap_data.loc["Average"] = heatmap_data_excluded.apply(
+        lambda col: col[~col.isna()].mean(), axis=0
+    )
 
     # Rename columns to month names
     month_names = [calendar.month_abbr[i] for i in range(1, 13)] + ["Yearly"]
@@ -2124,7 +2139,7 @@ def monthly_heatmap(data, export_csv=True):
     # Define a custom colorscale: shades of red (-1 to 0) to white (0) to green (0 to 3)
     custom_colorscale = [
         [0.0, "red"],  # -1 mapped to red
-        [0.5, "white"],  # 0 mapped to white (25% of the way through -1 to 3)
+        [0.5, "white"],  # 0 mapped to white
         [1.0, "green"],  # 3 mapped to green
     ]
 
@@ -2145,9 +2160,9 @@ def monthly_heatmap(data, export_csv=True):
 
     # Update the layout of the figure
     fig.update_layout(
-        title="Bitcoin Monthly & Yearly Returns Heatmap",
-        xaxis_nticks=13,  # Limit number of ticks to 12 months + yearly
-        yaxis_nticks=25,  # Adjust based on the number of years in data
+        title="Monthly Bitcoin Price Return Heatmap",
+        xaxis_nticks=13,
+        yaxis_nticks=25,
         autosize=False,
         width=1200,
         height=600,
