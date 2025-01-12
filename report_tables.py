@@ -355,17 +355,17 @@ def style_performance_table_weekly(performance_table):
     # Define formatting rules for different columns in the performance table
     format_dict = {
         "Asset": "{}",
-        "Price": "{:,.2f}",
+        "Price": "${:,.0f}",
         "7 Day Return": "{:.2%}",
-        "Difficulty Period Return": "{:.2f}%",
-        "MTD Return": "{:.2f}%",
+        "Difficulty Period Return": "{:.2}%",
+        "MTD Return": "{:.2}%",
         "90 Day Return": "{:.2%}",
-        "YTD Return": "{:.2f}%",
+        "YTD Return": "{:.2}%",
         "4 Year CAGR": "{:.2f}%",
         "4 Year Sharpe": "{:,.2f}",
         "90 Day BTC Correlation": "{:,.2f}",
-        "52 Week Low": "{:,.2f}",
-        "52 Week High": "{:,.2f}",
+        "52 Week Low": "${:,.0f}",
+        "52 Week High": "${:,.0f}",
     }
 
     # Define color maps for diverging and background color gradients
@@ -1631,10 +1631,10 @@ def style_performance_table(performance_table):
     # Define formatting rules for each column in the performance table
     format_dict = {
         "Asset": "{}",
-        "Price": "{:,.2f}",
+        "Price": "${:,.2f}",
         "Week To Date Return": "{:.2%}",
-        "MTD": "{:.2f}%",
-        "YTD": "{:.2f}%",
+        "MTD": "{:.2}%",
+        "YTD": "{:.2}%",
         "90 Day BTC Correlation": "{:,.2f}",
     }
 
@@ -2323,12 +2323,12 @@ def style_performance_table_weekly_bitcoin_recap(performance_table):
     # Define formatting rules for each column in the performance table
     format_dict = {
         "Asset": "{}",
-        "Price": "{:,.2f}",
+        "Price": "${:,.0f}",
         "7 Day Return": "{:.2%}",
         "MTD Return": "{:.2f}%",
         "YTD Return": "{:.2f}%",
-        "90 Day Return": "{:.2f}%",
-        "90 Day BTC Correlation": "{:,.2f}",
+        "90 Day Return": "{:.2%}",
+        "90 Day BTC Correlation": "{:.2f}",
     }
 
     # Helper function to apply conditional text color based on the value's sign
@@ -2367,6 +2367,7 @@ def style_performance_table_weekly_bitcoin_recap(performance_table):
     )
 
     return styled_table
+
 
 def create_full_weekly_bitcoin_recap_performance(
     report_data,
