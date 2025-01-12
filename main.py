@@ -419,11 +419,11 @@ styled_weekly_bitcoin_recap_performance_table.data.to_csv(
 )
 
 # Indexed Return Comparison Tables
-mtd_return_comp.to_csv("csv/mtd_return_comparison.csv", index=False)
-ytd_return_comp.to_csv("csv/ytd_return_comparison.csv", index=False)
+mtd_return_comp.to_csv("csv/weekly_bitcoin_recap_mtd_return_comparison.csv", index=False)
+ytd_return_comp.to_csv("csv/weekly_bitcoin_recap_ytd_return_comparison.csv", index=False)
 
 # Relative Value Comparison Table
-rv_table.to_csv("csv/relative_value_comparison.csv", index=False)
+rv_table.to_csv("csv/weekly_bitcoin_recap_relative_value_comparison.csv", index=False)
 
 # Create Weekly Market Summary Report
 dp.save_report(
@@ -445,3 +445,5 @@ dp.save_report(
     path="html/Weekly_Bitcoin_Recap.html",
     formatting=custom_formatting,
 )
+
+
