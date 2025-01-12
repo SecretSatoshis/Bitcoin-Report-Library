@@ -43,23 +43,23 @@ def generate_report_layout_weekl_bitcoin_recap(
         columns=1,
     )
 
-    # Performance Report Summary Section Components
-    performance_header = dp.Text("# Performance Tables")
-    performance_description = dp.Text("""
-    A comparative view of Bitcoin's performance against key Equity Indexes, Sector ETFs, Macro Assets, and Bitcoin Stocks & ETFs.
-      """)
-
-    # Monthly Heatmap Summary Header
-    header_heatmap_section = dp.Text("### Monthly Bitcoin Price Performacne Heatmap")
-
     # Weekly OHLC Bitcoin Price Chart Summary Header
     header_weekly_price_section = dp.Text("### Bitcoin Weekly OHLC Price Chart")
 
+    # Performance Report Summary Section Components
+    performance_header = dp.Text("# Bitcoin Price Return Relative Performance Tables")
+    performance_description = dp.Text("""
+    A comparative view of Bitcoin's price performance against key Equity Indexes, Sector ETFs, Macro Assets, and Bitcoin Stocks & ETFs.
+      """)
+
+    # Monthly Heatmap Summary Header
+    header_heatmap_section = dp.Text("### Monthly Bitcoin Price Return Heatmap")
+
     # Define individual headers for each table
-    header_equity = dp.Text("### Equity Index Performance")
-    header_sector = dp.Text("### Sector ETF Performance")
+    header_equity = dp.Text("### Stock Market Index Performance")
+    header_sector = dp.Text("### Stock Market Sector ETF Performance")
     header_macro = dp.Text("### Macro Asset Performance")
-    header_bitcoin = dp.Text("### Bitcoin Stock & ETF Performance")
+    header_bitcoin = dp.Text("### Bitcoin Industry Stock & ETF Performance")
 
     # Create individual groups for each table with its corresponding header
     equity_performance_block = dp.Group(
@@ -129,7 +129,7 @@ def generate_report_layout_weekl_bitcoin_recap(
 
     # OHLC Chart Overview
     ohlc_chart_overview = dp.Text("""
-  ## Open-High-Low-Close (OHLC) Chart
+  ## Weekly Open-High-Low-Close (OHLC) Price Chart
   **Purpose:** Presents an OHLC chart of Bitcoin prices, offering a detailed view of its price movements within specific time frames.
   
   **Insights:** Essential for technical analysis, providing insights into market sentiment and potential price directions. Helps in identifying patterns like bullish or bearish trends, breakouts, or reversals.
@@ -140,7 +140,7 @@ def generate_report_layout_weekl_bitcoin_recap(
 
     # Equity Index Performance Table
     equity_index_performance_overview = dp.Text("""
-    ## Equity Index Performance Table
+    ## Stock Market Index Performance Table
     **Purpose:** Provides a comparative view of Bitcoin's performance against major stock indices like Nasdaq, and S&P500.
 
     **Insights:** By comparing Bitcoin with major indices, this table offers an understanding of how Bitcoin performs in relation to traditional financial markets.
@@ -148,7 +148,7 @@ def generate_report_layout_weekl_bitcoin_recap(
 
     # Sector ETF Performance Table
     sector_etf_performance_overview = dp.Text("""
-    ## Sector ETF Performance Table
+    ## Stock Market Sector ETF Performance Table
     **Purpose:** Analyzes the performance of Bitcoin alongside sector-specific ETFs such as technology, financials, energy, and real estate.
 
     **Insights:** This table highlights sector trends and correlations, helping to understand how different industries are performing relative to Bitcoin.
@@ -164,7 +164,7 @@ def generate_report_layout_weekl_bitcoin_recap(
 
     # Bitcoin-Related Stocks & ETFs Performance Table
     bitcoin_related_equities_performance_overview = dp.Text("""
-    ## Bitcoin-Related Stocks & ETFs Performance Table
+    ## Bitcoin Industry Stock & ETF Performance Table
     **Purpose:** Focuses on equities and ETFs directly related to Bitcoin and the cryptocurrency market, such as MicroStrategy (MSTR), Coinbase (COIN), and Bitcoin Miners ETF (WGMI).
 
     **Insights:** This table illustrates the performance of Bitcoin-related stocks, offering insights into investor sentiment and sector-specific movements.
@@ -180,7 +180,7 @@ def generate_report_layout_weekl_bitcoin_recap(
 
     # Monthly Heatmap of Returns
     monthly_heatmap_text = """
-  ## Monthly Heatmap of Returns
+  ## Monthly Bitcoin Return Heatmap
   **Purpose:** Presents monthly and yearly Bitcoin returns in a heatmap format, providing a quick visual overview of performance over time.
   
   **Insights:** Allows for easy identification of periods with high returns or significant losses. Can be used to spot seasonal patterns or annual trends in Bitcoin's market performance.
