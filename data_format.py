@@ -2063,7 +2063,7 @@ def monthly_heatmap(data, export_csv=True):
     Creates a monthly and yearly returns heatmap for Bitcoin price data.
     """
     # Filter data to start from January 2011
-    data = data[data.index >= pd.to_datetime("2011-01-01")]
+    data = data[data.index >= pd.to_datetime("2012-01-01")]
 
     # Calculate monthly returns
     monthly_returns = data["PriceUSD"].resample("M").last().pct_change()
@@ -3008,7 +3008,7 @@ def create_monthly_returns_table(selected_metrics):
                 "Month": [current_month],
                 "Start Price ($)": [None],
                 "End Price ($)": [None],
-                "Return (%)": [None],
+                "Return (%)": [median_return],
                 "End of Period Indexed to Current Price ($)": [median_indexed_price],
                 "Report Date Return (%)": [df["Report Date Return (%)"].median()],
             }
@@ -3020,7 +3020,7 @@ def create_monthly_returns_table(selected_metrics):
                 "Month": [current_month],
                 "Start Price ($)": [None],
                 "End Price ($)": [None],
-                "Return (%)": [None],
+                "Return (%)": [avg_return],
                 "End of Period Indexed to Current Price ($)": [avg_indexed_price],
                 "Report Date Return (%)": [df["Report Date Return (%)"].mean()],
             }
@@ -3051,7 +3051,7 @@ def create_yearly_returns_table(selected_metrics):
     current_day_of_year = today.timetuple().tm_yday
 
     # Filter data to entries from January 1, 2014, onwards
-    selected_metrics = selected_metrics.loc[selected_metrics.index >= "2014-01-01"]
+    selected_metrics = selected_metrics.loc[selected_metrics.index >= "2011-01-01"]
 
     yearly_returns = {}
     report_date_returns = {}
@@ -3104,26 +3104,30 @@ def create_yearly_returns_table(selected_metrics):
     # Calculate Median and Average Indexed Prices
     if current_year in df.index:
         current_start = df.loc[current_year, "Start Price ($)"]
+
+        # Project end-of-period prices using median and average returns
         median_indexed_price = current_start * (1 + median_return / 100)
         avg_indexed_price = current_start * (1 + avg_return / 100)
 
+        # Add Median row
         median_row = pd.DataFrame(
             {
                 "Year": ["Median"],
                 "Start Price ($)": [None],
                 "End Price ($)": [None],
-                "Return (%)": [None],
+                "Return (%)": [median_return],
                 "Report Date Return (%)": [df["Report Date Return (%)"].median()],
                 "End of Period Indexed to Current Price ($)": [median_indexed_price],
             }
         )
 
+        # Add Average row
         avg_row = pd.DataFrame(
             {
                 "Year": ["Average"],
                 "Start Price ($)": [None],
                 "End Price ($)": [None],
-                "Return (%)": [None],
+                "Return (%)": [avg_return],
                 "Report Date Return (%)": [df["Report Date Return (%)"].mean()],
                 "End of Period Indexed to Current Price ($)": [avg_indexed_price],
             }
@@ -3144,10 +3148,6 @@ def create_yearly_returns_table(selected_metrics):
 
     # Concatenate sorted numeric data with labeled rows
     df = pd.concat([numeric_df, non_numeric]).reset_index(drop=True)
-
-    # Drop the 'Month' column to match the format
-    if "Month" in df.columns:
-        df.drop(columns=["Month"], inplace=True)
 
     return df
 
