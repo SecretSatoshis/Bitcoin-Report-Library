@@ -1,13 +1,13 @@
 yahoo_fin
-pandas==1.5.3.0
+pandas==1.5.3
 datapane
 pyarrow==10.0.0
 seaborn
 matplotlib
 Pillow
 scipy
-plotly
+plotly==5.24.1
 kaleido
 mplfinance
 yfinance
-numpy
+numpy==1.24.3
