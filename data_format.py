@@ -495,7 +495,7 @@ def calculate_custom_on_chain_metrics(data):
     # Calculate the Net Unrealized Profit/Loss (NUPL)
     data["nupl"] = (data["CapMrktCurUSD"] - data["CapRealUSD"]) / data["CapMrktCurUSD"]
 
-    # Calculate NVT price based on adjusted NVT ratio, with a rolling median to smooth data
+    # Calculate a price based on adjusted NVT ratio, with a rolling median to smooth data
     data["nvt_price"] = (
         data["NVTAdj"].rolling(window=365 * 2).median() * data["TxTfrValAdjUSD"]
     ) / data["SplyCur"]
@@ -1207,21 +1207,27 @@ def calculate_trading_week_change(data):
     # Calculate the trading week change for each date in the DataFrame
     for date, monday_of_week in zip(data.index, start_of_week):
         row = {}
-        if monday_of_week in data.index:  # Check if Monday's data is available
+
+        # Get Monday's data safely
+        monday_data = data.loc[monday_of_week] if monday_of_week in data.index else None
+
+        if monday_data is not None:  # Check if Monday's data is available
             for col in numeric_cols:
-                monday_value = data.at[monday_of_week, col]
-                current_value = data.at[date, col]
-                # Ensure monday_value is not NaN or zero before dividing
+                monday_value = np.nan_to_num(monday_data.get(col, np.nan), nan=np.nan)
+                current_value = np.nan_to_num(data.at[date, col], nan=np.nan)
+
+                # Ensure values are not NaN or inf before performing calculations
                 if (
-                    pd.notnull(monday_value)
-                    and pd.notnull(current_value)
+                    np.isfinite(monday_value)
+                    and np.isfinite(current_value)
                     and monday_value != 0
                 ):
                     row[f"{col}_trading_week_change"] = (
-                        current_value / monday_value
-                    ) - 1
+                        current_value - monday_value
+                    ) / monday_value
                 else:
                     row[f"{col}_trading_week_change"] = np.nan
+
         trading_week_change_data.append(row)
 
     # Construct the DataFrame after collecting all rows
@@ -2731,6 +2737,7 @@ def create_ohlc_chart(ohlc_data, report_data, chart_template):
     - fig (plotly.graph_objs.Figure): Plotly figure object containing the candlestick chart with overlays and event annotations.
     """
     # Ensure the index is timezone-naive for compatibility
+
     ohlc_data.index = ohlc_data.index.tz_localize(None)
     report_data.index = report_data.index.tz_localize(None)
 
@@ -2853,7 +2860,6 @@ def create_ohlc_chart(ohlc_data, report_data, chart_template):
         font=dict(size=50, color="rgba(128, 128, 128, 0.5)"),
         align="center",
     )
-    print(fig)
     return fig
 
 
@@ -2937,7 +2943,9 @@ def create_monthly_returns_table(selected_metrics):
     current_day = today.day
 
     # Ensure the data is filtered to entries from January 1, 2014, onwards
-    selected_metrics = selected_metrics.loc[selected_metrics.index >= "2014-01-01"]
+    selected_metrics = selected_metrics.loc[
+        selected_metrics.index >= "2014-01-01"
+    ].copy()
 
     monthly_returns = {}
     report_date_returns = {}
@@ -2947,7 +2955,8 @@ def create_monthly_returns_table(selected_metrics):
         monthly_data = selected_metrics[
             (selected_metrics.index.year == year)
             & (selected_metrics.index.month == current_month)
-        ]
+        ].copy()  # Fix: Ensure we're working with a copy
+
         if not monthly_data.empty:
             start_price = monthly_data["PriceUSD"].iloc[0]
             end_price = monthly_data["PriceUSD"].iloc[-1]
@@ -2963,7 +2972,7 @@ def create_monthly_returns_table(selected_metrics):
             (selected_metrics.index.year == year)
             & (selected_metrics.index.month == current_month)
             & (selected_metrics.index.day == current_day)
-        ]
+        ].copy()  # Fix: Ensure we're working with a copy
 
         if not report_date_data.empty:
             report_date_price = report_date_data["PriceUSD"].iloc[-1]
@@ -2972,7 +2981,7 @@ def create_monthly_returns_table(selected_metrics):
         else:
             report_date_returns[(year, current_month)] = None
 
-    # Create DataFrame from calculated returns
+    # Convert dictionary to DataFrame
     df = pd.DataFrame.from_dict(
         monthly_returns,
         orient="index",
@@ -2981,8 +2990,10 @@ def create_monthly_returns_table(selected_metrics):
     df.index = pd.MultiIndex.from_tuples(df.index, names=["Year", "Month"])
 
     # Add report date return column
-    report_date_series = pd.Series(report_date_returns)
-    df["Report Date Return (%)"] = report_date_series
+    df["Report Date Return (%)"] = pd.Series(report_date_returns)
+
+    # Ensure modifications are applied correctly
+    df = df.copy()
 
     # Calculate Indexed Price to Current Year
     for (year, month), row in df.iterrows():
@@ -2992,55 +3003,14 @@ def create_monthly_returns_table(selected_metrics):
                 row["End Price ($)"] / row["Start Price ($)"] * current_start
             )
 
-    # Calculate Median and Average Returns
-    median_return = df["Return (%)"].median()
-    avg_return = df["Return (%)"].mean()
-
-    # Calculate Median and Average Indexed Prices
-    if (current_year, current_month) in df.index:
-        current_start = df.loc[(current_year, current_month), "Start Price ($)"]
-        median_indexed_price = current_start * (1 + median_return / 100)
-        avg_indexed_price = current_start * (1 + avg_return / 100)
-
-        median_row = pd.DataFrame(
-            {
-                "Year": ["Median"],
-                "Month": [current_month],
-                "Start Price ($)": [None],
-                "End Price ($)": [None],
-                "Return (%)": [median_return],
-                "End of Period Indexed to Current Price ($)": [median_indexed_price],
-                "Report Date Return (%)": [df["Report Date Return (%)"].median()],
-            }
-        )
-
-        avg_row = pd.DataFrame(
-            {
-                "Year": ["Average"],
-                "Month": [current_month],
-                "Start Price ($)": [None],
-                "End Price ($)": [None],
-                "Return (%)": [avg_return],
-                "End of Period Indexed to Current Price ($)": [avg_indexed_price],
-                "Report Date Return (%)": [df["Report Date Return (%)"].mean()],
-            }
-        )
-
-        df = pd.concat([df.reset_index(), median_row, avg_row], ignore_index=True)
-
-    # Round all numerical values to 2 decimal places
-    df = df.round(2)
-
-    # Separate and retain median/average labels
-    non_numeric = df[df["Year"].isin(["Median", "Average"])]
-    numeric_df = df[~df["Year"].isin(["Median", "Average"])]
-
     # Sort numeric values (current year at top)
-    numeric_df["Year"] = pd.to_numeric(numeric_df["Year"])
+    numeric_df = df[df.index.get_level_values("Year").astype(str).str.isnumeric()]
     numeric_df = numeric_df.sort_values(by=["Year", "Month"], ascending=[False, False])
 
     # Concatenate sorted numeric data with labeled rows
-    df = pd.concat([numeric_df, non_numeric]).reset_index(drop=True)
+    df = pd.concat(
+        [numeric_df, df[~df.index.get_level_values("Year").astype(str).str.isnumeric()]]
+    ).reset_index()
 
     return df
 
@@ -3050,26 +3020,31 @@ def create_yearly_returns_table(selected_metrics):
     current_year = today.year
     current_day_of_year = today.timetuple().tm_yday
 
-    # Filter data to entries from January 1, 2014, onwards
-    selected_metrics = selected_metrics.loc[selected_metrics.index >= "2011-01-01"]
+    # Ensure the data is filtered correctly
+    selected_metrics = selected_metrics.loc[
+        selected_metrics.index >= "2011-01-01"
+    ].copy()
 
     yearly_returns = {}
     report_date_returns = {}
 
     # Calculate yearly returns
     for year in selected_metrics.index.year.unique():
-        yearly_data = selected_metrics[selected_metrics.index.year == year]
+        yearly_data = selected_metrics[
+            selected_metrics.index.year == year
+        ].copy()  # Fix: Ensure copy
+
         if not yearly_data.empty:
             start_price = yearly_data["PriceUSD"].iloc[0]
             end_price = yearly_data["PriceUSD"].iloc[-1]
             return_pct = (end_price / start_price - 1) * 100
             yearly_returns[year] = (start_price, end_price, return_pct)
 
-        # Calculate report date return for each year (up to the same day of the year)
+        # Calculate report date return for each year
         report_date_data = selected_metrics[
             (selected_metrics.index.year == year)
             & (selected_metrics.index.dayofyear == current_day_of_year)
-        ]
+        ].copy()  # Fix: Ensure copy
 
         if not report_date_data.empty:
             report_date_price = report_date_data["PriceUSD"].iloc[-1]
@@ -3078,7 +3053,7 @@ def create_yearly_returns_table(selected_metrics):
         else:
             report_date_returns[year] = None
 
-    # Create DataFrame from calculated returns
+    # Convert dictionary to DataFrame
     df = pd.DataFrame.from_dict(
         yearly_returns,
         orient="index",
@@ -3089,6 +3064,9 @@ def create_yearly_returns_table(selected_metrics):
     # Add report date return column
     df["Report Date Return (%)"] = pd.Series(report_date_returns)
 
+    # Ensure modifications are applied correctly
+    df = df.copy()
+
     # Calculate Indexed Price to Current Year
     for year, row in df.iterrows():
         if current_year in df.index:
@@ -3097,57 +3075,14 @@ def create_yearly_returns_table(selected_metrics):
                 row["End Price ($)"] / row["Start Price ($)"] * current_start
             )
 
-    # Calculate Median and Average Returns
-    median_return = df["Return (%)"].median()
-    avg_return = df["Return (%)"].mean()
-
-    # Calculate Median and Average Indexed Prices
-    if current_year in df.index:
-        current_start = df.loc[current_year, "Start Price ($)"]
-
-        # Project end-of-period prices using median and average returns
-        median_indexed_price = current_start * (1 + median_return / 100)
-        avg_indexed_price = current_start * (1 + avg_return / 100)
-
-        # Add Median row
-        median_row = pd.DataFrame(
-            {
-                "Year": ["Median"],
-                "Start Price ($)": [None],
-                "End Price ($)": [None],
-                "Return (%)": [median_return],
-                "Report Date Return (%)": [df["Report Date Return (%)"].median()],
-                "End of Period Indexed to Current Price ($)": [median_indexed_price],
-            }
-        )
-
-        # Add Average row
-        avg_row = pd.DataFrame(
-            {
-                "Year": ["Average"],
-                "Start Price ($)": [None],
-                "End Price ($)": [None],
-                "Return (%)": [avg_return],
-                "Report Date Return (%)": [df["Report Date Return (%)"].mean()],
-                "End of Period Indexed to Current Price ($)": [avg_indexed_price],
-            }
-        )
-
-        df = pd.concat([df.reset_index(), median_row, avg_row], ignore_index=True)
-
-    # Round all numerical values to 2 decimal places
-    df = df.round(2)
-
-    # Separate and retain median/average labels
-    non_numeric = df[df["Year"].isin(["Median", "Average"])]
-    numeric_df = df[~df["Year"].isin(["Median", "Average"])]
-
     # Sort numeric values (current year at top)
-    numeric_df["Year"] = pd.to_numeric(numeric_df["Year"])
+    numeric_df = df[df.index.astype(str).str.isnumeric()]
     numeric_df = numeric_df.sort_values(by="Year", ascending=False)
 
     # Concatenate sorted numeric data with labeled rows
-    df = pd.concat([numeric_df, non_numeric]).reset_index(drop=True)
+    df = pd.concat(
+        [numeric_df, df[~df.index.astype(str).str.isnumeric()]]
+    ).reset_index()
 
     return df
 
