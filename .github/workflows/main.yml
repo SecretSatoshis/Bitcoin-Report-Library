@@ -13,15 +13,21 @@ jobs:
       with:
         token: ${{ secrets.GITHUB_TOKEN }} 
 
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v2
+    - name: Set up Python 3.10.13
+      uses: actions/setup-python@v4
       with:
-        python-version: '3.10'
+        python-version: '3.10.13'
+
+    - name: Verify Python Version
+      run: python --version
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install --force-reinstall -r requirements.txt
+
+    - name: Print Installed Packages (Debug)
+      run: pip freeze
 
     - name: Run the script and update the charts
       run: |
