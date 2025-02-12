@@ -10,4 +10,4 @@ plotly
 kaleido
 mplfinance
 yfinance
-numpy==1.21.2
+numpy
