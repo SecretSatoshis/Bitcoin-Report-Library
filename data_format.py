@@ -2731,8 +2731,6 @@ def create_ohlc_chart(ohlc_data, report_data, chart_template):
     - fig (plotly.graph_objs.Figure): Plotly figure object containing the candlestick chart with overlays and event annotations.
     """
     # Ensure the index is timezone-naive for compatibility
-    print(ohlc_data.head())
-
     ohlc_data.index = ohlc_data.index.tz_localize(None)
     report_data.index = report_data.index.tz_localize(None)
 
@@ -2855,7 +2853,7 @@ def create_ohlc_chart(ohlc_data, report_data, chart_template):
         font=dict(size=50, color="rgba(128, 128, 128, 0.5)"),
         align="center",
     )
-
+    print(fig)
     return fig
 
 
