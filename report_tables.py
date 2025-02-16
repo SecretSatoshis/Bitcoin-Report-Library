@@ -1566,7 +1566,7 @@ def create_equities_performance_table(
     """
 
     # Define a list of equity tickers in the crypto ecosystem (excluding Bitcoin)
-    equities = ["COIN", "SQ", "MSTR", "MARA", "RIOT"]
+    equities = ["COIN", "XYZ", "MSTR", "MARA", "RIOT"]
 
     # Initialize a dictionary to store performance metrics for each asset
     performance_metrics_dict = {}
@@ -2224,7 +2224,7 @@ def create_macro_performance_table_weekly_bitcoin_recap(
 def create_bitcoin_performance_table(report_data, report_date, correlation_results):
     """
     Creates a Bitcoin performance table summarizing key metrics for Bitcoin (BTC) and related equities:
-    MSTR (MicroStrategy), SQ (Block), COIN (Coinbase), and WGMI (Bitcoin Miners ETF).
+    MSTR (MicroStrategy), XYZ (Block), COIN (Coinbase), and WGMI (Bitcoin Miners ETF).
     Metrics include price, 7-day return, MTD return, YTD return, 90-day return, and correlation with Bitcoin.
 
     Parameters:
@@ -2257,15 +2257,15 @@ def create_bitcoin_performance_table(report_data, report_date, correlation_resul
                 "PriceUSD", "MSTR_close"
             ],
         },
-        "SQ": {
-            "Asset": "Block - [SQ]",
-            "Price": report_data.loc[report_date, "SQ_close"],
-            "7 Day Return": report_data.loc[report_date, "SQ_close_7_change"],
-            "MTD Return": report_data.loc[report_date, "SQ_close_MTD_change"],
-            "YTD Return": report_data.loc[report_date, "SQ_close_YTD_change"],
-            "90 Day Return": report_data.loc[report_date, "SQ_close_90_change"],
+        "XYZ": {
+            "Asset": "Block - [XYZ]",
+            "Price": report_data.loc[report_date, "XYZ_close"],
+            "7 Day Return": report_data.loc[report_date, "XYZ_close_7_change"],
+            "MTD Return": report_data.loc[report_date, "XYZ_close_MTD_change"],
+            "YTD Return": report_data.loc[report_date, "XYZ_close_YTD_change"],
+            "90 Day Return": report_data.loc[report_date, "XYZ_close_90_change"],
             "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "SQ_close"
+                "PriceUSD", "XYZ_close"
             ],
         },
         "COIN": {
