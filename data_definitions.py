@@ -127,7 +127,7 @@ stock_tickers = tickers["stocks"]
 today = datetime.date.today()
 
 # Get yesterday's date
-yesterday = today - datetime.timedelta(days=1)
+yesterday = today - datetime.timedelta(days=2)
 
 # Creat report data and convert to pandas.Timestamp
 report_date = pd.Timestamp(yesterday)
