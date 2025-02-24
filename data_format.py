@@ -1,7 +1,7 @@
 import requests
 import pandas as pd
 import numpy as np
-from yahoo_fin import stock_info as si
+import yfinance as yf
 from datetime import datetime, timedelta
 from io import StringIO
 import calendar
