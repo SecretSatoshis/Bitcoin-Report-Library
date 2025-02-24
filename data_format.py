@@ -278,19 +278,8 @@ def get_crypto_data(ticker_list):
 
 
 def get_price(tickers: dict, start_date: str) -> pd.DataFrame:
-    """
-    Fetches historical stock price data for the given tickers from Yahoo Finance.
-
-    Parameters:
-    tickers (dict): A dictionary where keys are categories and values are lists of stock tickers.
-    start_date (str): The start date for fetching historical data.
-
-    Returns:
-    pd.DataFrame: DataFrame containing the historical stock price data.
-    """
-    data_frames = []  # Collect DataFrames to avoid repeated merges
-
-    # Define a list of crypto tickers to exclude
+    data_frames = []
+    end_date = datetime.today().strftime("%Y-%m-%d")
     excluded_crypto_tickers = {
         "ethereum",
         "ripple",
@@ -299,47 +288,48 @@ def get_price(tickers: dict, start_date: str) -> pd.DataFrame:
         "tether",
     }
 
+    # Create a continuous daily index (timezone-naive)
+    date_range = pd.date_range(start=start_date, end=end_date, freq="D")
+
     for category, ticker_list in tickers.items():
         for ticker in ticker_list:
-            # Skip excluded crypto tickers
-            if category == "crypto" and ticker in excluded_crypto_tickers:
+            if category == "crypto" and ticker.lower() in excluded_crypto_tickers:
                 continue
-
-            for attempt in range(3):  # Retry up to 3 times
+            for attempt in range(3):
                 try:
-                    # Fetch stock data from Yahoo Finance
-                    stock = si.get_data(ticker, start_date=start_date)
-                    # Keep only the 'close' column
-                    stock = stock[["close"]]
-                    # Rename the column to include the ticker name
-                    stock.columns = [f"{ticker}_close"]
-                    # Resample to fill missing days using forward fill
-                    stock = stock.resample("D").ffill()
-                    # Add DataFrame to the list
-                    data_frames.append(stock)
-                    break  # Exit retry loop on success
-
+                    stock = yf.Ticker(ticker)
+                    hist = stock.history(start=start_date, end=end_date)
+                    if hist.empty:
+                        raise ValueError(f"No data returned for {ticker}.")
+                    stock_data = hist[["Close"]].rename(
+                        columns={"Close": f"{ticker}_close"}
+                    )
+                    # Strip timezone from index before reindexing
+                    stock_data.index = pd.to_datetime(stock_data.index).tz_localize(
+                        None
+                    )
+                    # Reindex to daily and forward-fill
+                    stock_data = stock_data.reindex(date_range, method="ffill").fillna(
+                        method="ffill"
+                    )
+                    data_frames.append(stock_data)
+                    break
                 except Exception as e:
-                    if attempt < 2:  # Retry only for the first two attempts
-                        print(
-                            f"Retrying {ticker} due to error: {e}. Attempt {attempt + 1}"
-                        )
-                        time.sleep(2)  # Short delay before retrying
+                    if attempt < 2:
+                        print(f"Retrying {ticker}: {e}")
+                        time.sleep(2)
                     else:
-                        print(
-                            f"Could not fetch data for {ticker} in category {category}. Reason: {e}"
-                        )
+                        print(f"Failed {ticker} in {category}: {e}")
 
-    # Concatenate all DataFrames along the time axis
     if data_frames:
-        data = pd.concat(data_frames, axis=1).reset_index()
-        # Rename 'index' to 'time'
+        data = pd.concat(data_frames, axis=1)
+        data.reset_index(inplace=True)
         data.rename(columns={"index": "time"}, inplace=True)
-        # Convert 'time' column to datetime type
-        data["time"] = pd.to_datetime(data["time"])
+        data["time"] = pd.to_datetime(data["time"]).dt.tz_localize(
+            None
+        )  # Ensure timezone-naive
     else:
-        data = pd.DataFrame()
-
+        data = pd.DataFrame(columns=["time"])
     return data
 
 
@@ -418,58 +408,57 @@ def get_data(tickers, start_date):
     Fetch and consolidate multiple financial and on-chain datasets for analysis.
 
     Parameters:
-    tickers (list): List of stock or cryptocurrency tickers to fetch data for.
+    tickers (dict): Dictionary of stock or cryptocurrency tickers to fetch data for.
     start_date (str): The start date from which to fetch data.
 
     Returns:
-    pd.DataFrame: A consolidated DataFrame containing all relevant datasets.
+    pd.DataFrame: A consolidated DataFrame containing all relevant datasets, merged on coindata.
     """
-    # Fetch data from different sources
-    coindata = get_coinmetrics_onchain("btc.csv")  # Fetch on-chain Bitcoin data
-    prices = get_price(tickers, start_date)  # Fetch historical price data
-    marketcaps = get_marketcap(tickers, start_date)  # Calculate market cap
+    # Fetch data
+    coindata = get_coinmetrics_onchain("btc.csv")
+    prices = get_price(tickers, start_date)
+    marketcaps = get_marketcap(tickers, start_date)
     fear_greed_index = get_fear_and_greed_index()
     miner_data = get_miner_data(
         "https://docs.google.com/spreadsheets/d/1GXaY6XE2mx5jnCu5uJFejwV95a0gYDJYHtDE0lmkGeA/edit?usp=sharing"
-    )  # Fetch miner data
-    bitcoin_dominance = get_bitcoin_dominance()  # Fetch Bitcoin dominance data
-    # Fix: Normalize the 'time' column directly, preserving the full DataFrame
+    )
+    bitcoin_dominance = get_bitcoin_dominance()
     bitcoin_dominance["time"] = bitcoin_dominance["time"].dt.normalize()
+    btc_trade_volume_14d = get_btc_trade_volume_14d()
+    crypto_data = get_crypto_data(tickers["crypto"])
 
-    btc_trade_volume_14d = get_btc_trade_volume_14d()  # Fetch Fear and Greed Index data
-    crypto_data = get_crypto_data(tickers["crypto"])  # Crypto price data
-
-    # Ensure 'time' column is converted to datetime format and set as the index for each DataFrame
     datasets = [
-        coindata,
-        prices,
-        marketcaps,
-        fear_greed_index,
-        miner_data,
-        bitcoin_dominance,
-        btc_trade_volume_14d,
-        crypto_data,
+        ("coindata", coindata),
+        ("prices", prices),
+        ("marketcaps", marketcaps),
+        ("fear_greed_index", fear_greed_index),
+        ("miner_data", miner_data),
+        ("bitcoin_dominance", bitcoin_dominance),
+        ("btc_trade_volume_14d", btc_trade_volume_14d),
+        ("crypto_data", crypto_data),
     ]
-    for dataset in datasets:
-        # Only process the dataset if it is not empty and contains the 'time' column
-        if not dataset.empty and "time" in dataset.columns:
-            dataset["time"] = pd.to_datetime(
-                dataset["time"]
-            )  # Convert 'time' to datetime
-            dataset.set_index("time", inplace=True)  # Set 'time' as the index
 
-    # Merge all datasets iteratively to form a single consolidated DataFrame
-    data = datasets[0]  # Start with the first dataset
-    for dataset in datasets[1:]:
+    processed_datasets = []
+    for name, dataset in datasets:
+        if not dataset.empty and "time" in dataset.columns:
+            dataset["time"] = pd.to_datetime(dataset["time"]).dt.tz_localize(None)
+            dataset.set_index("time", inplace=True)
+            processed_datasets.append(dataset)
+
+    if not processed_datasets:
+        return pd.DataFrame()
+
+    # Start with coindata
+    data = processed_datasets[0]  # coindata
+    for i, dataset in enumerate(processed_datasets[1:], 1):
         data = pd.merge(data, dataset, left_index=True, right_index=True, how="left")
 
-    # Check for and drop duplicate indices to ensure clean time series data
+    # Handle duplicates
+    if data.columns.duplicated().any():
+        data = data.loc[:, ~data.columns.duplicated()]
     if data.index.duplicated().any():
-        print("Warning: Duplicate timestamps found. Dropping duplicates.")
         data = data[~data.index.duplicated()]
 
-    # Forward fill missing values to handle gaps in data availability
-    data.ffill(inplace=True)
     return data
 
 
@@ -1306,7 +1295,6 @@ def run_data_analysis(data, start_date):
     """
     # Calculate various time-based changes for the data
     changes = calculate_all_changes(data)
-
     # Calculate statistical metrics (percentiles and z-scores) for the data
     percentiles, z_scores = calculate_statistics(data, start_date)
 
@@ -1514,7 +1502,7 @@ def calculate_rolling_correlations(data, periods):
     dict: Dictionary where keys are periods and values are DataFrames of rolling correlations.
     """
     # Calculate daily returns for each asset
-    returns = data.pct_change().dropna()
+    returns = data.pct_change()
 
     # Initialize a dictionary to store rolling correlations for each period
     correlations = {}
@@ -2894,44 +2882,59 @@ def calculate_weekly_ohlc(ohlc_data, output_file="csv/weekly_ohlc.csv"):
 
 def create_btc_correlation_tables(report_date, tickers, correlations_data):
     """
-    Calculates rolling correlations between Bitcoin and specified assets over multiple periods.
+    Creates tables of Bitcoin correlations for specified assets at a given date.
 
     Parameters:
-    - report_date (str or pd.Timestamp): Date for which the correlations are retrieved.
-    - tickers (dict): Dictionary where keys are asset categories (e.g., stocks, bonds)
-                      and values are lists of ticker symbols (e.g., {"stocks": ["AAPL", "MSFT"]}).
-    - correlations_data (pd.DataFrame): DataFrame containing historical price data for Bitcoin
-                                        (column "PriceUSD") and other assets, indexed by date.
+    report_date (str or pd.Timestamp): Date for correlation snapshot.
+    tickers (dict): Dictionary of asset categories and ticker lists.
+    correlations_data (pd.DataFrame): DataFrame with historical price data.
 
     Returns:
-    - dict: A dictionary containing rolling correlation data for Bitcoin with each specified asset
-            over 7, 30, 90, and 365-day periods. Keys are formatted as "priceusd_X_days" for each period.
-            Each value is a DataFrame with correlation values for Bitcoin against each asset at the specified date.
+    dict: Rolling correlations for specified periods with PriceUSD.
     """
-
-    # Combine all tickers from the input categories
+    report_date = pd.to_datetime(report_date)
     all_tickers = [ticker for ticker_list in tickers.values() for ticker in ticker_list]
-
-    # Format tickers by appending '_close' for consistency with correlations_data columns, include "PriceUSD"
     ticker_list_with_suffix = ["PriceUSD"] + [
         f"{ticker}_close" for ticker in all_tickers
     ]
 
-    # Filter correlations data to include only relevant tickers and drop rows with NA values
-    filtered_data = correlations_data[ticker_list_with_suffix].dropna()
+    filtered_data = correlations_data[ticker_list_with_suffix].dropna(
+        subset=["PriceUSD"]
+    )
 
-    # Calculate rolling correlations for 7, 30, 90, and 365-day periods
+    if filtered_data.empty:
+        empty_corr = pd.Series(
+            index=[f"{ticker}_close" for ticker in all_tickers], dtype=float
+        )
+        return {f"priceusd_{p}_days": empty_corr for p in [7, 30, 90, 365]}
+
     correlations = calculate_rolling_correlations(
         filtered_data, periods=[7, 30, 90, 365]
     )
+    closest_date = (
+        filtered_data.index[
+            filtered_data.index.get_indexer([report_date], method="nearest")[0]
+        ]
+        if report_date not in filtered_data.index
+        else report_date
+    )
 
-    # Extract only the 'PriceUSD' (Bitcoin) row from each correlation matrix at the report date
-    btc_correlations = {
-        "priceusd_7_days": correlations[7].loc[report_date].loc[["PriceUSD"]],
-        "priceusd_30_days": correlations[30].loc[report_date].loc[["PriceUSD"]],
-        "priceusd_90_days": correlations[90].loc[report_date].loc[["PriceUSD"]],
-        "priceusd_365_days": correlations[365].loc[report_date].loc[["PriceUSD"]],
-    }
+    btc_correlations = {}
+    for period in [7, 30, 90, 365]:
+        corr_df = correlations[period]
+        try:
+            if report_date in corr_df.index:
+                btc_correlations[f"priceusd_{period}_days"] = corr_df.loc[
+                    report_date
+                ].loc[["PriceUSD"]]
+            else:
+                btc_correlations[f"priceusd_{period}_days"] = corr_df.loc[
+                    closest_date
+                ].loc[["PriceUSD"]]
+        except KeyError:
+            btc_correlations[f"priceusd_{period}_days"] = pd.Series(
+                index=[f"{ticker}_close" for ticker in all_tickers], dtype=float
+            )
 
     return btc_correlations
 
@@ -3085,9 +3088,7 @@ def create_yearly_returns_table(selected_metrics):
             "Start Price ($)": [current_start_price],
             "End Price ($)": [median_end_price],
             "Return (%)": [median_return],
-            "Report Date Return (%)": [
-                median_report_date_return_pct
-            ], 
+            "Report Date Return (%)": [median_report_date_return_pct],
         }
     )
 
