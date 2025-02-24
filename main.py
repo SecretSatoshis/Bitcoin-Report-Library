@@ -84,8 +84,7 @@ sharpe_results = data_format.calculate_daily_sharpe_ratios(sharpe_data)
 
 # Calcuate Correlations
 correlation_data = data[correlation_data]
-# Drop NA Values
-correlation_data = correlation_data.dropna()
+
 # Calculate Bitcoin Correlations
 correlation_results = data_format.create_btc_correlation_tables(
     report_date, tickers, correlation_data
@@ -446,4 +445,5 @@ dp.save_report(
     formatting=custom_formatting,
 )
 
-
+eoy_model_data= report_tables.get_eoy_model_data(data, cagr_results)
+eoy_model_data.to_csv("csv/eoy_model_data.csv", index=True)
