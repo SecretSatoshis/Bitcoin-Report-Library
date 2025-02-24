@@ -2428,3 +2428,50 @@ def create_full_weekly_bitcoin_recap_performance(
     full_weekly_performance_df = pd.DataFrame(all_performance_metrics.values())
 
     return full_weekly_performance_df
+
+def get_eoy_model_data(report_data, cagr_results):
+    """
+    Extracts and returns a DataFrame containing historical data for specific Bitcoin valuation-related metrics.
+    Includes CAGR data from a separate dataset.
+
+    Parameters:
+    - report_data (pd.DataFrame): DataFrame containing historical Bitcoin data.
+    - cagr_results (pd.DataFrame): DataFrame containing CAGR data for Bitcoin metrics.
+
+    Returns:
+    - pd.DataFrame: Combined DataFrame with the specified columns, ensuring all data is preserved.
+    """
+    # Define the columns to extract from report_data
+    columns_of_interest = [
+        "PriceUSD",
+        "realised_price",
+        "thermocap_price",
+        "200_day_ma_priceUSD",
+        "Lagged_Energy_Value",
+        "mvrv_ratio",
+        "thermocap_multiple",
+        "200_day_multiple",
+        "Energy_Value_Multiple",
+    ]
+
+    # Define the CAGR columns to extract from cagr_results
+    cagr_columns = [
+        "PriceUSD_4_Year_CAGR",
+        "realised_price_4_Year_CAGR",
+        "thermocap_price_4_Year_CAGR",
+        "200_day_ma_priceUSD_4_Year_CAGR",
+        "Lagged_Energy_Value_4_Year_CAGR",
+    ]
+
+    # Ensure the specified columns exist in report_data before extracting
+    available_columns = [col for col in columns_of_interest if col in report_data.columns]
+    available_cagr_columns = [col for col in cagr_columns if col in cagr_results.columns]
+
+    # Extract the relevant data from both datasets
+    report_data_filtered = report_data[available_columns]
+    cagr_results_filtered = cagr_results[available_cagr_columns]
+
+    # Merge both datasets on the index (assuming they share the same date index)
+    full_data = report_data_filtered.merge(cagr_results_filtered, left_index=True, right_index=True, how="left")
+
+    return full_data
