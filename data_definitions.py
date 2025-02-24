@@ -389,7 +389,6 @@ correlation_data = [
     "^VIX_close",
     "^IXIC_close",
     "^TNX_close",
-    "^TNX_close",
     "^TYX_close",
     "^FVX_close",
     "^IRX_close",
