@@ -67,6 +67,9 @@ tickers = {
 # Start date for TradFi Data
 market_data_start_date = "2010-01-01"
 
+# First Halving Date Start Stats Calculation
+stats_start_date = "2012-11-28"
+
 # Fiat Money Supply M0 Data
 fiat_money_data_top10 = pd.DataFrame(
     {
@@ -129,7 +132,7 @@ today = datetime.date.today()
 # Get yesterday's date
 yesterday = today - datetime.timedelta(days=1)
 
-# Creat report data and convert to pandas.Timestamp
+# Create report data and convert to pandas.Timestamp
 report_date = pd.Timestamp(yesterday)
 
 # On-Chain Metrics to create moving averages of for data smoothing
@@ -334,18 +337,15 @@ filter_data_columns = {
         "MARA_close",
         "RIOT_close",
         "CL=F_close",
+        "qtm_price",
+        "qtm_price_multiple_2",
+        "qtm_price_multiple_5",
+        "qtm_price_multiple_10",
     ]
 }
 
-# First Halving Date Start Stats Calculation
-stats_start_date = "2012-11-28"
-
-# Timeframes to calculate volatitlity for
+# Timeframes to calculate volatility 
 volatility_windows = [30, 90, 180, 365]
-
-
-## Extra Report Defintions
-
 
 # Data to run correlations on
 correlation_data = [
@@ -418,79 +418,7 @@ correlation_data = [
     "RIOT_close",
 ]
 
-# Metrics to calculate valuation targets
-valuation_data_metrics = {
-    "valuation_metrics": [
-        "NVTAdj",
-        "NVTAdj90",
-        "mvrv_ratio",
-        "thermocap_multiple",
-        "200_day_multiple",
-        "nvt_price_multiple",
-        "nvt_price",
-        "nvt_price_adj",
-        "NVTAdj_percentile",
-        "NVTAdj90_percentile",
-        "mvrv_ratio_percentile",
-        "thermocap_multiple_percentile",
-        "200_day_multiple_percentile",
-        "nvt_price_multiple_percentile",
-        "NVTAdj_zscore",
-        "mvrv_ratio_zscore",
-        "thermocap_multiple_zscore",
-        "200_day_multiple_zscore",
-        "NVTAdj90_zscore",
-        "nvt_price_multiple_zscore",
-        "PriceUSD",
-        "SF_Predicted_Price",
-        "SF_Multiple",
-        "SF_Predicted_Price_percentile",
-        "SF_Multiple_percentile",
-        "SF_Predicted_Price_zscore",
-        "SF_Multiple_zscore",
-    ]
-}
-
-# Buy & Sell Targets For Valuation Metrics | Calcualted in
-valuation_metrics = {
-    "200_day_multiple": {
-        "buy_target": [0.6969],
-        "sell_target": [2.1659],
-    },
-    "mvrv_ratio": {
-        "buy_target": [0.884],
-        "sell_target": [3.183],
-    },
-    "nvt_price_multiple": {
-        "buy_target": [0.54],
-        "sell_target": [2.08],
-    },
-    "thermocap_multiple": {
-        "buy_target": [5],
-        "sell_target": [25.422],
-    },
-    "SF_Multiple": {
-        "buy_target": [0.29],
-        "sell_target": [3.1],
-    },
-    "market_cap_metrics": {
-        "silver_marketcap_billion_usd": {
-            "probabilities": {"bull": 0.95, "base": 0.80, "bear": 0.50}
-        },
-        "United_Kingdom_cap": {
-            "probabilities": {"bull": 0.65, "base": 0.35, "bear": 0.10}
-        },
-        "AAPL_MarketCap": {"probabilities": {"bull": 0.55, "base": 0.25, "bear": 0.10}},
-        "United_States_cap": {
-            "probabilities": {"bull": 0.35, "base": 0.15, "bear": 0.05}
-        },
-        "gold_marketcap_billion_usd": {
-            "probabilities": {"bull": 0.20, "base": 0.10, "bear": 0.05}
-        },
-    },
-}
-
-# Fundamentals And Valuation Table Metrics
+# Weekly Fundamentals Table Metrics
 metrics_template = {
     "Network Performance": {
         "Total Address Count": ("AdrBalCnt", "number"),
