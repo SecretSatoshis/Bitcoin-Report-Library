@@ -1,421 +1,193 @@
 import datapane as dp
 import pandas as pd
 import seaborn as sns
-from datetime import date
+from datetime import datetime, timedelta
+import numpy as np
+import plotly.graph_objects as go
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
+import plotly.express as px
+from pandas.tseries.offsets import MonthEnd
+import calendar
 
 
-### Difficulty Adjustment Tables
-
-
-def create_difficulty_update_table(
-    report_data, difficulty_report, report_date, difficulty_period_changes
-):
+def calculate_price_buckets(data, bucket_size):
     """
-    Creates a summary table of Bitcoin's network difficulty metrics and related financial data.
+    Calculates the number of unique trading days the price spent in each bucket range.
 
     Parameters:
-    - report_data (pd.DataFrame): DataFrame containing historical Bitcoin data, indexed by date.
-    - difficulty_report (dict): Dictionary containing details of the latest difficulty change.
-    - report_date (pd.Timestamp or str): Specific date for the report.
-    - difficulty_period_changes (pd.DataFrame): DataFrame with Bitcoin price change data for the difficulty period.
+    data (pd.DataFrame): DataFrame with DateTime index and a 'PriceUSD' column.
+    bucket_size (int): The size of each price bucket.
 
     Returns:
-    - pd.DataFrame: DataFrame containing the difficulty update data for the specified report date.
+    pd.DataFrame: DataFrame containing counts of unique trading days in each price bucket.
     """
-    # Extract relevant data from report_data for the given date
-    report_date_data = report_data.loc[report_date].name
-    bitcoin_supply = report_data.loc[report_date, "SplyCur"]
-    HashRate = report_data.loc[report_date, "7_day_ma_HashRate"]
-    PriceUSD = report_data.loc[report_date, "PriceUSD"]
-    Marketcap = report_data.loc[report_date, "CapMrktCurUSD"]
-    sats_per_dollar = 100000000 / report_data.loc[report_date, "PriceUSD"]
-    difficulty_period_return = difficulty_period_changes.loc["PriceUSD"]
+    # Ensure the DataFrame is sorted by time
+    data = data.sort_index(ascending=True)
 
-    # Extract difficulty-related data from difficulty_report
-    block_height = difficulty_report["last_difficulty_change"][0]["block_height"]
-    difficulty = difficulty_report["last_difficulty_change"][0]["difficulty"]
-    difficulty_change = difficulty_report["difficulty_change_percentage"][0]
+    # Ensure the index is a DatetimeIndex
+    if not isinstance(data.index, pd.DatetimeIndex):
+        raise ValueError("Data index must be a DatetimeIndex.")
 
-    # Create a dictionary with all the collected data
-    difficulty_update_data = {
-        "Report Date": report_date_data,
-        "Bitcoin Supply": bitcoin_supply,
-        "7 Day Average Hashrate": HashRate,
-        "Network Difficulty": difficulty,
-        "Last Difficulty Adjustment Block Height": block_height,
-        "Last Difficulty Change": difficulty_change,
-        "Price USD": PriceUSD,
-        "Marketcap": Marketcap,
-        "Sats Per Dollar": sats_per_dollar,
-        "Bitcoin Price Change Difficulty Period": difficulty_period_return,
-    }
+    # Filter out NaN values before processing
+    data = data.dropna(subset=["PriceUSD"])
 
-    # Convert the dictionary into a DataFrame for easier reporting
-    difficulty_update_df = pd.DataFrame([difficulty_update_data])
-    return difficulty_update_df
+    # Remove duplicate intra-day price fluctuations by keeping only one entry per day
+    data = data.groupby(data.index.floor("D")).first()
 
-
-def format_value(value, format_type):
-    """
-    Formats a given value based on the specified type.
-
-    Parameters:
-    - value (any): The value to format.
-    - format_type (str): The type of formatting to apply ('percentage', 'integer', 'float', 'currency', 'date').
-
-    Returns:
-    - str: Formatted string of the input value.
-    """
-    if format_type == "percentage":
-        return f"{value:.2f}%"
-    elif format_type == "integer":
-        return f"{int(value):,}"
-    elif format_type == "float":
-        return f"{value:,.0f}"
-    elif format_type == "currency":
-        return f"${value:,.0f}"
-    elif format_type == "date":
-        return value.strftime("%Y-%m-%d")
-    else:
-        return str(value)
-
-
-def create_difficulty_big_numbers(difficulty_update_df):
-    """
-    Creates a set of large-format numbers (BigNumbers) for display of Bitcoin difficulty metrics.
-
-    Parameters:
-    - difficulty_update_df (pd.DataFrame): DataFrame containing difficulty update data.
-
-    Returns:
-    - dp.Group: Datapane Group object containing BigNumbers, arranged in 3 columns for display.
-    """
-    # Define formatting rules for each metric in difficulty_update_df
-    format_rules = {
-        "Report Date": "date",
-        "Bitcoin Supply": "integer",
-        "Last Difficulty Adjustment Block Height": "float",
-        "Network Difficulty": "float",
-        "Last Difficulty Change": "percentage",
-        "7 Day Average Hashrate": "float",
-        "Price USD": "currency",
-        "Marketcap": "currency",
-        "Sats Per Dollar": "float",
-    }
-
-    # Initialize a list to store BigNumber objects
-    big_numbers = []
-
-    # Iterate through each metric in the DataFrame row
-    for column, value in difficulty_update_df.iloc[0].items():
-        # Skip 'Bitcoin Price Change Difficulty Period' as specified
-        if column == "Bitcoin Price Change Difficulty Period":
-            continue
-
-        # Format the value based on the format_rules dictionary
-        formatted_value = format_value(value, format_rules.get(column, ""))
-
-        # If the metric is 'Difficulty Change', set direction for the BigNumber (upward/downward)
-        if column == "Difficulty Change":
-            is_upward = value >= 0
-            big_numbers.append(
-                dp.BigNumber(
-                    heading=column,
-                    value=formatted_value,
-                    is_upward_change=is_upward,
-                )
-            )
-        else:
-            # Add BigNumber without directional change for other metrics
-            big_numbers.append(
-                dp.BigNumber(
-                    heading=column,
-                    value=formatted_value,
-                )
-            )
-
-    # Arrange BigNumbers in a Group with 3 columns and return the result
-    return dp.Group(*big_numbers, columns=3)
-
-
-def create_performance_table(
-    report_data,
-    difficulty_period_changes,
-    report_date,
-    weekly_high_low,
-    cagr_results,
-    sharpe_results,
-    correlation_results,
-):
-    """
-    Creates a performance table for various assets, including Bitcoin, Nasdaq, S&P500,
-    and others, showing key metrics such as price, returns, and correlations.
-
-    Parameters:
-    - report_data (pd.DataFrame): DataFrame containing report data for the assets.
-    - difficulty_period_changes (pd.Series): Series with the asset's price changes over
-      the latest difficulty adjustment period.
-    - report_date (str or pd.Timestamp): Date for which the report is generated.
-    - weekly_high_low (dict): Dictionary containing the 52-week high and low values
-      for each asset.
-    - cagr_results (pd.DataFrame): DataFrame containing Compound Annual Growth Rate (CAGR)
-      data for each asset over 4 years.
-    - sharpe_results (dict): Dictionary with Sharpe ratios for each asset, indexed by
-      time periods (e.g., 4 years).
-    - correlation_results (dict): Dictionary of correlation matrices for each period
-      (e.g., 90 days) with BTC as a baseline.
-
-    Returns:
-    - pd.DataFrame: DataFrame summarizing asset performance metrics.
-    """
-    # Define the structure for performance metrics
-    performance_metrics_dict = {
-        "Bitcoin": {
-            "Asset": "Bitcoin",
-            "Price": report_data.loc[report_date, "PriceUSD"],
-            "7 Day Return": report_data.loc[report_date, "PriceUSD_7_change"],
-            "Difficulty Period Return": difficulty_period_changes.loc["PriceUSD"],
-            "MTD Return": report_data.loc[report_date, "PriceUSD_MTD_change"],
-            "90 Day Return": report_data.loc[report_date, "PriceUSD_90_change"],
-            "YTD Return": report_data.loc[report_date, "PriceUSD_YTD_change"],
-            "4 Year CAGR": cagr_results.loc[report_date, "PriceUSD_4_Year_CAGR"],
-            "4 Year Sharpe": sharpe_results["PriceUSD"]["4_year"].loc[report_date],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "PriceUSD"
-            ],
-            "52 Week Low": weekly_high_low["PriceUSD"]["52_week_low"],
-            "52 Week High": weekly_high_low["PriceUSD"]["52_week_high"],
-        },
-        "Nasdaq": {
-            "Asset": "Nasdaq",
-            "Price": report_data.loc[report_date, "^IXIC_close"],
-            "7 Day Return": report_data.loc[report_date, "^IXIC_close_7_change"],
-            "Difficulty Period Return": difficulty_period_changes.loc["^IXIC_close"],
-            "MTD Return": report_data.loc[report_date, "^IXIC_close_MTD_change"],
-            "90 Day Return": report_data.loc[report_date, "^IXIC_close_90_change"],
-            "YTD Return": report_data.loc[report_date, "^IXIC_close_YTD_change"],
-            "4 Year CAGR": cagr_results.loc[report_date, "^IXIC_close_4_Year_CAGR"],
-            "4 Year Sharpe": sharpe_results["^IXIC_close"]["4_year"].loc[report_date],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "^IXIC_close"
-            ],
-            "52 Week Low": weekly_high_low["^IXIC_close"]["52_week_low"],
-            "52 Week High": weekly_high_low["^IXIC_close"]["52_week_high"],
-        },
-        "S&P500": {
-            "Asset": "S&P500",
-            "Price": report_data.loc[report_date, "^GSPC_close"],
-            "7 Day Return": report_data.loc[report_date, "^GSPC_close_7_change"],
-            "Difficulty Period Return": difficulty_period_changes.loc["^GSPC_close"],
-            "MTD Return": report_data.loc[report_date, "^GSPC_close_MTD_change"],
-            "90 Day Return": report_data.loc[report_date, "^GSPC_close_90_change"],
-            "YTD Return": report_data.loc[report_date, "^GSPC_close_YTD_change"],
-            "4 Year CAGR": cagr_results.loc[report_date, "^GSPC_close_4_Year_CAGR"],
-            "4 Year Sharpe": sharpe_results["^GSPC_close"]["4_year"].loc[report_date],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "^GSPC_close"
-            ],
-            "52 Week Low": weekly_high_low["^GSPC_close"]["52_week_low"],
-            "52 Week High": weekly_high_low["^GSPC_close"]["52_week_high"],
-        },
-        "XLF": {
-            "Asset": "XLF Financials ETF",
-            "Price": report_data.loc[report_date, "XLF_close"],
-            "7 Day Return": report_data.loc[report_date, "XLF_close_7_change"],
-            "Difficulty Period Return": difficulty_period_changes.loc["XLF_close"],
-            "MTD Return": report_data.loc[report_date, "XLF_close_MTD_change"],
-            "90 Day Return": report_data.loc[report_date, "XLF_close_90_change"],
-            "YTD Return": report_data.loc[report_date, "XLF_close_YTD_change"],
-            "4 Year CAGR": cagr_results.loc[report_date, "XLF_close_4_Year_CAGR"],
-            "4 Year Sharpe": sharpe_results["XLF_close"]["4_year"].loc[report_date],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "XLF_close"
-            ],
-            "52 Week Low": weekly_high_low["XLF_close"]["52_week_low"],
-            "52 Week High": weekly_high_low["XLF_close"]["52_week_high"],
-        },
-        "^BCOM": {
-            "Asset": "Bloomberg Commodity Index",
-            "Price": report_data.loc[report_date, "^BCOM_close"],
-            "7 Day Return": report_data.loc[report_date, "^BCOM_close_7_change"],
-            "Difficulty Period Return": difficulty_period_changes.loc["^BCOM_close"],
-            "MTD Return": report_data.loc[report_date, "^BCOM_close_MTD_change"],
-            "90 Day Return": report_data.loc[report_date, "^BCOM_close_90_change"],
-            "YTD Return": report_data.loc[report_date, "^BCOM_close_YTD_change"],
-            "4 Year CAGR": cagr_results.loc[report_date, "^BCOM_close_4_Year_CAGR"],
-            "4 Year Sharpe": sharpe_results["^BCOM_close"]["4_year"].loc[report_date],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "^BCOM_close"
-            ],
-            "52 Week Low": weekly_high_low["^BCOM_close"]["52_week_low"],
-            "52 Week High": weekly_high_low["^BCOM_close"]["52_week_high"],
-        },
-        "FANG+": {
-            "Asset": "FANG+ ETF",
-            "Price": report_data.loc[report_date, "FANG.AX_close"],
-            "7 Day Return": report_data.loc[report_date, "FANG.AX_close_7_change"],
-            "Difficulty Period Return": difficulty_period_changes.loc["FANG.AX_close"],
-            "MTD Return": report_data.loc[report_date, "FANG.AX_close_MTD_change"],
-            "90 Day Return": report_data.loc[report_date, "FANG.AX_close_90_change"],
-            "YTD Return": report_data.loc[report_date, "FANG.AX_close_YTD_change"],
-            "4 Year CAGR": cagr_results.loc[report_date, "FANG.AX_close_2_Year_CAGR"],
-            "4 Year Sharpe": sharpe_results["FANG.AX_close"]["2_year"].loc[report_date],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "FANG.AX_close"
-            ],
-            "52 Week Low": weekly_high_low["FANG.AX_close"]["52_week_low"],
-            "52 Week High": weekly_high_low["FANG.AX_close"]["52_week_high"],
-        },
-        "BITQ": {
-            "Asset": "BITQ Crypto Industry ETF",
-            "Price": report_data.loc[report_date, "BITQ_close"],
-            "7 Day Return": report_data.loc[report_date, "BITQ_close_7_change"],
-            "Difficulty Period Return": difficulty_period_changes.loc["BITQ_close"],
-            "MTD Return": report_data.loc[report_date, "BITQ_close_MTD_change"],
-            "90 Day Return": report_data.loc[report_date, "BITQ_close_90_change"],
-            "YTD Return": report_data.loc[report_date, "BITQ_close_YTD_change"],
-            "4 Year CAGR": cagr_results.loc[report_date, "BITQ_close_2_Year_CAGR"],
-            "4 Year Sharpe": sharpe_results["BITQ_close"]["2_year"].loc[report_date],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "BITQ_close"
-            ],
-            "52 Week Low": weekly_high_low["BITQ_close"]["52_week_low"],
-            "52 Week High": weekly_high_low["BITQ_close"]["52_week_high"],
-        },
-        "Gold Futures": {
-            "Asset": "Gold",
-            "Price": report_data.loc[report_date, "GC=F_close"],
-            "7 Day Return": report_data.loc[report_date, "GC=F_close_7_change"],
-            "Difficulty Period Return": difficulty_period_changes.loc["GC=F_close"],
-            "MTD Return": report_data.loc[report_date, "GC=F_close_MTD_change"],
-            "90 Day Return": report_data.loc[report_date, "GC=F_close_90_change"],
-            "YTD Return": report_data.loc[report_date, "GC=F_close_YTD_change"],
-            "4 Year CAGR": cagr_results.loc[report_date, "GC=F_close_4_Year_CAGR"],
-            "4 Year Sharpe": sharpe_results["GC=F_close"]["4_year"].loc[report_date],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "GC=F_close"
-            ],
-            "52 Week Low": weekly_high_low["GC=F_close"]["52_week_low"],
-            "52 Week High": weekly_high_low["GC=F_close"]["52_week_high"],
-        },
-        "US Dollar Futures": {
-            "Asset": "US Dollar Index",
-            "Price": report_data.loc[report_date, "DX=F_close"],
-            "7 Day Return": report_data.loc[report_date, "DX=F_close_7_change"],
-            "Difficulty Period Return": difficulty_period_changes.loc["DX=F_close"],
-            "MTD Return": report_data.loc[report_date, "DX=F_close_MTD_change"],
-            "90 Day Return": report_data.loc[report_date, "DX=F_close_90_change"],
-            "YTD Return": report_data.loc[report_date, "DX=F_close_YTD_change"],
-            "4 Year CAGR": cagr_results.loc[report_date, "DX=F_close_4_Year_CAGR"],
-            "4 Year Sharpe": sharpe_results["DX=F_close"]["4_year"].loc[report_date],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "DX=F_close"
-            ],
-            "52 Week Low": weekly_high_low["DX=F_close"]["52_week_low"],
-            "52 Week High": weekly_high_low["DX=F_close"]["52_week_high"],
-        },
-        "TLT": {
-            "Asset": "TLT Treasury Bond ETF",
-            "Price": report_data.loc[report_date, "TLT_close"],
-            "7 Day Return": report_data.loc[report_date, "TLT_close_7_change"],
-            "Difficulty Period Return": difficulty_period_changes.loc["TLT_close"],
-            "MTD Return": report_data.loc[report_date, "TLT_close_MTD_change"],
-            "90 Day Return": report_data.loc[report_date, "TLT_close_90_change"],
-            "4 Year CAGR": cagr_results.loc[report_date, "TLT_close_4_Year_CAGR"],
-            "4 Year Sharpe": sharpe_results["TLT_close"]["4_year"].loc[report_date],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "TLT_close"
-            ],
-            "YTD Return": report_data.loc[report_date, "TLT_close_YTD_change"],
-            "52 Week Low": weekly_high_low["TLT_close"]["52_week_low"],
-            "52 Week High": weekly_high_low["TLT_close"]["52_week_high"],
-        },
-    }
-
-    # Convert the dictionary to a DataFrame
-    performance_table_df = pd.DataFrame(list(performance_metrics_dict.values()))
-
-    return performance_table_df
-
-
-def style_performance_table_weekly(performance_table):
-    """
-    Styles a DataFrame containing weekly performance metrics for various assets.
-    The function formats numerical values, applies conditional coloring based on
-    value positivity/negativity, and sets other stylistic properties for improved readability.
-
-    Parameters:
-    - performance_table (pd.DataFrame): The DataFrame containing performance metrics for
-      various assets on a weekly basis.
-
-    Returns:
-    - pd.io.formats.style.Styler: A styled DataFrame with formatted columns and conditional
-      colors applied for easy interpretation.
-    """
-    # Define formatting rules for different columns in the performance table
-    format_dict = {
-        "Asset": "{}",
-        "Price": "${:,.0f}",
-        "7 Day Return": "{:.2%}",
-        "Difficulty Period Return": "{:.2}%",
-        "MTD Return": "{:.2}%",
-        "90 Day Return": "{:.2%}",
-        "YTD Return": "{:.2}%",
-        "4 Year CAGR": "{:.2f}%",
-        "4 Year Sharpe": "{:,.2f}",
-        "90 Day BTC Correlation": "{:,.2f}",
-        "52 Week Low": "${:,.0f}",
-        "52 Week High": "${:,.0f}",
-    }
-
-    # Define color maps for diverging and background color gradients
-    diverging_cm = sns.diverging_palette(
-        100, 133, as_cmap=True
-    )  # Diverging palette for color variation
-    bg_colormap = sns.light_palette(
-        "white", as_cmap=True
-    )  # Background light color palette
-
-    # Helper function to apply conditional text color based on the value sign
-    def color_values(val):
-        """
-        Determines color based on value sign:
-        - Green for positive values
-        - Red for negative values
-        - Black for zero values
-        """
-        color = "green" if val > 0 else ("red" if val < 0 else "black")
-        return f"color: {color}"
-
-    # Specify columns to apply the gradient and conditional text coloring
-    gradient_columns = [
-        "7 Day Return",
-        "Difficulty Period Return",
-        "MTD Return",
-        "90 Day Return",
-        "YTD Return",
-        "4 Year CAGR",
-        "4 Year Sharpe",
-        "90 Day BTC Correlation",
-    ]
-
-    # Apply formatting, conditional coloring, and styling
-    styled_table = (
-        performance_table.style.format(format_dict)  # Apply the format dictionary
-        .applymap(color_values, subset=gradient_columns)  # Conditional text color
-        .hide_index()  # Hide DataFrame index for cleaner presentation
-        .set_properties(**{"white-space": "nowrap"})  # Prevent content wrapping
+    # Define the bucket ranges for price intervals
+    max_price = data["PriceUSD"].max()
+    bucket_ranges = pd.interval_range(
+        start=0,
+        end=(max_price // bucket_size + 1) * bucket_size,
+        freq=bucket_size,
+        closed="left",
     )
 
+    # Assign each price to a bucket
+    data["PriceBucket"] = pd.cut(data["PriceUSD"], bins=bucket_ranges)
+
+    # Ensure we only count valid price buckets
+    bucket_days_count = data["PriceBucket"].value_counts().sort_index()
+
+    # Get the current price and its bucket
+    current_price = data["PriceUSD"].iloc[-1]
+    current_bucket = pd.cut([current_price], bins=bucket_ranges)[0]
+
+    # Extract the count of unique days for the current price bucket
+    current_bucket_days = bucket_days_count.get(current_bucket, 0)
+
+    # Create a DataFrame for bucket counts with formatted price ranges
+    bucket_counts_df = bucket_days_count.reset_index()
+    bucket_counts_df.columns = ["Price Range ($)", "Count"]
+    bucket_counts_df["Price Range ($)"] = bucket_counts_df["Price Range ($)"].apply(
+        lambda x: f"${int(x.left / 1000)}K-${int(x.right / 1000)}K"
+    )
+
+    return bucket_counts_df
+
+
+def style_bucket_counts_table(bucket_counts_df):
+    # Define the style for the table: smaller font size
+    table_style = [
+        {
+            "selector": "th",
+            "props": "font-size: 12px;",  # Adjust header font size
+        },
+        {
+            "selector": "td",
+            "props": "font-size: 12px;",  # Adjust cell font size
+        },
+    ]
+
+    # Apply the style to the table and hide the index
+    styled_table = bucket_counts_df.style.set_table_styles(table_style).hide_index()
+
     return styled_table
+
+
+def calculate_roi_table(data, report_date, price_column="PriceUSD"):
+    """
+    Calculates the return on investment (ROI) for Bitcoin over various time frames from the report date.
+
+    Parameters:
+    data (pd.DataFrame): DataFrame containing price data with a DateTime index.
+    report_date (str or datetime): The date for which to calculate ROI.
+    price_column (str): The column name for Bitcoin price data.
+
+    Returns:
+    pd.DataFrame: DataFrame containing ROI, Start Date, and BTC Price for each time frame.
+    """
+    if price_column not in data.columns:
+        raise ValueError(
+            f"The price column '{price_column}' does not exist in the data."
+        )
+
+    if data.empty:
+        raise ValueError("The input data is empty.")
+
+    periods = {
+        "1 day": 1,
+        "3 day": 3,
+        "7 day": 7,
+        "30 day": 30,
+        "90 day": 90,
+        "1 Year": 365,
+        "2 Year": 730,
+        "4 Year": 1460,
+        "5 Year": 1825,
+        "10 Year": 3650,
+    }
+
+    today = pd.to_datetime(report_date).normalize()
+
+    # Pre-compute the 'Start Date' and 'BTC Price' for each period
+    start_dates = {
+        period: today - pd.Timedelta(days=days) for period, days in periods.items()
+    }
+    btc_prices = {
+        period: data.loc[start_dates[period], price_column]
+        if start_dates[period] in data.index
+        else None
+        for period in periods
+    }
+
+    roi_data = {
+        period: data[price_column].pct_change(days).iloc[-1] * 100
+        for period, days in periods.items()
+    }
+
+    # Combine the ROI, Start Dates, and BTC Prices into a DataFrame
+    roi_table = pd.DataFrame(
+        {
+            "Time Frame": periods.keys(),
+            "ROI": roi_data.values(),
+            "Start Date": start_dates.values(),
+            "BTC Price": btc_prices.values(),
+        }
+    )
+    roi_table.to_csv("csv/roi_table.csv")
+    return roi_table.set_index("Time Frame")
+
+
+def style_roi_table(roi_table):
+    """
+    Styles the ROI table by formatting the 'ROI' column with colors and the 'BTC Price' column as currency.
+
+    Parameters:
+    roi_table (pd.DataFrame): DataFrame containing the ROI data.
+
+    Returns:
+    pd.io.formats.style.Styler: Styled DataFrame for display.
+    """
+
+    # Function to color ROI values
+    def color_roi(val):
+        color = "green" if val > 0 else ("red" if val < 0 else "black")
+        return "color: %s" % color
+
+    # Function to format BTC Price as currency
+    def format_currency(val):
+        return "${:,.2f}".format(val)
+
+    return (
+        roi_table.style.applymap(color_roi, subset=["ROI"])
+        .format(
+            {
+                "ROI": "{:.2f}%",  # Format ROI as percentage with 2 decimal places
+                "BTC Price": format_currency,
+            }
+        )  # Format BTC Price as currency
+        .set_properties(**{"font-size": "10pt"})
+    )
 
 
 def create_bitcoin_fundamentals_table(
     report_data, difficulty_period_changes, weekly_high_low, report_date, cagr_results
 ):
     """
-    Creates a summary table of Bitcoin's fundamental metrics, including current values, changes,
-    and calculated CAGR.
+    Creates a summary table of Bitcoin's fundamental metrics, including price, network activity,
+    miner revenue, and key growth rates.
 
     Parameters:
     - report_data (pd.DataFrame): DataFrame containing Bitcoin metrics data.
@@ -427,150 +199,81 @@ def create_bitcoin_fundamentals_table(
     Returns:
     - pd.DataFrame: DataFrame summarizing Bitcoin's fundamental metrics, changes, CAGR, and 52-week highs and lows.
     """
-    # Extract data from report_data for the specific date
+
+    # Extract Bitcoin price data
+    Bitcoin_Price = report_data.loc[report_date, "PriceUSD"]
+    Bitcoin_7d_Return = report_data.loc[report_date, "PriceUSD_7_change"]
+    Bitcoin_MTD_Return = report_data.loc[report_date, "PriceUSD_MTD_change"]
+    Bitcoin_90d_Return = report_data.loc[report_date, "PriceUSD_90_change"]
+    Bitcoin_YTD_Return = report_data.loc[report_date, "PriceUSD_YTD_change"]
+    Bitcoin_4y_CAGR = cagr_results.loc[report_date, "PriceUSD_4_Year_CAGR"]
+    Bitcoin_52w_High = weekly_high_low["PriceUSD"]["52_week_high"]
+    Bitcoin_52w_Low = weekly_high_low["PriceUSD"]["52_week_low"]
+    Bitcoin_Difficulty_Change = difficulty_period_changes.loc["PriceUSD"]
+
+    # Extract other fundamental data
     HashRate = report_data.loc[report_date, "7_day_ma_HashRate"]
     TxCnt = report_data.loc[report_date, "7_day_ma_TxCnt"]
     TxTfrValAdjUSD = report_data.loc[report_date, "7_day_ma_TxTfrValAdjUSD"]
-    TxTfrValMeanUSD = report_data.loc[report_date, "7_day_ma_TxTfrValMeanUSD"]
+    TxTfrValMeanUSD = report_data.loc[
+        report_date, "7_day_ma_TxTfrValMeanUSD"
+    ]  # New metric added
     RevUSD = report_data.loc[report_date, "RevUSD"]
     AdrActCnt = report_data.loc[report_date, "AdrActCnt"]
-    AdrBalUSD10Cnt = report_data.loc[report_date, "AdrBalUSD10Cnt"]
+    AdrBalUSD10Cnt = report_data.loc[report_date, "AdrBalUSD10Cnt"]  # New metric added
     FeeTotUSD = report_data.loc[report_date, "FeeTotUSD"]
-    supply_pct_1_year_plus = report_data.loc[report_date, "supply_pct_1_year_plus"]
-    VelCur1yr = report_data.loc[report_date, "VelCur1yr"]
+    supply_pct_1_year_plus = report_data.loc[
+        report_date, "supply_pct_1_year_plus"
+    ]  # New metric added
+    VelCur1yr = report_data.loc[report_date, "VelCur1yr"]  # New metric added
 
-    HashRate_MTD = report_data.loc[report_date, "HashRate_MTD_change"]
-    TxCnt_MTD = report_data.loc[report_date, "TxCnt_MTD_change"]
-    TxTfrValAdjUSD_MTD = report_data.loc[report_date, "TxTfrValAdjUSD_MTD_change"]
-    TxTfrValMeanUSD_MTD = report_data.loc[
-        report_date, "7_day_ma_TxTfrValMeanUSD_MTD_change"
-    ]
-    RevUSD_MTD = report_data.loc[report_date, "RevUSD_MTD_change"]
-    AdrActCnt_MTD = report_data.loc[report_date, "AdrActCnt_MTD_change"]
-    AdrBalUSD10Cnt_MTD = report_data.loc[report_date, "AdrBalUSD10Cnt_MTD_change"]
-    FeeTotUSD_MTD = report_data.loc[report_date, "FeeTotUSD_MTD_change"]
-    supply_pct_1_year_plus_MTD = report_data.loc[
-        report_date, "supply_pct_1_year_plus_MTD_change"
-    ]
-    VelCur1yr_MTD = report_data.loc[report_date, "VelCur1yr_MTD_change"]
+    # Extract difficulty period changes
+    HashRate_Diff_Change = difficulty_period_changes.loc["7_day_ma_HashRate"]
+    TxCnt_Diff_Change = difficulty_period_changes.loc["TxCnt"]
+    TxTfrValAdjUSD_Diff_Change = difficulty_period_changes.loc["TxTfrValAdjUSD"]
+    RevUSD_Diff_Change = difficulty_period_changes.loc["RevUSD"]
+    AdrActCnt_Diff_Change = difficulty_period_changes.loc["AdrActCnt"]
+    FeeTotUSD_Diff_Change = difficulty_period_changes.loc["FeeTotUSD"]
 
-    HashRate_YTD = report_data.loc[report_date, "HashRate_YTD_change"]
-    TxCnt_YTD = report_data.loc[report_date, "TxCnt_YTD_change"]
-    TxTfrValAdjUSD_YTD = report_data.loc[report_date, "TxTfrValAdjUSD_YTD_change"]
-    TxTfrValMeanUSD_YTD = report_data.loc[
-        report_date, "7_day_ma_TxTfrValMeanUSD_YTD_change"
+    # Extract difficulty period changes
+    HashRate_Diff_Change = difficulty_period_changes.loc["7_day_ma_HashRate"]
+    TxCnt_Diff_Change = difficulty_period_changes.loc["TxCnt"]
+    TxTfrValAdjUSD_Diff_Change = difficulty_period_changes.loc[
+        "7_day_ma_TxTfrValAdjUSD"
     ]
-    RevUSD_YTD = report_data.loc[report_date, "RevUSD_YTD_change"]
-    AdrActCnt_YTD = report_data.loc[report_date, "AdrActCnt_YTD_change"]
-    AdrBalUSD10Cnt_YTD = report_data.loc[report_date, "AdrBalUSD10Cnt_YTD_change"]
-    FeeTotUSD_YTD = report_data.loc[report_date, "FeeTotUSD_YTD_change"]
-    supply_pct_1_year_plus_YTD = report_data.loc[
-        report_date, "supply_pct_1_year_plus_YTD_change"
-    ]
-    VelCur1yr_YTD = report_data.loc[report_date, "VelCur1yr_YTD_change"]
-
-    HashRate_90 = report_data.loc[report_date, "HashRate_90_change"]
-    TxCnt_90 = report_data.loc[report_date, "TxCnt_90_change"]
-    TxTfrValAdjUSD_90 = report_data.loc[report_date, "TxTfrValAdjUSD_90_change"]
-    TxTfrValMeanUSD_90 = report_data.loc[
-        report_date, "7_day_ma_TxTfrValMeanUSD_90_change"
-    ]
-    RevUSD_90 = report_data.loc[report_date, "RevUSD_90_change"]
-    AdrActCnt_90 = report_data.loc[report_date, "AdrActCnt_90_change"]
-    AdrBalUSD10Cnt_90 = report_data.loc[report_date, "AdrBalUSD10Cnt_90_change"]
-    FeeTotUSD_90 = report_data.loc[report_date, "FeeTotUSD_90_change"]
-    supply_pct_1_year_plus_90 = report_data.loc[
-        report_date, "supply_pct_1_year_plus_90_change"
-    ]
-    VelCur1yr_90 = report_data.loc[report_date, "VelCur1yr_90_change"]
-
-    HashRate_7 = report_data.loc[report_date, "HashRate_7_change"]
-    TxCnt_7 = report_data.loc[report_date, "TxCnt_7_change"]
-    TxTfrValAdjUSD_7 = report_data.loc[report_date, "TxTfrValAdjUSD_7_change"]
-    TxTfrValMeanUSD_7 = report_data.loc[
-        report_date, "7_day_ma_TxTfrValMeanUSD_7_change"
-    ]
-    RevUSD_7 = report_data.loc[report_date, "RevUSD_7_change"]
-    AdrActCnt_7 = report_data.loc[report_date, "AdrActCnt_7_change"]
-    AdrBalUSD10Cnt_7 = report_data.loc[report_date, "AdrBalUSD10Cnt_7_change"]
-    FeeTotUSD_7 = report_data.loc[report_date, "FeeTotUSD_7_change"]
-    supply_pct_1_year_plus_7 = report_data.loc[
-        report_date, "supply_pct_1_year_plus_7_change"
-    ]
-    VelCur1yr_7 = report_data.loc[report_date, "VelCur1yr_7_change"]
-
-    HashRate_CAGR = cagr_results.loc[report_date, "HashRate_4_Year_CAGR"]
-    TxCnt_CAGR = cagr_results.loc[report_date, "TxCnt_4_Year_CAGR"]
-    TxTfrValAdjUSD_CAGR = cagr_results.loc[report_date, "TxTfrValAdjUSD_4_Year_CAGR"]
-    TxTfrValMeanUSD_CAGR = cagr_results.loc[report_date, "TxTfrValMeanUSD_4_Year_CAGR"]
-    RevUSD_CAGR = cagr_results.loc[report_date, "RevUSD_4_Year_CAGR"]
-    AdrActCnt_CAGR = cagr_results.loc[report_date, "AdrActCnt_4_Year_CAGR"]
-    AdrBalUSD10Cnt_CAGR = cagr_results.loc[report_date, "AdrBalUSD10Cnt_4_Year_CAGR"]
-    FeeTotUSD_CAGR = cagr_results.loc[report_date, "FeeTotUSD_4_Year_CAGR"]
-    supply_pct_1_year_plus_CAGR = cagr_results.loc[
-        report_date, "supply_pct_1_year_plus_4_Year_CAGR"
-    ]
-    VelCur1yr_CAGR = cagr_results.loc[report_date, "VelCur1yr_4_Year_CAGR"]
-
-    # Fetch 52-week high and low for each metric
-    HashRate_52_high = weekly_high_low["7_day_ma_HashRate"]["52_week_high"]
-    TxCnt_52_high = weekly_high_low["7_day_ma_TxCnt"]["52_week_high"]
-    TxTfrValAdjUSD_52_high = weekly_high_low["7_day_ma_TxTfrValAdjUSD"]["52_week_high"]
-    TxTfrValMeanUSD_52_high = weekly_high_low["7_day_ma_TxTfrValMeanUSD"][
-        "52_week_high"
-    ]
-    RevUSD_52_high = weekly_high_low["RevUSD"]["52_week_high"]
-    AdrActCnt_52_high = weekly_high_low["AdrActCnt"]["52_week_high"]
-    AdrBalUSD10Cnt_52_high = weekly_high_low["AdrBalUSD10Cnt"]["52_week_high"]
-    FeeTotUSD_52_high = weekly_high_low["FeeTotUSD"]["52_week_high"]
-    supply_pct_1_year_plus_52_high = weekly_high_low["supply_pct_1_year_plus"][
-        "52_week_high"
-    ]
-    VelCur1yr_52_high = weekly_high_low["VelCur1yr"]["52_week_high"]
-
-    HashRate_52_low = weekly_high_low["7_day_ma_HashRate"]["52_week_low"]
-    TxCnt_52_low = weekly_high_low["7_day_ma_TxCnt"]["52_week_low"]
-    TxTfrValAdjUSD_52_low = weekly_high_low["7_day_ma_TxTfrValAdjUSD"]["52_week_low"]
-    TxTfrValMeanUSD_52_low = weekly_high_low["7_day_ma_TxTfrValMeanUSD"]["52_week_low"]
-    RevUSD_52_low = weekly_high_low["RevUSD"]["52_week_low"]
-    AdrActCnt_52_low = weekly_high_low["AdrActCnt"]["52_week_low"]
-    AdrBalUSD10Cnt_52_low = weekly_high_low["AdrBalUSD10Cnt"]["52_week_low"]
-    FeeTotUSD_52_low = weekly_high_low["FeeTotUSD"]["52_week_low"]
-    supply_pct_1_year_plus_52_low = weekly_high_low["supply_pct_1_year_plus"][
-        "52_week_low"
-    ]
-    VelCur1yr_52_low = weekly_high_low["VelCur1yr"]["52_week_low"]
-
-    HashRate_difficulty_change = difficulty_period_changes.loc["7_day_ma_HashRate"]
-    TxCnt_difficulty_change = difficulty_period_changes.loc["TxCnt"]
-    TxTfrValAdjUSD_difficulty_change = difficulty_period_changes.loc["TxTfrValAdjUSD"]
-    TxTfrValMeanUSD_difficulty_change = difficulty_period_changes.loc[
+    TxTfrValMeanUSD_Diff_Change = difficulty_period_changes.loc[
         "7_day_ma_TxTfrValMeanUSD"
-    ]
-    RevUSD_difficulty_change = difficulty_period_changes.loc["RevUSD"]
-    AdrActCnt_difficulty_change = difficulty_period_changes.loc["AdrActCnt"]
-    AdrBalUSD10Cnt_difficulty_change = difficulty_period_changes.loc["AdrBalUSD10Cnt"]
-    FeeTotUSD_difficulty_change = difficulty_period_changes.loc["FeeTotUSD"]
-    supply_pct_1_year_plus_difficulty_change = difficulty_period_changes.loc[
+    ]  # New metric added
+    RevUSD_Diff_Change = difficulty_period_changes.loc["RevUSD"]
+    AdrActCnt_Diff_Change = difficulty_period_changes.loc["AdrActCnt"]
+    AdrBalUSD10Cnt_Diff_Change = difficulty_period_changes.loc[
+        "AdrBalUSD10Cnt"
+    ]  # New metric added
+    FeeTotUSD_Diff_Change = difficulty_period_changes.loc["FeeTotUSD"]
+    supply_pct_1_year_plus_Diff_Change = difficulty_period_changes.loc[
         "supply_pct_1_year_plus"
-    ]
-    VelCur1yr_difficulty_change = difficulty_period_changes.loc["VelCur1yr"]
+    ]  # New metric added
+    VelCur1yr_Diff_Change = difficulty_period_changes.loc[
+        "VelCur1yr"
+    ]  # New metric added
 
     # Create a dictionary with the extracted values
     bitcoin_fundamentals_data = {
         "Metrics Name": [
+            "Bitcoin Price",
             "Hashrate",
             "Transaction Count",
             "Transaction Volume",
-            "Avg Transaction Size",
+            "Transaction Volume Mean USD",  # New metric added
             "Active Address Count",
-            "+$10 USD Address",
+            "Addresses with Balance > 10 USD",  # New metric added
             "Miner Revenue",
-            "Fees In USD",
-            "1+ Year Supply %",
-            "1 Year Velocity",
+            "Fees in USD",
+            "Supply Held > 1 Year",  # New metric added
+            "Velocity (1 Year)",  # New metric added
         ],
         "Value": [
+            Bitcoin_Price,
             HashRate,
             TxCnt,
             TxTfrValAdjUSD,
@@ -583,100 +286,144 @@ def create_bitcoin_fundamentals_table(
             VelCur1yr,
         ],
         "7 Day Change": [
-            HashRate_7,
-            TxCnt_7,
-            TxTfrValAdjUSD_7,
-            TxTfrValMeanUSD_7,
-            AdrActCnt_7,
-            AdrBalUSD10Cnt_7,
-            RevUSD_7,
-            FeeTotUSD_7,
-            supply_pct_1_year_plus_7,
-            VelCur1yr_7,
+            Bitcoin_7d_Return,
+            report_data.loc[report_date, "HashRate_7_change"],
+            report_data.loc[report_date, "TxCnt_7_change"],
+            report_data.loc[report_date, "TxTfrValAdjUSD_7_change"],
+            report_data.loc[
+                report_date, "7_day_ma_TxTfrValMeanUSD_7_change"
+            ],  # New metric added
+            report_data.loc[report_date, "AdrActCnt_7_change"],
+            report_data.loc[report_date, "AdrBalUSD10Cnt_7_change"],  # New metric added
+            report_data.loc[report_date, "RevUSD_7_change"],
+            report_data.loc[report_date, "FeeTotUSD_7_change"],
+            report_data.loc[
+                report_date, "supply_pct_1_year_plus_7_change"
+            ],  # New metric added
+            report_data.loc[report_date, "VelCur1yr_7_change"],  # New metric added
         ],
         "Difficulty Period Change": [
-            HashRate_difficulty_change,
-            TxCnt_difficulty_change,
-            TxTfrValAdjUSD_difficulty_change,
-            TxTfrValMeanUSD_difficulty_change,
-            AdrActCnt_difficulty_change,
-            AdrBalUSD10Cnt_difficulty_change,
-            RevUSD_difficulty_change,
-            FeeTotUSD_difficulty_change,
-            supply_pct_1_year_plus_difficulty_change,
-            VelCur1yr_difficulty_change,
+            Bitcoin_Difficulty_Change,
+            HashRate_Diff_Change,
+            TxCnt_Diff_Change,
+            TxTfrValAdjUSD_Diff_Change,
+            TxTfrValMeanUSD_Diff_Change,
+            AdrActCnt_Diff_Change,
+            AdrBalUSD10Cnt_Diff_Change,
+            RevUSD_Diff_Change,
+            FeeTotUSD_Diff_Change,
+            supply_pct_1_year_plus_Diff_Change,
+            VelCur1yr_Diff_Change,
         ],
         "MTD Change": [
-            HashRate_MTD,
-            TxCnt_MTD,
-            TxTfrValAdjUSD_MTD,
-            TxTfrValMeanUSD_MTD,
-            AdrActCnt_MTD,
-            AdrBalUSD10Cnt_MTD,
-            RevUSD_MTD,
-            FeeTotUSD_MTD,
-            supply_pct_1_year_plus_MTD,
-            VelCur1yr_MTD,
+            Bitcoin_MTD_Return,
+            report_data.loc[report_date, "HashRate_MTD_change"],
+            report_data.loc[report_date, "TxCnt_MTD_change"],
+            report_data.loc[report_date, "TxTfrValAdjUSD_MTD_change"],
+            report_data.loc[
+                report_date, "7_day_ma_TxTfrValMeanUSD_MTD_change"
+            ],  # New metric added
+            report_data.loc[report_date, "AdrActCnt_MTD_change"],
+            report_data.loc[
+                report_date, "AdrBalUSD10Cnt_MTD_change"
+            ],  # New metric added
+            report_data.loc[report_date, "RevUSD_MTD_change"],
+            report_data.loc[report_date, "FeeTotUSD_MTD_change"],
+            report_data.loc[
+                report_date, "supply_pct_1_year_plus_MTD_change"
+            ],  # New metric added
+            report_data.loc[report_date, "VelCur1yr_MTD_change"],  # New metric added
         ],
         "90 Day Change": [
-            HashRate_90,
-            TxCnt_90,
-            TxTfrValAdjUSD_90,
-            TxTfrValMeanUSD_90,
-            AdrActCnt_90,
-            AdrBalUSD10Cnt_90,
-            RevUSD_90,
-            FeeTotUSD_90,
-            supply_pct_1_year_plus_90,
-            VelCur1yr_90,
+            Bitcoin_90d_Return,
+            report_data.loc[report_date, "HashRate_90_change"],
+            report_data.loc[report_date, "TxCnt_90_change"],
+            report_data.loc[report_date, "TxTfrValAdjUSD_90_change"],
+            report_data.loc[
+                report_date, "7_day_ma_TxTfrValMeanUSD_90_change"
+            ],  # New metric added
+            report_data.loc[report_date, "AdrActCnt_90_change"],
+            report_data.loc[
+                report_date, "AdrBalUSD10Cnt_90_change"
+            ],  # New metric added
+            report_data.loc[report_date, "RevUSD_90_change"],
+            report_data.loc[report_date, "FeeTotUSD_90_change"],
+            report_data.loc[
+                report_date, "supply_pct_1_year_plus_90_change"
+            ],  # New metric added
+            report_data.loc[report_date, "VelCur1yr_90_change"],  # New metric added
         ],
         "YTD Change": [
-            HashRate_YTD,
-            TxCnt_YTD,
-            TxTfrValAdjUSD_YTD,
-            TxTfrValMeanUSD_YTD,
-            AdrActCnt_YTD,
-            AdrBalUSD10Cnt_YTD,
-            RevUSD_YTD,
-            FeeTotUSD_YTD,
-            supply_pct_1_year_plus_YTD,
-            VelCur1yr_YTD,
+            Bitcoin_YTD_Return,
+            report_data.loc[report_date, "HashRate_YTD_change"],
+            report_data.loc[report_date, "TxCnt_YTD_change"],
+            report_data.loc[report_date, "TxTfrValAdjUSD_YTD_change"],
+            report_data.loc[
+                report_date, "7_day_ma_TxTfrValMeanUSD_YTD_change"
+            ],  # New metric added
+            report_data.loc[report_date, "AdrActCnt_YTD_change"],
+            report_data.loc[
+                report_date, "AdrBalUSD10Cnt_YTD_change"
+            ],  # New metric added
+            report_data.loc[report_date, "RevUSD_YTD_change"],
+            report_data.loc[report_date, "FeeTotUSD_YTD_change"],
+            report_data.loc[
+                report_date, "supply_pct_1_year_plus_YTD_change"
+            ],  # New metric added
+            report_data.loc[report_date, "VelCur1yr_YTD_change"],  # New metric added
         ],
         "4 Year CAGR": [
-            HashRate_CAGR,
-            TxCnt_CAGR,
-            TxTfrValAdjUSD_CAGR,
-            TxTfrValMeanUSD_CAGR,
-            AdrActCnt_CAGR,
-            AdrBalUSD10Cnt_CAGR,
-            RevUSD_CAGR,
-            FeeTotUSD_CAGR,
-            supply_pct_1_year_plus_CAGR,
-            VelCur1yr_CAGR,
+            Bitcoin_4y_CAGR,
+            cagr_results.loc[report_date, "HashRate_4_Year_CAGR"],
+            cagr_results.loc[report_date, "TxCnt_4_Year_CAGR"],
+            cagr_results.loc[report_date, "TxTfrValAdjUSD_4_Year_CAGR"],
+            cagr_results.loc[
+                report_date, "7_day_ma_TxTfrValMeanUSD_4_Year_CAGR"
+            ],  # New metric added
+            cagr_results.loc[report_date, "AdrActCnt_4_Year_CAGR"],
+            cagr_results.loc[
+                report_date, "AdrBalUSD10Cnt_4_Year_CAGR"
+            ],  # New metric added
+            cagr_results.loc[report_date, "RevUSD_4_Year_CAGR"],
+            cagr_results.loc[report_date, "FeeTotUSD_4_Year_CAGR"],
+            cagr_results.loc[
+                report_date, "supply_pct_1_year_plus_4_Year_CAGR"
+            ],  # New metric added
+            cagr_results.loc[report_date, "VelCur1yr_4_Year_CAGR"],  # New metric added
         ],
         "52 Week Low": [
-            HashRate_52_low,
-            TxCnt_52_low,
-            TxTfrValAdjUSD_52_low,
-            TxTfrValMeanUSD_52_low,
-            AdrActCnt_52_low,
-            AdrBalUSD10Cnt_52_low,
-            RevUSD_52_low,
-            FeeTotUSD_52_low,
-            supply_pct_1_year_plus_52_low,
-            VelCur1yr_52_low,
+            Bitcoin_52w_Low,
+            weekly_high_low["7_day_ma_HashRate"]["52_week_low"],
+            weekly_high_low["7_day_ma_TxCnt"]["52_week_low"],
+            weekly_high_low["7_day_ma_TxTfrValAdjUSD"]["52_week_low"],
+            weekly_high_low["7_day_ma_TxTfrValMeanUSD"][
+                "52_week_low"
+            ],  # New metric added
+            weekly_high_low["AdrActCnt"]["52_week_low"],
+            weekly_high_low["AdrBalUSD10Cnt"]["52_week_low"],  # New metric added
+            weekly_high_low["RevUSD"]["52_week_low"],
+            weekly_high_low["FeeTotUSD"]["52_week_low"],
+            weekly_high_low["supply_pct_1_year_plus"][
+                "52_week_low"
+            ],  # New metric added
+            weekly_high_low["VelCur1yr"]["52_week_low"],  # New metric added
         ],
         "52 Week High": [
-            HashRate_52_high,
-            TxCnt_52_high,
-            TxTfrValAdjUSD_52_high,
-            TxTfrValMeanUSD_52_high,
-            AdrActCnt_52_high,
-            AdrBalUSD10Cnt_52_high,
-            RevUSD_52_high,
-            FeeTotUSD_52_high,
-            supply_pct_1_year_plus_52_high,
-            VelCur1yr_52_high,
+            Bitcoin_52w_High,
+            weekly_high_low["7_day_ma_HashRate"]["52_week_high"],
+            weekly_high_low["7_day_ma_TxCnt"]["52_week_high"],
+            weekly_high_low["7_day_ma_TxTfrValAdjUSD"]["52_week_high"],
+            weekly_high_low["7_day_ma_TxTfrValMeanUSD"][
+                "52_week_high"
+            ],  # New metric added
+            weekly_high_low["AdrActCnt"]["52_week_high"],
+            weekly_high_low["AdrBalUSD10Cnt"]["52_week_high"],  # New metric added
+            weekly_high_low["RevUSD"]["52_week_high"],
+            weekly_high_low["FeeTotUSD"]["52_week_high"],
+            weekly_high_low["supply_pct_1_year_plus"][
+                "52_week_high"
+            ],  # New metric added
+            weekly_high_low["VelCur1yr"]["52_week_high"],  # New metric added
         ],
     }
 
@@ -771,1076 +518,406 @@ def style_bitcoin_fundamentals_table(fundamentals_table):
     return styled_table_colors
 
 
-def create_bitcoin_valuation_table(
-    report_data, difficulty_period_changes, weekly_high_low, valuation_data, report_date
-):
+def create_weekly_metrics_table(df, metrics_template):
     """
-    Generates a valuation table for Bitcoin using different valuation models.
+    Generates a weekly metrics table with Monday - Sunday columns.
 
     Parameters:
-    - report_data (pd.DataFrame): DataFrame containing report data for Bitcoin.
-    - difficulty_period_changes (pd.Series): Series of changes in valuation model metrics for the latest difficulty period.
-    - weekly_high_low (dict): Dictionary with 52-week highs and lows for each metric.
-    - valuation_data (dict): Dictionary of target valuations for buy/sell decisions.
-    - report_date (str or pd.Timestamp): The specific date for the valuation report.
+    df (pd.DataFrame): DataFrame with time-indexed data containing columns specified in the template.
+    metrics_template (dict): Dictionary where keys are section headers and values are dictionaries
+                             with metric names as keys and tuples (column_name, format_type) as values.
 
     Returns:
-    - pd.DataFrame: DataFrame summarizing various valuation metrics, model prices, buy/sell targets, and fair values.
+    pd.io.formats.style.Styler: A styled DataFrame ready for display with customized formatting.
     """
-    # Extract BTC Value
-    btc_value = report_data.loc[report_date, "PriceUSD"]
-
-    # Extraction for "NVTAdj"
-    nvt_price_multiple = report_data.loc[report_date, "nvt_price"]
-    nvt_difficulty_change = difficulty_period_changes.loc["nvt_price"]
-    nvt_buy_target = valuation_data["nvt_price_multiple_buy_target"]
-    nvt_sell_target = valuation_data["nvt_price_multiple_sell_target"]
-    nvt_pct_from_fair_value = (nvt_price_multiple - btc_value) / btc_value
-    nvt_return_to_target = (nvt_sell_target - btc_value) / btc_value
-    nvt_return_to_buy_target = (nvt_buy_target - btc_value) / btc_value
-
-    # Extraction for "200_day_multiple"
-    day_200_price = report_data.loc[report_date, "200_day_ma_priceUSD"]
-    day_200_difficulty_change = difficulty_period_changes.loc["200_day_multiple"]
-    day_200_buy_target = valuation_data["200_day_multiple_buy_target"]
-    day_200_sell_target = valuation_data["200_day_multiple_sell_target"]
-    day_200_pct_from_fair_value = (day_200_price - btc_value) / btc_value
-    day_200_return_to_target = (day_200_sell_target - btc_value) / btc_value
-    day_200_return_to_buy_target = (day_200_buy_target - btc_value) / btc_value
-
-    # Extraction for "mvrv_ratio"
-    mvrv_price = report_data.loc[report_date, "realised_price"]
-    mvrv_difficulty_change = difficulty_period_changes.loc["realised_price"]
-    mvrv_buy_target = valuation_data["mvrv_ratio_buy_target"]
-    mvrv_sell_target = valuation_data["mvrv_ratio_sell_target"]
-    mvrv_pct_from_fair_value = (mvrv_price - btc_value) / btc_value
-    mvrv_return_to_target = (mvrv_sell_target - btc_value) / btc_value
-    mvrv_return_to_buy_target = (mvrv_buy_target - btc_value) / btc_value
-
-    # Extraction for "thermocap_multiple"
-    thermo_price = report_data.loc[report_date, "thermocap_price_multiple_8"]
-    thermo_difficulty_change = difficulty_period_changes.loc[
-        "thermocap_price_multiple_8"
-    ]
-    thermo_buy_target = valuation_data["thermocap_multiple_buy_target"]
-    thermo_sell_target = valuation_data["thermocap_multiple_sell_target"]
-    thermo_pct_from_fair_value = (thermo_price - btc_value) / btc_value
-    thermo_return_to_target = (thermo_sell_target - btc_value) / btc_value
-    thermo_return_to_buy_target = (thermo_buy_target - btc_value) / btc_value
-
-    # Extraction for "stocktoflow"
-    sf_price = report_data.loc[report_date, "SF_Predicted_Price"]
-    sf_difficulty_change = difficulty_period_changes.loc["SF_Predicted_Price"]
-    sf_buy_target = valuation_data["SF_Multiple_buy_target"]
-    sf_sell_target = valuation_data["SF_Multiple_sell_target"]
-    sf_pct_from_fair_value = (sf_price - btc_value) / btc_value
-    sf_return_to_target = (sf_sell_target - btc_value) / btc_value
-    sf_return_to_buy_target = (sf_buy_target - btc_value) / btc_value
-
-    # Extraction for "appl_marketcap"
-    aapl_price = valuation_data["AAPL_MarketCap_bull_present_value"]
-    aapl_difficulty_change = difficulty_period_changes.loc["AAPL_mc_btc_price"]
-    aapl_buy_target = valuation_data["AAPL_MarketCap_base_present_value"]
-    aapl_sell_target = report_data.loc[report_date, "AAPL_mc_btc_price"]
-    aapl_pct_from_fair_value = (aapl_price - btc_value) / btc_value
-    aapl_return_to_target = (aapl_sell_target - btc_value) / btc_value
-    aapl_return_to_buy_target = (aapl_buy_target - btc_value) / btc_value
-
-    # Extraction for "gold_marketcap_billion_usd"
-    gold_price = valuation_data["gold_marketcap_billion_usd_bull_present_value"]
-    gold_difficulty_change = difficulty_period_changes.loc["gold_marketcap_billion_usd"]
-    gold_buy_target = valuation_data["gold_marketcap_billion_usd_base_present_value"]
-    gold_sell_target = (
-        report_data.loc[report_date, "gold_marketcap_billion_usd"]
-        / report_data.loc[report_date, "SplyExpFut10yr"]
-    )
-    gold_pct_from_fair_value = (gold_price - btc_value) / btc_value
-    gold_return_to_target = (gold_sell_target - btc_value) / btc_value
-    gold_return_to_buy_target = (gold_buy_target - btc_value) / btc_value
-
-    # Extraction for "silver_marketcap_billion_usd"
-    silver_price = valuation_data["silver_marketcap_billion_usd_bull_present_value"]
-    silver_difficulty_change = difficulty_period_changes.loc[
-        "silver_marketcap_billion_usd"
-    ]
-    silver_buy_target = valuation_data[
-        "silver_marketcap_billion_usd_base_present_value"
-    ]
-    silver_sell_target = (
-        report_data.loc[report_date, "silver_marketcap_billion_usd"]
-        / report_data.loc[report_date, "SplyExpFut10yr"]
-    )
-    silver_pct_from_fair_value = (silver_price - btc_value) / btc_value
-    silver_return_to_target = (silver_sell_target - btc_value) / btc_value
-    silver_return_to_buy_target = (silver_buy_target - btc_value) / btc_value
-
-    # Extraction for "United_States_btc_price"
-    us_btc_price = valuation_data["United_States_cap_bull_present_value"]
-    us_difficulty_change = difficulty_period_changes.loc["United_States_btc_price"]
-    us_buy_target = valuation_data["United_States_cap_base_present_value"]
-    us_sell_target = report_data.loc[report_date, "United_States_btc_price"]
-    us_pct_from_fair_value = (us_btc_price - btc_value) / btc_value
-    us_return_to_target = (us_sell_target - btc_value) / btc_value
-    us_return_to_buy_target = (us_buy_target - btc_value) / btc_value
-
-    # Extraction for "United_Kingdom_btc_price"
-    uk_btc_price = valuation_data["United_Kingdom_cap_bull_present_value"]
-    uk_difficulty_change = difficulty_period_changes.loc["United_Kingdom_btc_price"]
-    uk_buy_target = valuation_data["United_Kingdom_cap_base_present_value"]
-    uk_sell_target = report_data.loc[report_date, "United_Kingdom_btc_price"]
-    uk_pct_from_fair_value = (uk_btc_price - btc_value) / btc_value
-    uk_return_to_target = (uk_sell_target - btc_value) / btc_value
-    uk_return_to_buy_target = (uk_buy_target - btc_value) / btc_value
-
-    # Update the dictionary with the extracted values
-    bitcoin_valuation_data = {
-        "Valuation Model": [
-            "200 Day Moving Average",
-            "NVT Price",
-            "Realized Price",
-            "ThermoCap Price",
-            "Stock To Flow Price",
-            "Silver Market Cap",
-            "UK M0 Price",
-            "Apple Market Cap",
-            "US M0 Price",
-            "Gold Market Cap",
-        ],
-        "Model Price": [
-            day_200_price,
-            nvt_price_multiple,
-            mvrv_price,
-            thermo_price,
-            sf_price,
-            silver_price,
-            uk_btc_price,
-            aapl_price,
-            us_btc_price,
-            gold_price,
-        ],
-        "Difficulty Period Change": [
-            day_200_difficulty_change,
-            nvt_difficulty_change,
-            mvrv_difficulty_change,
-            thermo_difficulty_change,
-            sf_difficulty_change,
-            silver_difficulty_change,
-            uk_difficulty_change,
-            aapl_difficulty_change,
-            us_difficulty_change,
-            gold_difficulty_change,
-        ],
-        "BTC Price": [
-            btc_value,
-            btc_value,
-            btc_value,
-            btc_value,
-            btc_value,
-            btc_value,
-            btc_value,
-            btc_value,
-            btc_value,
-            btc_value,
-        ],
-        "Buy Target": [
-            day_200_buy_target,
-            nvt_buy_target,
-            mvrv_buy_target,
-            thermo_buy_target,
-            sf_buy_target,
-            silver_buy_target,
-            uk_buy_target,
-            aapl_buy_target,
-            us_buy_target,
-            gold_buy_target,
-        ],
-        "Sell Target": [
-            day_200_sell_target,
-            nvt_sell_target,
-            mvrv_sell_target,
-            thermo_sell_target,
-            sf_sell_target,
-            silver_sell_target,
-            uk_sell_target,
-            aapl_sell_target,
-            us_sell_target,
-            gold_sell_target,
-        ],
-        "% To Buy Target": [
-            day_200_return_to_buy_target,
-            nvt_return_to_buy_target,
-            mvrv_return_to_buy_target,
-            thermo_return_to_buy_target,
-            sf_return_to_buy_target,
-            silver_return_to_buy_target,
-            uk_return_to_buy_target,
-            aapl_return_to_buy_target,
-            us_return_to_buy_target,
-            gold_return_to_buy_target,
-        ],
-        "% To Model Price": [
-            day_200_pct_from_fair_value,
-            nvt_pct_from_fair_value,
-            mvrv_pct_from_fair_value,
-            thermo_pct_from_fair_value,
-            sf_pct_from_fair_value,
-            silver_pct_from_fair_value,
-            uk_pct_from_fair_value,
-            aapl_pct_from_fair_value,
-            us_pct_from_fair_value,
-            gold_pct_from_fair_value,
-        ],
-        "% To Sell Target": [
-            day_200_return_to_target,
-            nvt_return_to_target,
-            mvrv_return_to_target,
-            thermo_return_to_target,
-            sf_return_to_target,
-            silver_return_to_target,
-            uk_return_to_target,
-            aapl_return_to_target,
-            us_return_to_target,
-            gold_return_to_target,
-        ],
+    # Define formatting functions
+    formatters = {
+        "number": lambda val: f"{val:,.0f}" if pd.notnull(val) else "",
+        "number2": lambda val: f"{val:,.2f}" if pd.notnull(val) else "",
+        "currency": lambda val: f"${val:,.2f}" if pd.notnull(val) else "",
+        "percent": lambda val: f"{val:.2f}%" if pd.notnull(val) else "",
+        "percent_change": lambda val: (
+            f"<span style='color: {'green' if val > 0 else 'red'};'>{val:.2f}%</span>"
+            if pd.notnull(val)
+            else ""
+        ),
     }
 
-    # Create and return the "Bitcoin Valuation" DataFrame
-    bitcoin_valuation_df = pd.DataFrame(bitcoin_valuation_data)
-    # Convert columns from 'object' to 'float64'
-    bitcoin_valuation_df["Difficulty Period Change"] = pd.to_numeric(
-        bitcoin_valuation_df["Difficulty Period Change"], errors="coerce"
-    )
-    bitcoin_valuation_df["Sell Target"] = pd.to_numeric(
-        bitcoin_valuation_df["Sell Target"], errors="coerce"
-    )
-    bitcoin_valuation_df["% To Sell Target"] = pd.to_numeric(
-        bitcoin_valuation_df["% To Sell Target"], errors="coerce"
-    )
-    return bitcoin_valuation_df
+    def apply_format(column, format_type):
+        """Apply the correct formatting function based on format_type."""
+        return column.apply(formatters[format_type])
 
+    # Initialize a list to hold the calculated values
+    table_data = []
 
-def style_bitcoin_valuation_table(bitcoin_valuation_table):
-    """
-    Styles a DataFrame containing valuation metrics for Bitcoin. The function applies
-    specific formatting rules to monetary values, percentages, and other numeric data.
-    Conditional coloring is used to differentiate positive and negative values, and
-    additional styling adjustments improve readability.
+    # Get the most recent date in the DataFrame for current week calculations
+    latest_date = df.index.max()
+    start_of_week = latest_date - timedelta(
+        days=latest_date.weekday()
+    )  # Get the most recent Monday
 
-    Parameters:
-    - bitcoin_valuation_table (pd.DataFrame): DataFrame containing valuation metrics for Bitcoin.
+    # Helper function to append header and metric rows
+    def append_row(data, row, header=False):
+        """Append a row with specific formatting and track headers for styling."""
+        if header:
+            header_style_indices.append(len(data))  # Track header row index
+        data.append(row)
 
-    Returns:
-    - pd.io.formats.style.Styler: A styled DataFrame with formatted columns, conditional
-      coloring, and layout enhancements for readability.
-    """
-    # Define formatting rules for each column in the valuation table
-    format_dict_valuation = {
-        "Valuation Model": "{}",
-        "Model Price": lambda x: "${:,.0f}".format(x)
-        if pd.notnull(x)
-        else x,  # Ensure numeric formatting
-        "Difficulty Period Change": "{:.2f}%",  # Format percentage values
-        "BTC Price": lambda x: "${:,.0f}".format(x) if pd.notnull(x) else x,
-        "Buy Target": lambda x: "${:,.0f}".format(x) if pd.notnull(x) else x,
-        "Sell Target": lambda x: "${:,.0f}".format(x) if pd.notnull(x) else x,
-        "% To Buy Target": "{:.2%}",
-        "% To Model Price": "{:.2%}",
-        "% To Sell Target": "{:.2%}",
-    }
+    header_style_indices = []  # Store header row indices
 
-    # Define color palettes for conditional formatting (not applied directly but can be used in extensions)
-    diverging_cm = sns.diverging_palette(100, 133, as_cmap=True)  # Diverging palette
-    bg_colormap = sns.light_palette("white", as_cmap=True)  # Light background palette
-
-    # Helper function to apply conditional text color based on value
-    def color_values(val):
-        """
-        Determines color based on value sign:
-        - Green for positive values
-        - Red for negative values
-        - Black for zero or NaN values
-        """
-        try:
-            if val > 0:
-                color = "green"
-            elif val < 0:
-                color = "red"
-            else:
-                color = "black"
-        except ValueError:
-            color = "black"  # Default color if comparison fails
-        return f"color: {color}"
-
-    # Columns to apply the gradient and conditional text coloring
-    gradient_columns = [
-        "Difficulty Period Change",
-        "% To Model Price",
-        "% To Sell Target",
-        "% To Buy Target",
-    ]
-
-    # Apply formatting, conditional coloring, and styling to the table
-    styled_table_colors = (
-        bitcoin_valuation_table.style.format(
-            format_dict_valuation
-        )  # Apply the format dictionary
-        .applymap(color_values, subset=gradient_columns)  # Conditional text color
-        .hide_index()  # Hide DataFrame index for cleaner presentation
-        .set_properties(**{"white-space": "nowrap"})  # Prevent content wrapping
-        .set_table_styles(
-            [{"selector": "th", "props": [("white-space", "nowrap")]}]
-        )  # Set table header styling
-    )
-
-    return styled_table_colors
-
-
-### Weekly Market Summary Tables
-
-
-def create_weekly_summary_table(report_data, report_date):
-    """
-    Generates a weekly summary table for Bitcoin's key metrics.
-
-    Parameters:
-    - report_data (pd.DataFrame): DataFrame containing historical Bitcoin data, indexed by date.
-    - report_date (str or pd.Timestamp): Specific date for which the summary is generated.
-
-    Returns:
-    - pd.DataFrame: DataFrame containing a summary of Bitcoin metrics for the specified report date.
-    """
-
-    # Extract the necessary data for the specified date from report_data
-    report_date_data = report_data.loc[report_date].name
-    bitcoin_supply = report_data.loc[report_date, "SplyCur"]
-    hash_rate = report_data.loc[report_date, "7_day_ma_HashRate"]
-    price_usd = report_data.loc[report_date, "PriceUSD"]
-    market_cap = report_data.loc[report_date, "CapMrktCurUSD"]
-    sats_per_dollar = 100000000 / price_usd  # Calculates satoshis per dollar
-    btc_dominance = report_data.loc[report_date, "bitcoin_dominance"]
-    btc_volume = report_data.loc[report_date, "btc_trading_volume"]
-
-    # Placeholder values for market sentiment, trend, and valuation; can be dynamically assigned in the future
-    fear_greed = "Neutral"  # Example sentiment
-    bitcoin_trend = "Bullish"  # Example trend
-    bitcoin_valuation = "Fair Value"  # Example valuation status
-
-    # Create a dictionary to hold all the extracted metrics
-    weekly_update_data = {
-        "Bitcoin Price USD": price_usd,
-        "Report Date": report_date_data,
-        "Bitcoin Marketcap": market_cap,
-        "Sats Per Dollar": sats_per_dollar,
-        "Bitcoin Dominance": btc_dominance,
-        "24HR Bitcoin Trading Volume": btc_volume,
-        "Bitcoin Market Sentiment": fear_greed,
-        "Bitcoin Market Trend": bitcoin_trend,
-        "Bitcoin Valuation": bitcoin_valuation,
-    }
-
-    # Create a DataFrame from the dictionary for clear and structured reporting
-    weekly_summary_df = pd.DataFrame([weekly_update_data])
-
-    return weekly_summary_df
-
-
-def format_value(value, format_type):
-    """
-    Helper function to format a value based on a specified type.
-
-    Parameters:
-    - value: The value to format. Can be an integer, float, or date object, depending on format_type.
-    - format_type (str): The format type to apply to the value. Accepted values are:
-        - "percentage": Formats the value as a percentage with two decimal places.
-        - "integer": Formats the value as an integer with thousand separators.
-        - "float": Formats the value as a float with thousand separators and no decimal places.
-        - "currency": Formats the value as currency (e.g., $100,000) with thousand separators.
-        - "date": Formats the value as a date in the format "YYYY-MM-DD".
-        - Defaults to string formatting if the format_type is unrecognized.
-
-    Returns:
-    - str: The formatted value as a string.
-    """
-
-    # Format the value based on the specified format_type
-    if format_type == "percentage":
-        return f"{value:.2f}%"  # Format as a percentage with 2 decimal places
-
-    elif format_type == "integer":
-        return f"{int(value):,}"  # Format as an integer with thousand separators
-
-    elif format_type == "float":
-        return (
-            f"{value:,.0f}"  # Format as a float with thousand separators, no decimals
+    # Loop through each section and metric in the template
+    for section, metrics in metrics_template.items():
+        # Add section header row
+        append_row(
+            table_data,
+            {
+                "Metric": f"<strong>{section}</strong>",
+                "7 Day Avg": "-",
+                "7 Day Avg % Change": "-",
+                "Monday": "-",
+                "Tuesday": "-",
+                "Wednesday": "-",
+                "Thursday": "-",
+                "Friday": "-",
+                "Saturday": "-",
+                "Sunday": "-",
+            },
+            header=True,
         )
 
-    elif format_type == "currency":
-        return f"${value:,.0f}"  # Format as currency with thousand separators
-
-    elif format_type == "date":
-        return value.strftime("%Y-%m-%d")  # Format date as YYYY-MM-DD
-
-    else:
-        # Default: return as a string if format_type is unrecognized
-        return str(value)
-
-
-def create_weekly_summary_big_numbers(weekly_summary_df):
-    """
-    Generates a series of BigNumbers for each metric in the weekly summary table, applying
-    formatting rules based on metric type and indicating directional changes where applicable.
-
-    Parameters:
-    - weekly_summary_df (pd.DataFrame): DataFrame containing weekly summary metrics for Bitcoin.
-
-    Returns:
-    - dp.Group: A Datapane Group containing BigNumbers for display, arranged in 3 columns.
-    """
-
-    # Define formatting rules for each metric in the weekly summary
-    format_rules = {
-        "Bitcoin Price USD": "currency",
-        "Report Date": "string",
-        "Bitcoin Marketcap": "currency",
-        "Sats Per Dollar": "float",
-        "Bitcoin Dominance": "percentage",
-        "24HR Bitcoin Trading Volume": "currency",
-        "Bitcoin Market Sentiment": "string",
-        "Bitcoin Market Trend": "string",
-        "Bitcoin Valuation": "string",
-    }
-
-    # Initialize a list to store BigNumber elements
-    big_numbers = []
-
-    # Loop through each metric and apply formatting and directional styling if needed
-    for column, value in weekly_summary_df.iloc[0].items():
-        # Skip irrelevant or specifically excluded metrics
-        if column == "Bitcoin Price Change Difficulty Period":
-            continue
-
-        # Format the metric value based on its type as per format_rules
-        formatted_value = format_value(value, format_rules.get(column, ""))
-
-        # Handle metrics with directional indication, assuming "Difficulty Change" implies a trend
-        if column == "Difficulty Change":
-            is_upward = value >= 0  # Positive values indicate upward trend
-            big_numbers.append(
-                dp.BigNumber(
-                    heading=column,
-                    value=formatted_value,
-                    is_upward_change=is_upward,
-                )
-            )
-        else:
-            # Add BigNumber without directional indication for other metrics
-            big_numbers.append(
-                dp.BigNumber(
-                    heading=column,
-                    value=formatted_value,
-                )
+        # Process each metric
+        for metric_display_name, (column_name, format_type) in metrics.items():
+            # Calculate the 7-day average and percentage change from the previous 7-day average
+            week_avg = df[column_name].tail(7).mean()
+            prev_week_avg = df[column_name].tail(14).head(7).mean()
+            pct_change = (
+                ((week_avg - prev_week_avg) / prev_week_avg) * 100
+                if prev_week_avg != 0
+                else np.nan
             )
 
-    # Organize BigNumbers into a Group with 3 columns and return the result for display
-    return dp.Group(*big_numbers, columns=3)
+            # Get weekly values (Mon-Sun) up to the latest available date
+            weekly_values = (
+                df[column_name][start_of_week:latest_date]
+                .reindex(
+                    pd.date_range(start=start_of_week, periods=7, freq="D").date,
+                    fill_value=None,
+                )
+                .tolist()
+            )
 
+            # Add the metric data with formatted values
+            append_row(
+                table_data,
+                {
+                    "Metric": metric_display_name,
+                    "7 Day Avg": apply_format(pd.Series([week_avg]), format_type)[0],
+                    "7 Day Avg % Change": apply_format(
+                        pd.Series([pct_change]), "percent_change"
+                    )[0],
+                    "Monday": apply_format(pd.Series([weekly_values[0]]), format_type)[
+                        0
+                    ],
+                    "Tuesday": apply_format(pd.Series([weekly_values[1]]), format_type)[
+                        0
+                    ],
+                    "Wednesday": apply_format(
+                        pd.Series([weekly_values[2]]), format_type
+                    )[0],
+                    "Thursday": apply_format(
+                        pd.Series([weekly_values[3]]), format_type
+                    )[0],
+                    "Friday": apply_format(pd.Series([weekly_values[4]]), format_type)[
+                        0
+                    ],
+                    "Saturday": apply_format(
+                        pd.Series([weekly_values[5]]), format_type
+                    )[0],
+                    "Sunday": apply_format(pd.Series([weekly_values[6]]), format_type)[
+                        0
+                    ],
+                },
+            )
 
-def create_crypto_performance_table(
-    report_data, data, report_date, correlation_results
-):
-    """
-    Creates a performance table summarizing key metrics for major cryptocurrencies, including
-    Bitcoin, Ethereum, Ripple, Dogecoin, Binance Coin, and Tether. Metrics include price, market cap,
-    returns over multiple periods, and correlations with Bitcoin.
+    # Create the final DataFrame and style it
+    table_df = pd.DataFrame(table_data)
 
-    Parameters:
-    - report_data (pd.DataFrame): DataFrame containing historical data for cryptocurrencies.
-    - data (dict): Additional data related to cryptocurrencies (not directly used here but kept for compatibility).
-    - report_date (str or pd.Timestamp): Date for which the performance metrics are retrieved.
-    - correlation_results (pd.DataFrame): DataFrame with correlation values between cryptocurrencies and Bitcoin.
+    # Apply styling to hide index and adjust text properties
+    styled_table = table_df.style.hide_index().set_properties(
+        **{"font-size": "10pt", "white-space": "nowrap"}
+    )
 
-    Returns:
-    - pd.DataFrame: A DataFrame containing the performance metrics for the selected cryptocurrencies.
-    """
-
-    # Define the structure and data sources for each cryptocurrency's performance metrics
-    performance_metrics_dict = {
-        "Bitcoin": {
-            "Asset": "BTC",
-            "Price": report_data.loc[report_date, "PriceUSD"],
-            "Market Cap": report_data.loc[report_date, "CapMrktCurUSD"],
-            "Week To Date Return": report_data.loc[
-                report_date, "PriceUSD_trading_week_change"
-            ],
-            "MTD": report_data.loc[report_date, "PriceUSD_MTD_change"],
-            "YTD": report_data.loc[report_date, "PriceUSD_YTD_change"],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "PriceUSD"
-            ],
-        },
-        "Ethereum": {
-            "Asset": "ETH",
-            "Price": report_data.loc[report_date, "ethereum_close"],
-            "Market Cap": report_data.loc[report_date, "ethereum_market_cap"],
-            "Week To Date Return": report_data.loc[
-                report_date, "ethereum_close_trading_week_change"
-            ],
-            "MTD": report_data.loc[report_date, "ethereum_close_MTD_change"],
-            "YTD": report_data.loc[report_date, "ethereum_close_YTD_change"],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "ethereum_close"
-            ],
-        },
-        "Ripple": {
-            "Asset": "XRP",
-            "Price": report_data.loc[report_date, "ripple_close"],
-            "Market Cap": report_data.loc[report_date, "ripple_market_cap"],
-            "Week To Date Return": report_data.loc[
-                report_date, "ripple_close_trading_week_change"
-            ],
-            "MTD": report_data.loc[report_date, "ripple_close_MTD_change"],
-            "YTD": report_data.loc[report_date, "ripple_close_YTD_change"],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "ripple_close"
-            ],
-        },
-        "Dogecoin": {
-            "Asset": "DOGE",
-            "Price": report_data.loc[report_date, "dogecoin_close"],
-            "Market Cap": report_data.loc[report_date, "dogecoin_market_cap"],
-            "Week To Date Return": report_data.loc[
-                report_date, "dogecoin_close_trading_week_change"
-            ],
-            "MTD": report_data.loc[report_date, "dogecoin_close_MTD_change"],
-            "YTD": report_data.loc[report_date, "dogecoin_close_YTD_change"],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "dogecoin_close"
-            ],
-        },
-        "Binance Coin": {
-            "Asset": "BNB",
-            "Price": report_data.loc[report_date, "binancecoin_close"],
-            "Market Cap": report_data.loc[report_date, "binancecoin_market_cap"],
-            "Week To Date Return": report_data.loc[
-                report_date, "binancecoin_close_trading_week_change"
-            ],
-            "MTD": report_data.loc[report_date, "binancecoin_close_MTD_change"],
-            "YTD": report_data.loc[report_date, "binancecoin_close_YTD_change"],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "binancecoin_close"
-            ],
-        },
-        "Tether": {
-            "Asset": "USDT",
-            "Price": report_data.loc[report_date, "tether_close"],
-            "Market Cap": report_data.loc[report_date, "tether_market_cap"],
-            "Week To Date Return": report_data.loc[
-                report_date, "tether_close_trading_week_change"
-            ],
-            "MTD": report_data.loc[report_date, "tether_close_MTD_change"],
-            "YTD": report_data.loc[report_date, "tether_close_YTD_change"],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "tether_close"
-            ],
-        },
-    }
-
-    # Convert the dictionary into a DataFrame for easier data manipulation and display
-    performance_table_df = pd.DataFrame(list(performance_metrics_dict.values()))
-
-    return performance_table_df
-
-
-def create_index_performance_table(report_data, data, report_date, correlation_results):
-    """
-    Creates a performance table summarizing key metrics for major financial indices and ETFs,
-    including Bitcoin, Nasdaq, S&P500, XLF Financials ETF, XLE Energy ETF, and FANG+ ETF.
-    Metrics include price, returns over multiple periods, and correlations with Bitcoin.
-
-    Parameters:
-    - report_data (pd.DataFrame): DataFrame containing historical data for various financial indices and ETFs.
-    - data (dict): Additional data related to indices and ETFs (not directly used here but included for compatibility).
-    - report_date (str or pd.Timestamp): Date for which the performance metrics are retrieved.
-    - correlation_results (pd.DataFrame): DataFrame with correlation values between indices/ETFs and Bitcoin.
-
-    Returns:
-    - pd.DataFrame: A DataFrame containing the performance metrics for the selected indices and ETFs.
-    """
-
-    # Define the structure and data sources for each index/ETF's performance metrics
-    performance_metrics_dict = {
-        "Bitcoin": {
-            "Asset": "Bitcoin",
-            "Price": report_data.loc[report_date, "PriceUSD"],
-            "Week To Date Return": report_data.loc[
-                report_date, "PriceUSD_trading_week_change"
-            ],
-            "MTD": report_data.loc[report_date, "PriceUSD_MTD_change"],
-            "YTD": report_data.loc[report_date, "PriceUSD_YTD_change"],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "PriceUSD"
-            ],
-        },
-        "Nasdaq": {
-            "Asset": "Nasdaq",
-            "Price": report_data.loc[report_date, "^IXIC_close"],
-            "Week To Date Return": report_data.loc[
-                report_date, "^IXIC_close_trading_week_change"
-            ],
-            "MTD": report_data.loc[report_date, "^IXIC_close_MTD_change"],
-            "YTD": report_data.loc[report_date, "^IXIC_close_YTD_change"],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "^IXIC_close"
-            ],
-        },
-        "S&P500": {
-            "Asset": "S&P500",
-            "Price": report_data.loc[report_date, "^GSPC_close"],
-            "Week To Date Return": report_data.loc[
-                report_date, "^GSPC_close_trading_week_change"
-            ],
-            "MTD": report_data.loc[report_date, "^GSPC_close_MTD_change"],
-            "YTD": report_data.loc[report_date, "^GSPC_close_YTD_change"],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "^GSPC_close"
-            ],
-        },
-        "XLF": {
-            "Asset": "XLF Financials ETF",
-            "Price": report_data.loc[report_date, "XLF_close"],
-            "Week To Date Return": report_data.loc[
-                report_date, "XLF_close_trading_week_change"
-            ],
-            "MTD": report_data.loc[report_date, "XLF_close_MTD_change"],
-            "YTD": report_data.loc[report_date, "XLF_close_YTD_change"],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "XLF_close"
-            ],
-        },
-        "XLE": {
-            "Asset": "XLE Energy ETF",
-            "Price": report_data.loc[report_date, "XLE_close"],
-            "Week To Date Return": report_data.loc[
-                report_date, "XLE_close_trading_week_change"
-            ],
-            "MTD": report_data.loc[report_date, "XLE_close_MTD_change"],
-            "YTD": report_data.loc[report_date, "XLE_close_YTD_change"],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "XLE_close"
-            ],
-        },
-        "FANG+": {
-            "Asset": "FANG+ ETF",
-            "Price": report_data.loc[report_date, "FANG.AX_close"],
-            "Week To Date Return": report_data.loc[
-                report_date, "FANG.AX_close_trading_week_change"
-            ],
-            "MTD": report_data.loc[report_date, "FANG.AX_close_MTD_change"],
-            "YTD": report_data.loc[report_date, "FANG.AX_close_YTD_change"],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "FANG.AX_close"
-            ],
-        },
-    }
-
-    # Convert the dictionary into a DataFrame for easier data manipulation and display
-    performance_table_df = pd.DataFrame(list(performance_metrics_dict.values()))
-
-    return performance_table_df
-
-
-def create_macro_performance_table(report_data, data, report_date, correlation_results):
-    """
-    Generates a performance table summarizing key metrics for macroeconomic assets, including Bitcoin,
-    the US Dollar Index, Gold Futures, Crude Oil Futures, 20+ Year Treasury Bond ETF, and the Bloomberg Commodity Index.
-    Metrics include asset price, returns over multiple periods, and correlations with Bitcoin.
-
-    Parameters:
-    - report_data (pd.DataFrame): DataFrame containing historical data for various macroeconomic assets.
-    - data (dict): Additional data related to assets (not directly used here but included for compatibility).
-    - report_date (str or pd.Timestamp): The date for which the performance metrics are retrieved.
-    - correlation_results (pd.DataFrame): DataFrame containing correlation values between assets and Bitcoin.
-
-    Returns:
-    - pd.DataFrame: A DataFrame containing performance metrics for the selected macroeconomic assets.
-    """
-
-    # Define the structure and data sources for each macroeconomic asset's performance metrics
-    performance_metrics_dict = {
-        "Bitcoin": {
-            "Asset": "Bitcoin",
-            "Price": report_data.loc[report_date, "PriceUSD"],
-            "Week To Date Return": report_data.loc[
-                report_date, "PriceUSD_trading_week_change"
-            ],
-            "MTD": report_data.loc[report_date, "PriceUSD_MTD_change"],
-            "YTD": report_data.loc[report_date, "PriceUSD_YTD_change"],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "PriceUSD"
-            ],
-        },
-        "US Dollar Index": {
-            "Asset": "US Dollar Index",
-            "Price": report_data.loc[report_date, "DX=F_close"],
-            "Week To Date Return": report_data.loc[
-                report_date, "DX=F_close_trading_week_change"
-            ],
-            "MTD": report_data.loc[report_date, "DX=F_close_MTD_change"],
-            "YTD": report_data.loc[report_date, "DX=F_close_YTD_change"],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "DX=F_close"
-            ],
-        },
-        "Gold Futures": {
-            "Asset": "Gold Futures",
-            "Price": report_data.loc[report_date, "GC=F_close"],
-            "Week To Date Return": report_data.loc[
-                report_date, "GC=F_close_trading_week_change"
-            ],
-            "MTD": report_data.loc[report_date, "GC=F_close_MTD_change"],
-            "YTD": report_data.loc[report_date, "GC=F_close_YTD_change"],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "GC=F_close"
-            ],
-        },
-        "Crude Oil Futures": {
-            "Asset": "Crude Oil Futures",
-            "Price": report_data.loc[report_date, "CL=F_close"],
-            "Week To Date Return": report_data.loc[
-                report_date, "CL=F_close_trading_week_change"
-            ],
-            "MTD": report_data.loc[report_date, "CL=F_close_MTD_change"],
-            "YTD": report_data.loc[report_date, "CL=F_close_YTD_change"],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "CL=F_close"
-            ],
-        },
-        "20+ Year Treasury Bond ETF": {
-            "Asset": "20+ Year Treasury Bond ETF",
-            "Price": report_data.loc[report_date, "TLT_close"],
-            "Week To Date Return": report_data.loc[
-                report_date, "TLT_close_trading_week_change"
-            ],
-            "MTD": report_data.loc[report_date, "TLT_close_MTD_change"],
-            "YTD": report_data.loc[report_date, "TLT_close_YTD_change"],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "TLT_close"
-            ],
-        },
-        "Bloomberg Commodity Index": {
-            "Asset": "Bloomberg Commodity Index",
-            "Price": report_data.loc[report_date, "^BCOM_close"],
-            "Week To Date Return": report_data.loc[
-                report_date, "^BCOM_close_trading_week_change"
-            ],
-            "MTD": report_data.loc[report_date, "^BCOM_close_MTD_change"],
-            "YTD": report_data.loc[report_date, "^BCOM_close_YTD_change"],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", "^BCOM_close"
-            ],
-        },
-    }
-
-    # Convert the dictionary into a DataFrame for easier data manipulation and display
-    macro_performance_table_df = pd.DataFrame(list(performance_metrics_dict.values()))
-
-    return macro_performance_table_df
-
-
-def create_equities_performance_table(
-    report_data, data, report_date, correlation_results
-):
-    """
-    Generates a performance table summarizing key metrics for Bitcoin and select equities
-    involved in the cryptocurrency ecosystem. Metrics include asset price, market capitalization,
-    returns over various periods, and correlations with Bitcoin.
-
-    Parameters:
-    - report_data (pd.DataFrame): DataFrame containing historical data for Bitcoin and equities.
-    - data (pd.DataFrame): DataFrame containing additional data, such as market capitalization, for equities.
-    - report_date (str or pd.Timestamp): The date for which the performance metrics are retrieved.
-    - correlation_results (pd.DataFrame): DataFrame containing correlation values between Bitcoin and equities.
-
-    Returns:
-    - pd.DataFrame: A DataFrame containing performance metrics for Bitcoin and selected equities.
-    """
-
-    # Define a list of equity tickers in the crypto ecosystem (excluding Bitcoin)
-    equities = ["COIN", "XYZ", "MSTR", "MARA", "RIOT"]
-
-    # Initialize a dictionary to store performance metrics for each asset
-    performance_metrics_dict = {}
-
-    # Add Bitcoin's performance metrics with direct values
-    performance_metrics_dict["Bitcoin"] = {
-        "Asset": "Bitcoin",
-        "Price": report_data.loc[report_date, "PriceUSD"],
-        "Market Cap": report_data.loc[report_date, "CapMrktCurUSD"],
-        "Week To Date Return": report_data.loc[
-            report_date, "PriceUSD_trading_week_change"
-        ],
-        "MTD": report_data.loc[report_date, "PriceUSD_MTD_change"],
-        "YTD": report_data.loc[report_date, "PriceUSD_YTD_change"],
-        "90 Day BTC Correlation": 1.0,  # Bitcoin's correlation with itself is always 1
-    }
-
-    # Iterate over each equity in the list to collect its performance data
-    for equity in equities:
-        performance_metrics_dict[equity] = {
-            "Asset": equity,
-            "Price": report_data.loc[report_date, f"{equity}_close"],
-            "Market Cap": data.loc[report_date, f"{equity}_MarketCap"],
-            "Week To Date Return": report_data.loc[
-                report_date, f"{equity}_close_trading_week_change"
-            ],
-            "MTD": report_data.loc[report_date, f"{equity}_close_MTD_change"],
-            "YTD": report_data.loc[report_date, f"{equity}_close_YTD_change"],
-            "90 Day BTC Correlation": correlation_results["priceusd_90_days"].loc[
-                "PriceUSD", f"{equity}_close"
+    # Define specific styles for the header rows
+    header_styles = [
+        {
+            "selector": f".row{row_index}",
+            "props": [
+                ("border-top", "1px solid black"),
+                ("border-bottom", "1px solid black"),
             ],
         }
-
-    # Convert the dictionary to a DataFrame for easier display and manipulation
-    performance_table_df = pd.DataFrame(list(performance_metrics_dict.values()))
-
-    return performance_table_df
-
-
-def style_performance_table(performance_table):
-    """
-    Styles a DataFrame containing performance metrics for various assets. This function applies
-    custom number formatting, conditional coloring based on value positivity or negativity,
-    and additional stylistic properties for improved readability.
-
-    Parameters:
-    - performance_table (pd.DataFrame): DataFrame containing performance metrics for assets.
-
-    Returns:
-    - pd.io.formats.style.Styler: A styled DataFrame with formatted columns, conditional coloring,
-      and layout enhancements.
-    """
-
-    # Format "Market Cap" column if it exists, converting values to billions with a single decimal
-    if "Market Cap" in performance_table.columns:
-        performance_table["Market Cap"] = performance_table["Market Cap"].apply(
-            lambda x: "{:,.1f} Billion".format(pd.to_numeric(x, errors="coerce") / 1e9)
-            if pd.notnull(pd.to_numeric(x, errors="coerce"))
-            else x
-        )
-
-    # Define formatting rules for each column in the performance table
-    format_dict = {
-        "Asset": "{}",
-        "Price": "${:,.2f}",
-        "Week To Date Return": "{:.2%}",
-        "MTD": "{:.2}%",
-        "YTD": "{:.2}%",
-        "90 Day BTC Correlation": "{:,.2f}",
-    }
-
-    # Helper function to apply conditional text color based on the value's sign
-    def color_values(val):
-        """
-        Determines color based on value sign:
-        - Green for positive values
-        - Red for negative values
-        - Black for zero or NaN values
-
-        Parameters:
-        - val (float): Numeric value to be styled.
-
-        Returns:
-        - str: CSS color property based on value.
-        """
-        color = "green" if val > 0 else ("red" if val < 0 else "black")
-        return f"color: {color}"
-
-    # Columns to apply the gradient and conditional text coloring
-    gradient_columns = ["Week To Date Return", "MTD", "YTD", "90 Day BTC Correlation"]
-
-    # Define additional table styling, such as font size adjustments
-    table_style = [
-        {"selector": "th", "props": "font-size: 10px;"},  # Header font size
-        {"selector": "td", "props": "font-size: 10px;"},  # Cell font size
+        for row_index in header_style_indices
     ]
 
-    # Apply formatting, conditional coloring, and styling to the table
-    styled_table = (
-        performance_table.style.format(format_dict)  # Apply the format dictionary
-        .applymap(color_values, subset=gradient_columns)  # Conditional text color
-        .hide_index()  # Hide DataFrame index for a cleaner presentation
-        .set_properties(**{"white-space": "nowrap"})  # Prevents content wrapping
-        .set_table_styles(table_style)  # Apply font size adjustments
-    )
+    # Apply header row styles to the styled table
+    styled_table = styled_table.set_table_styles(header_styles, overwrite=False)
 
     return styled_table
 
 
-## New Tables
-
-
-def create_bitcoin_model_table(report_data, report_date, cagr_results):
+def create_ohlc_chart(ohlc_data, report_data, chart_template):
     """
-    Constructs a table with various valuation metrics for Bitcoin based on financial models,
-    comparing BTC against different market multiples and external asset price levels.
+    Creates an interactive OHLC (candlestick) chart with Plotly, including additional metrics and optional event markers.
 
     Parameters:
-    - report_data (pd.DataFrame): DataFrame containing Bitcoin and asset market data by date.
-    - report_date (str or datetime): Specific date to extract metrics.
-    - cagr_results (pd.DataFrame): DataFrame with calculated Compound Annual Growth Rate (CAGR) values.
+    - ohlc_data (pd.DataFrame): Time-indexed DataFrame with OHLC data, containing 'Open', 'High', 'Low', and 'Close' columns.
+    - report_data (pd.DataFrame): DataFrame with additional metrics for overlaying on the OHLC chart (e.g., moving averages).
+    - chart_template (dict): Dictionary defining chart settings, including title, labels, filename, and event markers.
 
     Returns:
-    - pd.DataFrame: DataFrame with Bitcoin valuation metrics including market multiples,
-      traditional assets, and country-level comparisons.
+    - fig (plotly.graph_objs.Figure): Plotly figure object containing the candlestick chart with overlays and event annotations.
     """
-    # Extract BTC Value
-    btc_value = report_data.loc[report_date, "PriceUSD"]
+    # Ensure the index is timezone-naive for compatibility
 
-    # Extraction for Values"
-    four_year_cagr = (cagr_results.loc[report_date, "PriceUSD_4_Year_CAGR"],)
-    sf_multiple = report_data.loc[report_date, "SF_Multiple"]
-    day_200_price_multiple = report_data.loc[report_date, "200_day_multiple"]
-    realized_price_multiple = report_data.loc[report_date, "mvrv_ratio"]
-    thermocap_multiple = report_data.loc[report_date, "thermocap_multiple"]
-    production_price_multiple = report_data.loc[report_date, "Energy_Value_Multiple"]
+    ohlc_data.index = ohlc_data.index.tz_localize(None)
+    report_data.index = report_data.index.tz_localize(None)
 
-    # Extraction for "appl_marketcap"
-    silver_price = (
-        report_data.loc[report_date, "silver_marketcap_billion_usd"]
-        / report_data.loc[report_date, "SplyExpFut10yr"]
+    # Extract chart attributes from the template
+    title = chart_template["title"]
+    x_label = chart_template["x_label"]
+    y_label = chart_template["y1_label"]
+    filename = chart_template["filename"]
+
+    # Calculate the extended x-axis range
+    start_date = ohlc_data.index.min() - timedelta(days=30)  # Extend 30 days back
+    end_date = ohlc_data.index.max() + timedelta(days=30)  # Extend 30 days forward
+
+    # Filter `report_data` to align with OHLC data range
+    report_data_filtered = report_data[report_data.index >= ohlc_data.index.min()]
+
+    # Initialize the candlestick chart with OHLC data
+    fig = go.Figure(
+        data=[
+            go.Candlestick(
+                x=ohlc_data.index,
+                open=ohlc_data["Open"],
+                high=ohlc_data["High"],
+                low=ohlc_data["Low"],
+                close=ohlc_data["Close"],
+                name="Weekly Price",
+            )
+        ]
     )
-    gold_price_country = report_data.loc[
-        report_date, "gold_official_country_holdings_marketcap_btc_price"
-    ]
-    gold_price_private = report_data.loc[
-        report_date, "gold_private_investment_marketcap_btc_price"
-    ]
-    gold_price = (
-        report_data.loc[report_date, "gold_marketcap_billion_usd"]
-        / report_data.loc[report_date, "SplyExpFut10yr"]
+
+    # Overlay additional metrics on the chart
+    for metric in [
+        "200_week_ma_priceUSD",
+        "realised_price",
+        "realizedcap_multiple_3",
+        "thermocap_price_multiple_32",
+        "qtm_price_multiple_2",
+        "qtm_price_multiple_5",
+        "Electricity_Cost",
+        "Bitcoin_Production_Cost",
+
+
+    ]:
+        if metric in report_data_filtered.columns:
+            fig.add_trace(
+                go.Scatter(
+                    x=report_data_filtered.index,
+                    y=report_data_filtered[metric],
+                    mode="lines",
+                    name=metric,
+                )
+            )
+
+    # Update the layout, including axis settings, legend, and custom buttons for y-axis scaling
+    fig.update_layout(
+        title=dict(text=title, x=0.5, xanchor="center", y=0.95),
+        xaxis=dict(
+            title=x_label,
+            showgrid=False,
+            tickformat="%B-%d-%Y",
+            rangeslider_visible=False,
+            range=[start_date, end_date],  # Use extended range
+        ),
+        yaxis=dict(title=y_label, showgrid=False, type="log", autorange=True),
+        plot_bgcolor="rgba(255, 255, 255, 1)",
+        hovermode="x",
+        autosize=True,
+        legend=dict(
+            orientation="h", yanchor="bottom", y=-0.23, xanchor="center", x=0.5
+        ),
+        template="plotly_white",
+        updatemenus=[
+            dict(
+                buttons=list(
+                    [
+                        dict(
+                            label="Y1-axis: Linear",
+                            method="relayout",
+                            args=["yaxis.type", "linear"],
+                        ),
+                        dict(
+                            label="Y1-axis: Log",
+                            method="relayout",
+                            args=["yaxis.type", "log"],
+                        ),
+                    ]
+                ),
+                direction="right",
+                x=-0.1,
+                xanchor="left",
+                y=-0.25,
+                yanchor="top",
+            )
+        ],
+        width=1400,
+        height=700,
+        margin=dict(l=50, r=50, b=50, t=50, pad=50),
+        font=dict(family="PT Sans Narrow", size=14, color="black"),
     )
-    META_price = report_data.loc[report_date, "META_mc_btc_price"]
-    AMZN_price = report_data.loc[report_date, "AMZN_mc_btc_price"]
-    GOOGL_price = report_data.loc[report_date, "GOOGL_mc_btc_price"]
-    MSFT_price = report_data.loc[report_date, "MSFT_mc_btc_price"]
-    AAPL_price = report_data.loc[report_date, "AAPL_mc_btc_price"]
-    uk_price = report_data.loc[report_date, "United_Kingdom_btc_price"]
-    japan_price = report_data.loc[report_date, "Japan_btc_price"]
-    china_price = report_data.loc[report_date, "China_btc_price"]
-    us_price = report_data.loc[report_date, "United_States_btc_price"]
-    eu_price = report_data.loc[report_date, "Eurozone_btc_price"]
 
-    # Update the dictionary with the extracted values
-    bitcoin_model_data = {
-        "Model": [
-            "Bitcoin Price",
-            "4 Year CAGR",
-            "Stock-Flow Multiple",
-            "200 Day Price Multiple",
-            "Realized Price Multiple",
-            "Thermocap Multiple",
-            "Production Price Multiple",
-            "Silver Price Level",
-            "Gold Country Price Level",
-            "Gold Private Ownership Price Level",
-            "Total Gold Price Level",
-            "META Price Level",
-            "Amazon Price Level",
-            "Google Price Level",
-            "Microsoft Price Level",
-            "Apple Price Level",
-            "UK Price Level",
-            "Japan Price Level",
-            "China Price Level",
-            "US Price Level",
-            "EU Price Level",
-        ],
-        "Model Multiple / Value": [
-            btc_value,
-            four_year_cagr,
-            sf_multiple,
-            day_200_price_multiple,
-            realized_price_multiple,
-            thermocap_multiple,
-            production_price_multiple,
-            silver_price,
-            gold_price_country,
-            gold_price_private,
-            gold_price,
-            META_price,
-            AMZN_price,
-            GOOGL_price,
-            MSFT_price,
-            AAPL_price,
-            uk_price,
-            japan_price,
-            china_price,
-            us_price,
-            eu_price,
-        ],
-    }
+    # Add event markers (vertical lines and annotations) from the template
+    if "events" in chart_template:
+        for event in chart_template["events"]:
+            event_dates = pd.to_datetime(event["dates"])
+            for date in event_dates:
+                if ohlc_data.index.min() <= date <= ohlc_data.index.max():
+                    fig.add_vline(
+                        x=date.timestamp() * 1000,
+                        line=dict(color="black", width=1, dash="dash"),
+                    )
+                    fig.add_annotation(
+                        x=date, y=0.5, text=event["name"], showarrow=False, yref="paper"
+                    )
 
-    # Create and return the "Bitcoin Valuation" DataFrame
-    bitcoin_model_df = pd.DataFrame(bitcoin_model_data)
-
-    return bitcoin_model_df
+    # Add a watermark to the chart
+    fig.add_annotation(
+        xref="paper",
+        yref="paper",
+        x=0.5,
+        y=0.5,
+        text="SecretSatoshis.com",
+        showarrow=False,
+        font=dict(size=50, color="rgba(128, 128, 128, 0.5)"),
+        align="center",
+    )
+    return fig
 
 
-def style_bitcoin_model_table(bitcoin_model_table):
+def create_yoy_change_chart(data, column_name):
     """
-    Applies styling to the Bitcoin model table to improve readability, including
-    custom number formatting and conditional coloring.
+    Plots the Year-Over-Year (YOY) percentage change of a specified column and the Bitcoin price on dual y-axes with log scaling.
 
     Parameters:
-    - bitcoin_model_table (pd.DataFrame): DataFrame containing Bitcoin model values
-      and multiple valuation metrics.
+    data (pd.DataFrame): DataFrame containing historical data with a DateTime index.
+    column_name (str): The name of the column in the data for YOY change calculations.
 
     Returns:
-    - pd.io.formats.style.Styler: A styled DataFrame with formatted values and color styling.
+    matplotlib.figure.Figure: A Matplotlib figure with the YOY change and Bitcoin price plot.
     """
-    # Define formatting rules for the columns in the model table
-    format_dict_valuation = {
-        "Valuation Model": "{}",
-        "Model Multiple / Value": "{:,.0f}",
-    }
+    # Filter the data from 2012 onwards
+    data_since_2012 = data[data.index.year >= 2012]
 
-    # Define custom colormaps for the table
-    diverging_cm = sns.diverging_palette(100, 133, as_cmap=True)
-    bg_colormap = sns.light_palette("white", as_cmap=True)
+    # Create the figure and first axis
+    fig, ax1 = plt.subplots(figsize=(14, 7))
 
-    def color_values(val):
-        """
-        Returns CSS color styling based on the sign of the value:
-        - Green for positive values
-        - Red for negative values
-        - Black for zero or null values
+    # Get the most recent YOY change and Bitcoin price
+    latest_yoy_change = data_since_2012[column_name].iloc[-1]
+    latest_bitcoin_price = data_since_2012["PriceUSD"].iloc[-1]
 
-        Parameters:
-        - val (float or int): Numeric value to style.
+    # Format the latest YOY change and Bitcoin price for the legend
+    yoy_legend_label = f"YOY Change (latest: {latest_yoy_change:.0%})"
+    btc_price_legend_label = f"Bitcoin Price (latest: ${latest_bitcoin_price:,.2f})"
 
-        Returns:
-        - str: CSS style string for color.
-        """
-        color = "green" if val > 0 else ("red" if val < 0 else "black")
-        return f"color: {color}"
+    # Plot the YOY data on ax1
+    ax1.plot(
+        data_since_2012.index,
+        data_since_2012[column_name],
+        label=yoy_legend_label,
+        color="tab:blue",
+    )
+    ax1.set_yscale("symlog", linthresh=1)  # Set the y-axis to symlog scale
+    ax1.yaxis.set_major_formatter(
+        mticker.FuncFormatter(lambda y, _: "{:.0%}".format(y))
+    )  # Format as percentages
+    ax1.set_xlabel("Year")
+    ax1.set_ylabel("Percent Change", color="tab:blue")
+    ax1.tick_params(axis="y", labelcolor="tab:blue")
+    ax1.grid(True, which="both", ls="--", linewidth=0.5)
+    ax1.set_title("Bitcoin Year-Over-Year Change and Price on Log Scale")
 
-    # Apply the formatting rules and style configurations
-    styled_table = (
-        bitcoin_model_table.style.format(format_dict_valuation)
-        .hide_index()  # Hide the DataFrame index for cleaner presentation
-        .set_properties(**{"white-space": "nowrap"})  # Prevents content wrapping
-        .set_table_styles([{"selector": "th", "props": [("white-space", "nowrap")]}])
+    # Create a second y-axis for the bitcoin price with log scale
+    ax2 = ax1.twinx()
+    ax2.plot(
+        data_since_2012.index,
+        data_since_2012["PriceUSD"],
+        label=btc_price_legend_label,
+        color="tab:orange",
+    )
+    ax2.set_yscale("log")  # Set the y-axis to log scale
+
+    # Add legends
+    lines, labels = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines + lines2, labels + labels2, loc="upper left")
+
+    dp.Plot(fig)
+
+    return fig
+
+
+def create_price_buckets_chart(bucket_counts_df):
+    """
+    Creates a horizontal bar chart of Bitcoin price ranges and the number of days spent in each range.
+
+    Parameters:
+    bucket_counts_df (pd.DataFrame): DataFrame containing price range data with 'Price Range ($)' and 'Count' columns.
+
+    Returns:
+    dp.Plot: A Datapane Plot object containing the price buckets bar chart.
+    """
+    # Exclude the 0-1K range from the plotting data
+    plot_data = bucket_counts_df[
+        bucket_counts_df["Price Range ($)"] != "$0K-$1K"
+    ].copy()
+
+    # Convert the 'Price Range ($)' to a sortable numeric value
+    plot_data["Sort Key"] = plot_data["Price Range ($)"].apply(
+        lambda x: int(x.split("-")[0][1:-1])
     )
 
-    return styled_table
+    # Sort the DataFrame by 'Sort Key' in descending order
+    plot_data = plot_data.sort_values(by="Sort Key", ascending=False)
+
+    # Create the bar chart using Plotly
+    fig = px.bar(
+        plot_data,
+        y="Price Range ($)",
+        x="Count",  # Change 'Days Count' to 'Count'
+        orientation="h",  # Makes the bars horizontal
+        color="Count",  # Use 'Count' as the color scale
+        color_continuous_scale="Viridis",  # Choose a color scale
+        title="Number of Days Bitcoin Traded within 1K Price Ranges",
+    )
+
+    # Update figure layout
+    fig.update_layout(height=500, width=800, margin=dict(l=5, r=5, t=50, b=5))
+
+    # Create a Datapane Plot object
+    dp_chart = dp.Plot(fig)
+
+    return dp_chart
 
 
-## Weekly Bitcoin Recap Summary Tables
+## Weekly Bitcoin Recap Tables
 
 
 def create_summary_table_weekly_bitcoin_recap(report_data, report_date):
     """
-    Generates a weekly summary table for Bitcoin's key metrics.
+    Generates a weekly summary table for Bitcoin's key metrics with categorized column headers.
 
     Parameters:
     - report_data (pd.DataFrame): DataFrame containing historical Bitcoin data, indexed by date.
@@ -1850,33 +927,50 @@ def create_summary_table_weekly_bitcoin_recap(report_data, report_date):
     - pd.DataFrame: DataFrame containing a summary of Bitcoin metrics for the specified report date.
     """
 
-    # Extract the necessary data for the specified date from report_data
+    # Extract key metrics from report_data
     price_usd = report_data.loc[report_date, "PriceUSD"]
     market_cap = report_data.loc[report_date, "CapMrktCurUSD"]
-    sats_per_dollar = 100000000 / price_usd  # Calculates satoshis per dollar
+    sats_per_dollar = 100000000 / price_usd
 
     bitcoin_supply = report_data.loc[report_date, "SplyCur"]
     miner_revenue_30d = report_data.loc[report_date, "30_day_ma_RevUSD"]
     tx_volume_30d = report_data.loc[report_date, "30_day_ma_TxTfrValAdjUSD"]
-    btc_dominance = report_data["bitcoin_dominance"].iloc[-1]    # Placeholder values for market sentiment, trend, and valuation; can be dynamically assigned in the future
-    fear_greed = "Neutral"  # Example sentiment
-    bitcoin_valuation = "Fair Value"  # Example valuation status
+    btc_dominance = 59.4
 
-    # Create a dictionary to hold all the extracted metrics
-    weekly_update_data = {
-        "Bitcoin Price USD": price_usd,
-        "Bitcoin Marketcap": market_cap,
-        "Sats Per Dollar": sats_per_dollar,
-        "Bitcoin Supply": bitcoin_supply,
-        "Bitcoin Miner Revenue": miner_revenue_30d,
-        "Bitcoin Transaction Volume": tx_volume_30d,
-        "Bitcoin Dominance": btc_dominance,
-        "Bitcoin Market Sentiment": fear_greed,
-        "Bitcoin Valuation": bitcoin_valuation,
+    # Placeholder for additional derived metrics
+    fear_greed = "Neutral"
+    bitcoin_valuation = "Fair Value"
+
+    # Define categories for organization
+    categorized_data = {
+        "Market Data": {
+            "Bitcoin Price USD": price_usd,
+            "Bitcoin Marketcap": market_cap,
+            "Sats Per Dollar": sats_per_dollar,
+        },
+        "On-chain Data": {
+            "Bitcoin Supply": bitcoin_supply,
+            "Bitcoin Miner Revenue": miner_revenue_30d,
+            "Bitcoin Transaction Volume": tx_volume_30d,
+        },
+        "Investor Sentiment": {
+            "Bitcoin Dominance": btc_dominance,
+            "Bitcoin Market Sentiment": fear_greed,
+            "Bitcoin Valuation": bitcoin_valuation,
+        },
     }
 
-    # Create a DataFrame from the dictionary for clear and structured reporting
-    weekly_summary_df = pd.DataFrame([weekly_update_data])
+    # Convert the dictionary into a structured DataFrame
+    weekly_summary_df = pd.DataFrame.from_dict(
+        {k: v for d in categorized_data.values() for k, v in d.items()},
+        orient="index",
+        columns=["Value"],
+    )
+
+    # Add a category column
+    weekly_summary_df["Category"] = [
+        category for category, metrics in categorized_data.items() for _ in metrics
+    ]
 
     return weekly_summary_df
 
@@ -1922,64 +1016,72 @@ def format_value_weekly_bitcoin_recap(value, format_type):
         return str(value)
 
 
-def create_summary_big_numbers_weekly_bitcoin_recap(weekly_summary_df):
+def create_summary_big_numbers_weekly_bitcoin_recap(weekly_summary_df, report_date):
     """
-    Generates a series of BigNumbers for each metric in the weekly summary table, applying
-    formatting rules based on metric type and indicating directional changes where applicable.
+    Generates a series of BigNumbers grouped by Market Data, On-chain Data, and Sentiment Data,
+    with an additional row displaying the report date at the top.
 
     Parameters:
-    - weekly_summary_df (pd.DataFrame): DataFrame containing weekly summary metrics for Bitcoin.
+    - weekly_summary_df (pd.DataFrame): DataFrame containing categorized Bitcoin metrics.
+    - report_date (str or pd.Timestamp): The date for which the report data is being generated.
 
     Returns:
-    - dp.Group: A Datapane Group containing BigNumbers for display, arranged in 3 columns.
+    - dp.Group: A Datapane Group containing BigNumbers, arranged correctly in a 3-column layout.
     """
 
-    # Define formatting rules for each metric in the weekly summary
+    # Ensure report_date is formatted correctly
+    if isinstance(report_date, pd.Timestamp):
+        report_date_str = report_date.strftime("%Y-%m-%d")
+    else:
+        report_date_str = str(report_date)  # If it's already a string
+
+    # Define formatting rules
     format_rules = {
         "Bitcoin Price USD": "currency",
-        "Bitcoin Marketcap": "currency",
-        "Sats Per Dollar": "float",
         "Bitcoin Supply": "float",
-        "Bitcoin Miner Revenue": "currency",
-        "Bitcoin Transaction Volume": "currency",
         "Bitcoin Dominance": "percentage",
+        "Bitcoin Marketcap": "currency",
+        "Bitcoin Miner Revenue": "currency",
         "Bitcoin Market Sentiment": "string",
+        "Sats Per Dollar": "float",
+        "Bitcoin Transaction Volume": "currency",
         "Bitcoin Valuation": "string",
     }
 
-    # Initialize a list to store BigNumber elements
-    big_numbers = []
+    # Group by category
+    grouped_big_numbers = {
+        "Market Data": [],
+        "On-chain Data": [],
+        "Investor Sentiment": [],
+    }
 
-    # Loop through each metric and apply formatting and directional styling if needed
-    for column, value in weekly_summary_df.iloc[0].items():
-        # Skip irrelevant or specifically excluded metrics
-        if column == "Bitcoin Price Change Difficulty Period":
-            continue
+    # Loop through DataFrame and categorize BigNumbers
+    for index, row in weekly_summary_df.iterrows():
+        formatted_value = format_value_weekly_bitcoin_recap(
+            row["Value"], format_rules.get(index, "")
+        )
+        grouped_big_numbers[row["Category"]].append(
+            dp.BigNumber(heading=index, value=formatted_value)
+        )
 
-        # Format the metric value based on its type as per format_rules
-        formatted_value = format_value(value, format_rules.get(column, ""))
+    # Create "Data As Of" as a **full-width row** above everything else
+    data_as_of = dp.BigNumber(heading="📅 Data As Of", value=report_date_str)
 
-        # Handle metrics with directional indication, assuming "Difficulty Change" implies a trend
-        if column == "Difficulty Change":
-            is_upward = value >= 0  # Positive values indicate upward trend
-            big_numbers.append(
-                dp.BigNumber(
-                    heading=column,
-                    value=formatted_value,
-                    is_upward_change=is_upward,
-                )
-            )
-        else:
-            # Add BigNumber without directional indication for other metrics
-            big_numbers.append(
-                dp.BigNumber(
-                    heading=column,
-                    value=formatted_value,
-                )
-            )
-
-    # Organize BigNumbers into a Group with 3 columns and return the result for display
-    return dp.Group(*big_numbers, columns=3)
+    # **Final layout with correct row structure**
+    return dp.Group(
+        data_as_of,  # **Row 1: Full-width date row**
+        dp.Group(  # **Row 2: Three equally spaced columns for the categories**
+            dp.Group(dp.Text("### Market Data"), *grouped_big_numbers["Market Data"]),
+            dp.Group(
+                dp.Text("### On-chain Data"), *grouped_big_numbers["On-chain Data"]
+            ),
+            dp.Group(
+                dp.Text("### Investor Sentiment"),
+                *grouped_big_numbers["Investor Sentiment"],
+            ),
+            columns=3,  # Ensures three evenly spaced sections
+        ),
+    )
 
 
 def create_equity_performance_table(report_data, report_date, correlation_results):
@@ -2349,7 +1451,13 @@ def style_performance_table_weekly_bitcoin_recap(performance_table):
         return f"color: {color}"
 
     # Columns to apply the gradient and conditional text coloring
-    gradient_columns = ["7 Day Return", "MTD Return", "YTD Return", "90 Day Return", "90 Day BTC Correlation"]
+    gradient_columns = [
+        "7 Day Return",
+        "MTD Return",
+        "YTD Return",
+        "90 Day Return",
+        "90 Day BTC Correlation",
+    ]
 
     # Define additional table styling, such as font size adjustments
     table_style = [
@@ -2371,11 +1479,7 @@ def style_performance_table_weekly_bitcoin_recap(performance_table):
 
 def create_full_weekly_bitcoin_recap_performance(
     report_data,
-    difficulty_period_changes,
     report_date,
-    weekly_high_low,
-    cagr_results,
-    sharpe_results,
     correlation_results,
 ):
     """
@@ -2429,7 +1533,156 @@ def create_full_weekly_bitcoin_recap_performance(
 
     return full_weekly_performance_df
 
-def get_eoy_model_data(report_data, cagr_results):
+
+def monthly_heatmap(data, export_csv=True):
+    """
+    Creates a monthly and yearly returns heatmap for Bitcoin price data.
+    """
+    # Filter data to start from January 2011
+    data = data[data.index >= pd.to_datetime("2012-01-01")]
+
+    # Calculate monthly returns
+    monthly_returns = data["PriceUSD"].resample("M").last().pct_change()
+
+    # Calculate YTD returns based on the first price of the year
+    start_of_year = data["PriceUSD"].groupby(data.index.year).transform("first")
+    ytd_returns = (data["PriceUSD"] / start_of_year) - 1
+
+    # Aggregate YTD returns by year
+    yearly_returns = ytd_returns.groupby(data.index.year).last()
+
+    # Prepare the data for the heatmap: years as rows, months as columns
+    heatmap_data = (
+        monthly_returns.groupby(
+            [monthly_returns.index.year, monthly_returns.index.month]
+        )
+        .mean()
+        .unstack()
+    )
+
+    # Add the YTD returns as a separate column
+    heatmap_data[13] = yearly_returns
+
+    # Get the last date in the data to check if the current month is complete
+    last_date = data.index[-1]
+    current_year, current_month = last_date.year, last_date.month
+
+    # Check if the current month is incomplete
+    is_incomplete_month = last_date.day != (last_date + MonthEnd(0)).day
+
+    if is_incomplete_month:
+        # Get the first price of the current month
+        start_of_month = data["PriceUSD"].loc[last_date.strftime("%Y-%m")].iloc[0]
+        # Calculate the MTD return for the incomplete month
+        current_month_return = (data["PriceUSD"].iloc[-1] / start_of_month) - 1
+        # Add the MTD return to the heatmap for display
+        if current_year in heatmap_data.index:
+            heatmap_data.loc[current_year, current_month] = current_month_return
+
+    # Create a copy of the data excluding the incomplete month for additional calculations
+    heatmap_data_excluded = heatmap_data.copy()
+    if is_incomplete_month and current_year in heatmap_data.index:
+        heatmap_data_excluded.loc[current_year, current_month] = pd.NA
+
+    # Add the "4-Year Average" row (last 4 years for each month)
+    heatmap_data.loc["4-Year Average"] = heatmap_data_excluded.iloc[-4:].apply(
+        lambda col: col[~col.isna()].mean(), axis=0
+    )
+
+    # Add the "Median" row, excluding the incomplete month
+    heatmap_data.loc["Median"] = heatmap_data_excluded.apply(
+        lambda col: col[~col.isna()].median(), axis=0
+    )
+
+    # Add the "Average" row, excluding the incomplete month
+    heatmap_data.loc["Average"] = heatmap_data_excluded.apply(
+        lambda col: col[~col.isna()].mean(), axis=0
+    )
+
+    # Rename columns to month names
+    month_names = [calendar.month_abbr[i] for i in range(1, 13)] + ["Yearly"]
+    heatmap_data.columns = month_names
+
+    # Optionally export the heatmap data to CSV
+    if export_csv:
+        heatmap_data.to_csv("csv/monthly_heatmap_data.csv")
+
+    # Create text values for annotations in the heatmap
+    text_values = heatmap_data.applymap(
+        lambda x: f"{x:.2%}" if pd.notnull(x) else ""
+    ).values
+
+    # Define a custom colorscale: shades of red (-1 to 0) to white (0) to green (0 to 3)
+    custom_colorscale = [
+        [0.0, "red"],  # -1 mapped to red
+        [0.5, "white"],  # 0 mapped to white
+        [1.0, "green"],  # 3 mapped to green
+    ]
+
+    # Create the Plotly heatmap figure
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=heatmap_data.values,
+            x=heatmap_data.columns,
+            y=heatmap_data.index.astype(str),
+            colorscale=custom_colorscale,
+            zmin=-1,  # Minimum value for the color scale
+            zmax=1,  # Maximum value for the color scale
+            text=text_values,
+            hoverinfo="text",
+            texttemplate="%{text}",
+        )
+    )
+
+    # Update the layout of the figure
+    fig.update_layout(
+        title="Monthly Bitcoin Price Return Heatmap",
+        xaxis_nticks=13,
+        yaxis_nticks=25,
+        autosize=False,
+        width=1200,
+        height=600,
+    )
+
+    # Create a Datapane plot
+    dp_chart = dp.Plot(fig)
+
+    return dp_chart
+
+
+## CSV Exports
+
+
+def calculate_weekly_ohlc(ohlc_data, output_file="csv/kraken_weekly_ohlc.csv"):
+    """
+    Calculates the latest weekly OHLC (Open, High, Low, Close) values from daily data and saves them to a CSV file.
+
+    Parameters:
+    - ohlc_data (pd.DataFrame): DataFrame with daily OHLC data containing 'Open', 'High', 'Low', and 'Close' columns.
+    - output_file (str): Filename for saving the weekly OHLC values as a CSV file.
+
+    Returns:
+    - pd.DataFrame: DataFrame containing the latest weekly OHLC values for the most recent week.
+    """
+    # Ensure the index is a datetime index for resampling
+    ohlc_data.index = pd.to_datetime(ohlc_data.index)
+
+    # Resample daily data to get weekly OHLC values
+    weekly_ohlc = ohlc_data.resample("W").agg(
+        {"Open": "first", "High": "max", "Low": "min", "Close": "last"}
+    )
+
+    # Extract the most recent weekly OHLC values
+    latest_weekly_ohlc = weekly_ohlc.iloc[-1]
+
+    # Convert to a DataFrame for export and save to CSV
+    latest_weekly_ohlc_df = pd.DataFrame(latest_weekly_ohlc).T
+    latest_weekly_ohlc_df.to_csv(output_file)
+
+    return latest_weekly_ohlc_df
+
+
+def create_eoy_model_table(report_data, cagr_results):
     """
     Extracts and returns a DataFrame containing historical data for specific Bitcoin valuation-related metrics.
     Includes CAGR data from a separate dataset.
@@ -2464,14 +1717,266 @@ def get_eoy_model_data(report_data, cagr_results):
     ]
 
     # Ensure the specified columns exist in report_data before extracting
-    available_columns = [col for col in columns_of_interest if col in report_data.columns]
-    available_cagr_columns = [col for col in cagr_columns if col in cagr_results.columns]
+    available_columns = [
+        col for col in columns_of_interest if col in report_data.columns
+    ]
+    available_cagr_columns = [
+        col for col in cagr_columns if col in cagr_results.columns
+    ]
 
     # Extract the relevant data from both datasets
     report_data_filtered = report_data[available_columns]
     cagr_results_filtered = cagr_results[available_cagr_columns]
 
     # Merge both datasets on the index (assuming they share the same date index)
-    full_data = report_data_filtered.merge(cagr_results_filtered, left_index=True, right_index=True, how="left")
+    full_data = report_data_filtered.merge(
+        cagr_results_filtered, left_index=True, right_index=True, how="left"
+    )
 
     return full_data
+
+
+def create_monthly_returns_table(selected_metrics):
+    today = datetime.today().date()
+    current_year = today.year
+    current_month = today.month
+    current_day = today.day
+
+    # Ensure data is filtered to entries from January 1, 2014, onwards
+    selected_metrics = selected_metrics[selected_metrics.index >= "2014-01-01"].copy()
+
+    monthly_returns = {}
+    report_date_returns = {}
+
+    # Get the starting price for the current month of the current year
+    current_month_data = selected_metrics[
+        (selected_metrics.index.year == current_year)
+        & (selected_metrics.index.month == current_month)
+    ]
+    if current_month_data.empty:
+        return None  # No data for current month
+
+    current_start_price = current_month_data["PriceUSD"].iloc[0]
+
+    # Calculate monthly returns for each year
+    for year in selected_metrics.index.year.unique():
+        monthly_data = selected_metrics[
+            (selected_metrics.index.year == year)
+            & (selected_metrics.index.month == current_month)
+        ]
+
+        if not monthly_data.empty:
+            start_price = monthly_data["PriceUSD"].iloc[0]
+            end_price = monthly_data["PriceUSD"].iloc[-1]
+            return_pct = (end_price / start_price - 1) * 100
+            monthly_returns[year] = (start_price, end_price, return_pct)
+
+            # Report Date Return Calculation
+            report_date_data = monthly_data[(monthly_data.index.day == current_day)]
+            if not report_date_data.empty:
+                report_date_price = report_date_data["PriceUSD"].iloc[-1]
+                report_date_return = (report_date_price / start_price - 1) * 100
+                report_date_returns[year] = report_date_return
+            else:
+                report_date_returns[year] = None
+
+    # Convert dictionary to DataFrame
+    df = pd.DataFrame.from_dict(
+        monthly_returns,
+        orient="index",
+        columns=["Start Price ($)", "End Price ($)", "Return (%)"],
+    )
+    df.index.name = "Year"
+
+    # Add report date return column
+    df["Report Date Return (%)"] = pd.Series(report_date_returns)
+
+    # Extract the current year's data
+    current_year_row = df.loc[[current_year]].reset_index()
+
+    # Calculate the historical median return
+    median_return = df["Return (%)"].median()
+    median_end_price = current_start_price * (1 + median_return / 100)
+
+    # Calculate the median return at the current date (not full period)
+    median_report_date_return = df["Report Date Return (%)"].median()
+
+    # Create the projected median row
+    median_row = pd.DataFrame(
+        {
+            "Year": ["Median Projection"],
+            "Start Price ($)": [current_start_price],
+            "End Price ($)": [median_end_price],
+            "Return (%)": [median_return],
+            "Report Date Return (%)": [median_report_date_return],
+        }
+    )
+
+    # Concatenate current year and median projection rows
+    df_filtered = pd.concat([current_year_row, median_row], ignore_index=True)
+
+    return df_filtered
+
+
+def create_yearly_returns_table(selected_metrics):
+    today = datetime.today().date()
+    current_year = today.year
+    current_day_of_year = today.timetuple().tm_yday
+
+    # Ensure data is filtered correctly
+    selected_metrics = selected_metrics[selected_metrics.index >= "2014-01-01"].copy()
+
+    yearly_returns = {}
+    report_date_returns = {}
+
+    # Get the starting price for the current year
+    current_year_data = selected_metrics[selected_metrics.index.year == current_year]
+    if current_year_data.empty:
+        return None  # No data for current year
+
+    current_start_price = current_year_data["PriceUSD"].iloc[0]
+
+    # Calculate yearly returns for each year
+    for year in selected_metrics.index.year.unique():
+        yearly_data = selected_metrics[selected_metrics.index.year == year]
+
+        if not yearly_data.empty:
+            start_price = yearly_data["PriceUSD"].iloc[0]
+            end_price = yearly_data["PriceUSD"].iloc[-1]
+            return_pct = (end_price / start_price - 1) * 100
+            yearly_returns[year] = (start_price, end_price, return_pct)
+
+            # Report Date Return Calculation
+            report_date_data = yearly_data[
+                yearly_data.index.dayofyear == current_day_of_year
+            ]
+            if not report_date_data.empty:
+                report_date_price = report_date_data["PriceUSD"].iloc[-1]
+                report_date_return = (report_date_price / start_price - 1) * 100
+                report_date_returns[year] = report_date_return
+            else:
+                report_date_returns[year] = None
+
+    # Convert dictionary to DataFrame
+    df = pd.DataFrame.from_dict(
+        yearly_returns,
+        orient="index",
+        columns=["Start Price ($)", "End Price ($)", "Return (%)"],
+    )
+    df.index.name = "Year"
+
+    # Add report date return column
+    df["Report Date Return (%)"] = pd.Series(report_date_returns)
+
+    # Extract the current year's data
+    current_year_row = df.loc[[current_year]].reset_index()
+
+    # Calculate the historical median return
+    median_return = df["Return (%)"].median()
+    median_end_price = current_start_price * (1 + median_return / 100)
+
+    # **Fix the Median Report Date Return (%)**
+    median_report_date_return_pct = df["Report Date Return (%)"].dropna().median()
+
+    # Create the projected median row
+    median_row = pd.DataFrame(
+        {
+            "Year": ["Median Projection"],
+            "Start Price ($)": [current_start_price],
+            "End Price ($)": [median_end_price],
+            "Return (%)": [median_return],
+            "Report Date Return (%)": [median_report_date_return_pct],
+        }
+    )
+
+    # Concatenate current year and median projection rows
+    df_filtered = pd.concat([current_year_row, median_row], ignore_index=True)
+
+    return df_filtered
+
+
+def create_asset_valuation_table(report_data):
+    """
+    Generates a valuation table for various assets compared to Bitcoin.
+
+    Parameters:
+    - report_data (pd.DataFrame): DataFrame containing asset market cap and BTC price data.
+
+    Returns:
+    - pd.DataFrame: DataFrame summarizing asset valuations and Bitcoin price targets.
+    """
+    assets = [
+        {"name": "Bitcoin", "data": "PriceUSD", "marketcap": "CapMrktCurUSD"},
+        {
+            "name": "Total Silver Market",
+            "data": "silver_marketcap_btc_price",
+            "marketcap": "silver_marketcap_billion_usd",
+        },
+        {
+            "name": "UK M0",
+            "data": "United_Kingdom_btc_price",
+            "marketcap": "United_Kingdom_cap",
+        },
+        {"name": "Meta", "data": "META_mc_btc_price", "marketcap": "META_MarketCap"},
+        {"name": "Amazon", "data": "AMZN_mc_btc_price", "marketcap": "AMZN_MarketCap"},
+        {
+            "name": "Gold Country Holdings",
+            "data": "gold_official_country_holdings_marketcap_btc_price",
+            "marketcap": "gold_marketcap_official_country_holdings_billion_usd",
+        },
+        {"name": "NVIDIA", "data": "NVDA_mc_btc_price", "marketcap": "NVDA_MarketCap"},
+        {
+            "name": "Gold Private Investment",
+            "data": "gold_private_investment_marketcap_btc_price",
+            "marketcap": "gold_marketcap_private_investment_billion_usd",
+        },
+        {"name": "Apple", "data": "AAPL_mc_btc_price", "marketcap": "AAPL_MarketCap"},
+        {
+            "name": "US M0",
+            "data": "United_States_btc_price",
+            "marketcap": "United_States_cap",
+        },
+        {
+            "name": "Total Gold Market",
+            "data": "gold_marketcap_btc_price",
+            "marketcap": "gold_marketcap_billion_usd",
+        },
+    ]
+
+    # Get the latest values (last row)
+    latest_data = report_data.iloc[-1]
+    bitcoin_price = latest_data.get("PriceUSD", float("nan"))
+
+    valuation_data = []
+    for asset in assets:
+        marketcap_btc_price = latest_data.get(asset["data"], float("nan"))
+        marketcap_value = latest_data.get(asset["marketcap"], float("nan"))
+
+        # Avoid division by zero or invalid values
+        if (
+            pd.notna(bitcoin_price)
+            and pd.notna(marketcap_btc_price)
+            and bitcoin_price > 0
+        ):
+            percent_move = ((marketcap_btc_price - bitcoin_price) / bitcoin_price) * 100
+        else:
+            percent_move = "N/A"
+
+        valuation_data.append(
+            {
+                "Asset": asset["name"],
+                "Market Cap (USD)": f"${marketcap_value:,.0f}"
+                if pd.notna(marketcap_value)
+                else "N/A",
+                "Market Cap BTC Price": f"${marketcap_btc_price:,.0f}"
+                if pd.notna(marketcap_btc_price)
+                else "N/A",
+                "BTC % Move to Marketcap BTC Price": f"{percent_move:.0f}%"
+                if percent_move != "N/A"
+                else "N/A",
+            }
+        )
+
+    valuation_df = pd.DataFrame(valuation_data)
+
+    return valuation_df
