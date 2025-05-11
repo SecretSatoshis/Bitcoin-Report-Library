@@ -4,15 +4,10 @@ import numpy as np
 import yfinance as yf
 from datetime import datetime, timedelta
 from io import StringIO
-import calendar
-import matplotlib.pyplot as plt
-import plotly.express as px
-import plotly.graph_objects as go
-import matplotlib.ticker as mticker
-import mplfinance as mpf
 import time
-import datapane as dp
-from pandas.tseries.offsets import MonthEnd
+
+
+# Get Data
 
 
 def get_coinmetrics_onchain(endpoint: str) -> pd.DataFrame:
@@ -461,6 +456,9 @@ def get_data(tickers, start_date):
     return data
 
 
+# Metric Calculation
+
+
 def calculate_custom_on_chain_metrics(data):
     """
     Calculate custom on-chain metrics for cryptocurrency data.
@@ -523,6 +521,15 @@ def calculate_custom_on_chain_metrics(data):
     data["thermocap_price_multiple_16"] = (16 * data["RevAllTimeUSD"]) / data["SplyCur"]
     data["thermocap_price_multiple_32"] = (32 * data["RevAllTimeUSD"]) / data["SplyCur"]
 
+    data["miner_revenue_1_Year"] = data["RevUSD"].rolling(window=365).sum()
+    data["miner_revenue_4_Year"] = data["RevUSD"].rolling(window=4 * 365).sum()
+
+    data["ss_multiple_1"] = data["CapMrktCurUSD"] / data["miner_revenue_1_Year"]
+    data["ss_price_1"] = data["miner_revenue_1_Year"] / data["SplyCur"]
+
+    data["ss_multiple_4"] = data["CapMrktCurUSD"] / data["miner_revenue_4_Year"]
+    data["ss_price_4"] = data["miner_revenue_4_Year"] / data["SplyCur"]
+
     # Calculate Realized Cap multiples for different factors (3x, 5x, 7x)
     data["realizedcap_multiple_3"] = (3 * data["CapRealUSD"]) / data["SplyCur"]
     data["realizedcap_multiple_5"] = (5 * data["CapRealUSD"]) / data["SplyCur"]
@@ -536,6 +543,13 @@ def calculate_custom_on_chain_metrics(data):
     # Calculate illiquid and liquid supply based on the 1+ year held supply
     data["illiquid_supply"] = (data["supply_pct_1_year_plus"] / 100) * data["SplyCur"]
     data["liquid_supply"] = data["SplyCur"] - data["illiquid_supply"]
+
+    data["tx_volume_yearly"] = data["TxTfrValAdjUSD"].rolling(window=365).sum()
+    data["qtm_price"] = data["tx_volume_yearly"] / (data["SplyCur"] * data["VelCur1yr"])
+    data["qtm_multiple"] = data["PriceUSD"] / (data["qtm_price"])
+    data["qtm_price_multiple_2"] = data["qtm_price"] * 2
+    data["qtm_price_multiple_5"] = data["qtm_price"] * 5
+    data["qtm_price_multiple_10"] = data["qtm_price"] * 10
 
     return data
 
@@ -551,11 +565,24 @@ def calculate_moving_averages(data: pd.DataFrame, metrics: list) -> pd.DataFrame
     Returns:
     pd.DataFrame: DataFrame with added columns for moving averages of the specified metrics.
     """
-    for metric in metrics:
-        # Calculate 7-day, 30-day, and 365-day moving averages for each metric
-        data[f"7_day_ma_{metric}"] = data[metric].rolling(window=7).mean()
-        data[f"30_day_ma_{metric}"] = data[metric].rolling(window=30).mean()
-        data[f"365_day_ma_{metric}"] = data[metric].rolling(window=365).mean()
+    moving_averages = {
+        f"7_day_ma_{metric}": data[metric].rolling(window=7).mean()
+        for metric in metrics
+    }
+    moving_averages.update(
+        {
+            f"30_day_ma_{metric}": data[metric].rolling(window=30).mean()
+            for metric in metrics
+        }
+    )
+    moving_averages.update(
+        {
+            f"365_day_ma_{metric}": data[metric].rolling(window=365).mean()
+            for metric in metrics
+        }
+    )
+
+    data = pd.concat([data, pd.DataFrame(moving_averages)], axis=1)
     return data
 
 
@@ -713,18 +740,22 @@ def calculate_btc_price_to_surpass_fiat(
     Returns:
     pd.DataFrame: DataFrame with added columns for BTC prices needed to surpass fiat supplies.
     """
+    fiat_marketcap = {}
+
     for _, row in fiat_money_data.iterrows():
-        country = row["Country"]
+        country = row["Country"].replace(" ", "_")
         fiat_supply_usd_trillion = row["US Dollar Trillion"]
 
         # Convert the fiat supply from trillions to units
         fiat_supply_usd = fiat_supply_usd_trillion * 1e12
 
-        # Compute the price of Bitcoin needed to surpass this country's M0 money supply
-        metric_name_price = country.replace(" ", "_") + "_btc_price"
-        metric_name_cap = country.replace(" ", "_") + "_cap"
-        data[metric_name_price] = fiat_supply_usd / data["SplyCur"]
-        data[metric_name_cap] = fiat_supply_usd
+        # Compute the price of Bitcoin needed to surpass this country's fiat supply
+        fiat_marketcap[f"{country}_btc_price"] = fiat_supply_usd / data["SplyCur"]
+        fiat_marketcap[f"{country}_cap"] = fiat_supply_usd
+
+    data = pd.concat([data, pd.DataFrame(fiat_marketcap)], axis=1)
+    data = data.copy()  # De-fragment the DataFrame
+
     return data
 
 
@@ -741,15 +772,16 @@ def calculate_btc_price_for_stock_mkt_caps(
     Returns:
     pd.DataFrame: DataFrame with added columns for BTC prices needed to surpass stock market caps.
     """
-    new_columns = {}
-    for ticker in stock_tickers:
-        # Calculate the BTC price needed to match each stock's market cap
-        new_columns[ticker + "_mc_btc_price"] = (
-            data[ticker + "_MarketCap"] / data["SplyCur"]
-        )
-    # Concatenate the new columns with the original DataFrame
-    data = pd.concat([data, pd.DataFrame(new_columns)], axis=1)
+    stock_marketcap_prices = {
+        f"{ticker}_mc_btc_price": data[f"{ticker}_MarketCap"] / data["SplyCur"]
+        for ticker in stock_tickers
+    }
+
+    data = pd.concat([data, pd.DataFrame(stock_marketcap_prices)], axis=1)
     return data
+
+
+## Onchain Models Calculation
 
 
 def calculate_stock_to_flow_metrics(data):
@@ -1035,35 +1067,7 @@ def electric_price_models(data):
     return data
 
 
-def calculate_statistics(data, start_date):
-    """
-    Calculate statistical metrics, including percentiles and z-scores, for the given data after a specified start date.
-
-    Parameters:
-    data (pd.DataFrame): The input DataFrame containing financial or numerical data.
-    start_date (str): The start date from which to filter data.
-
-    Returns:
-    tuple: Two DataFrames containing percentiles and z-scores, respectively.
-    """
-    # Convert start_date to datetime to ensure consistent filtering
-    start_date = pd.to_datetime(start_date)
-
-    # Filter data to only include rows after start_date
-    data = data[data.index >= start_date]
-
-    # Calculate percentiles and z-scores for numeric columns
-    numeric_data = data.select_dtypes(include=[np.number])
-
-    # Calculate percentiles for each numeric column
-    percentiles = numeric_data.rank(pct=True)
-    percentiles.columns = [str(col) + "_percentile" for col in percentiles.columns]
-
-    # Calculate z-scores for each numeric column (standard score)
-    z_scores = (numeric_data - numeric_data.mean()) / numeric_data.std()
-    z_scores.columns = [str(col) + "_zscore" for col in z_scores.columns]
-
-    return percentiles, z_scores
+# Timeframe Calculations
 
 
 def calculate_rolling_cagr_for_all_columns(data, years):
@@ -1281,6 +1285,37 @@ def calculate_time_changes(data, periods):
     return changes
 
 
+def calculate_statistics(data, start_date):
+    """
+    Calculate statistical metrics, including percentiles and z-scores, for the given data after a specified start date.
+
+    Parameters:
+    data (pd.DataFrame): The input DataFrame containing financial or numerical data.
+    start_date (str): The start date from which to filter data.
+
+    Returns:
+    tuple: Two DataFrames containing percentiles and z-scores, respectively.
+    """
+    # Convert start_date to datetime to ensure consistent filtering
+    start_date = pd.to_datetime(start_date)
+
+    # Filter data to only include rows after start_date
+    data = data[data.index >= start_date]
+
+    # Calculate percentiles and z-scores for numeric columns
+    numeric_data = data.select_dtypes(include=[np.number])
+
+    # Calculate percentiles for each numeric column
+    percentiles = numeric_data.rank(pct=True)
+    percentiles.columns = [str(col) + "_percentile" for col in percentiles.columns]
+
+    # Calculate z-scores for each numeric column (standard score)
+    z_scores = (numeric_data - numeric_data.mean()) / numeric_data.std()
+    z_scores.columns = [str(col) + "_zscore" for col in z_scores.columns]
+
+    return percentiles, z_scores
+
+
 def run_data_analysis(data, start_date):
     """
     Run a comprehensive data analysis by calculating changes, percentiles, and z-scores for each column in the DataFrame.
@@ -1303,190 +1338,7 @@ def run_data_analysis(data, start_date):
     return data
 
 
-def compute_drawdowns(data):
-    """
-    Compute drawdown metrics for each major Bitcoin drawdown cycle.
-
-    Parameters:
-    data (pd.DataFrame): DataFrame containing the historical price data with a DateTime index.
-
-    Returns:
-    pd.DataFrame: DataFrame containing drawdown percentages and days since all-time high for each cycle.
-    """
-    drawdown_periods = [
-        # Define major drawdown periods with start and end dates
-        ("2011-06-08", "2013-02-28"),
-        ("2013-11-29", "2017-03-03"),
-        ("2017-12-17", "2020-12-16"),
-        ("2021-11-10", pd.to_datetime("today")),
-    ]
-
-    drawdown_data = (
-        pd.DataFrame()
-    )  # Initialize an empty DataFrame to store drawdown metrics
-
-    # Loop through each drawdown period to calculate metrics
-    for i, period in enumerate(drawdown_periods, 1):
-        start_date, end_date = pd.to_datetime(period[0]), pd.to_datetime(period[1])
-        # Filter data for the specific drawdown period
-        period_data = data[(data.index >= start_date) & (data.index <= end_date)].copy()
-        # Calculate the all-time high (ATH) within the drawdown period
-        period_data[f"ath_cycle_{i}"] = period_data["PriceUSD"].cummax()
-        # Calculate drawdown percentage from ATH
-        period_data[f"drawdown_cycle_{i}"] = (
-            period_data["PriceUSD"] / period_data[f"ath_cycle_{i}"] - 1
-        ) * 100
-        # Calculate days since the start of the drawdown period
-        period_data["index_as_date"] = pd.to_datetime(period_data.index)
-        period_data[f"days_since_ath_cycle_{i}"] = (
-            period_data["index_as_date"] - start_date
-        ).dt.days
-
-        # Select relevant columns for the current drawdown cycle
-        selected_columns = [f"days_since_ath_cycle_{i}", f"drawdown_cycle_{i}"]
-        # Append the results to drawdown_data DataFrame
-        if drawdown_data.empty:
-            drawdown_data = period_data[selected_columns].rename(
-                columns={
-                    f"days_since_ath_cycle_{i}": "days_since_ath",
-                    f"drawdown_cycle_{i}": f"drawdown_cycle_{i}",
-                }
-            )
-        else:
-            drawdown_data = pd.concat(
-                [
-                    drawdown_data,
-                    period_data[selected_columns].rename(
-                        columns={
-                            f"days_since_ath_cycle_{i}": "days_since_ath",
-                            f"drawdown_cycle_{i}": f"drawdown_cycle_{i}",
-                        }
-                    ),
-                ]
-            )
-
-    return drawdown_data
-
-
-def compute_cycle_lows(data):
-    """
-    Compute metrics related to cycle lows for each Bitcoin cycle.
-
-    Parameters:
-    data (pd.DataFrame): DataFrame containing the historical price data with a DateTime index.
-
-    Returns:
-    pd.DataFrame: DataFrame containing days since cycle low and return since cycle low for each cycle.
-    """
-    cycle_periods = [
-        # Define cycle periods with start and end dates to identify cycle lows
-        ("2010-07-25", "2011-11-18"),
-        ("2011-11-18", "2015-01-14"),
-        ("2015-01-14", "2018-12-16"),
-        ("2018-12-16", "2022-11-20"),
-        ("2022-11-20", pd.to_datetime("today")),
-    ]
-
-    cycle_low_data = (
-        pd.DataFrame()
-    )  # Initialize an empty DataFrame to store cycle low metrics
-
-    # Loop through each cycle period and calculate metrics
-    for i, period in enumerate(cycle_periods, 1):
-        start_date, end_date = pd.to_datetime(period[0]), pd.to_datetime(period[1])
-        # Filter data for the specific cycle period
-        period_data = data[(data.index >= start_date) & (data.index <= end_date)].copy()
-        # Calculate the lowest price in the cycle
-        cycle_low_price = period_data["PriceUSD"].min()
-        # Identify the date of the cycle low
-        cycle_low_date = period_data["PriceUSD"].idxmin()
-        # Calculate days since the cycle low
-        period_data["index_as_date"] = pd.to_datetime(period_data.index)
-        period_data[f"days_since_cycle_low_{i}"] = (
-            period_data["index_as_date"] - cycle_low_date
-        ).dt.days
-        # Calculate return since the cycle low
-        period_data[f"return_since_cycle_low_{i}"] = (
-            period_data["PriceUSD"] / cycle_low_price - 1
-        ) * 100
-
-        # Select relevant columns for the current cycle low period
-        selected_columns = [f"days_since_cycle_low_{i}", f"return_since_cycle_low_{i}"]
-        # Append the results to cycle_low_data DataFrame
-        if cycle_low_data.empty:
-            cycle_low_data = period_data[selected_columns].rename(
-                columns={
-                    f"days_since_cycle_low_{i}": "days_since_cycle_low",
-                    f"return_since_cycle_low_{i}": f"return_since_cycle_low_{i}",
-                }
-            )
-        else:
-            cycle_low_data = pd.concat(
-                [
-                    cycle_low_data,
-                    period_data[selected_columns].rename(
-                        columns={
-                            f"days_since_cycle_low_{i}": "days_since_cycle_low",
-                            f"return_since_cycle_low_{i}": f"return_since_cycle_low_{i}",
-                        }
-                    ),
-                ]
-            )
-
-    return cycle_low_data
-
-
-def compute_halving_days(data):
-    """
-    Compute metrics related to Bitcoin halving events.
-
-    Parameters:
-    data (pd.DataFrame): DataFrame containing the historical price data with a DateTime index.
-
-    Returns:
-    pd.DataFrame: DataFrame containing days since halving and return since halving for each halving period.
-    """
-    bitcoin_halvings = [
-        # Define Bitcoin halving periods with start and end dates
-        ("Genesis Era", "2009-01-03", "2012-11-28"),
-        ("2nd Era", "2012-11-28", "2016-07-09"),
-        ("3rd Era", "2016-07-09", "2020-05-11"),
-        ("4th Era", "2020-05-11", "2024-04-20"),
-        ("5th Era", "2024-04-20", pd.to_datetime("today").strftime("%Y-%m-%d")),
-    ]
-
-    # Initialize an empty DataFrame to store halving metrics
-    halving_data = pd.DataFrame()
-
-    # Loop through each halving period and calculate metrics
-    for i, (era_name, start_date, end_date) in enumerate(bitcoin_halvings, 1):
-        start_date, end_date = pd.to_datetime(start_date), pd.to_datetime(end_date)
-        # Filter data for the specific halving period
-        period_data = data[(data.index >= start_date) & (data.index <= end_date)].copy()
-        # Calculate days since the halving event
-        period_data["index_as_date"] = pd.to_datetime(period_data.index)
-        period_data["days_since_halving"] = (
-            period_data["index_as_date"] - start_date
-        ).dt.days
-        # Calculate return since the halving date
-        period_data[f"return_since_halving_{i}"] = (
-            period_data["PriceUSD"] / period_data.loc[start_date, "PriceUSD"] - 1
-        ) * 100
-
-        # Add era identifier column
-        period_data["Era"] = era_name
-
-        # Select relevant columns for the current halving period
-        selected_columns = ["days_since_halving", f"return_since_halving_{i}", "Era"]
-        period_data = period_data[selected_columns]
-
-        # Append to main DataFrame
-        halving_data = pd.concat([halving_data, period_data], ignore_index=True)
-
-    return halving_data
-
-
-## Custom Reports
+# Create Market Statistics
 
 
 def calculate_rolling_correlations(data, periods):
@@ -1730,6 +1582,9 @@ def calculate_52_week_high_low(data, current_date):
     return high_low
 
 
+# Difficultuy Adjustment Data
+
+
 def get_current_block(retries=3, delay=1):
     """
     Retrieves the current block height from the Blockstream API with retries in case of request failure.
@@ -1910,6 +1765,9 @@ def calculate_difficulty_period_change(difficulty_report, df):
     return percentage_changes
 
 
+# Calculate Custom Datasets
+
+
 def create_valuation_data(report_data, valuation_metrics, report_date):
     """
     Creates valuation data based on the report metrics, discount rate, and targets.
@@ -1970,916 +1828,7 @@ def create_valuation_data(report_data, valuation_metrics, report_date):
     return valuation_data
 
 
-def calculate_price_buckets(data, bucket_size):
-    """
-    Calculates the number of days the price spent in each bucket range and saves
-    the current price data to a CSV file.
-
-    Parameters:
-    data (pd.DataFrame): DataFrame containing time-indexed price data.
-    bucket_size (int): The size of each price bucket.
-
-    Returns:
-    pd.DataFrame: DataFrame containing counts of entries in each price bucket.
-    """
-    # Ensure the data index is sorted by time
-    data = data.sort_index(ascending=True)
-
-    # Define the bucket ranges for price intervals
-    bucket_ranges = pd.interval_range(
-        start=0,
-        end=(data["PriceUSD"].max() // bucket_size + 1) * bucket_size,
-        freq=bucket_size,
-    )
-
-    # Assign each price to a bucket
-    data["PriceBucket"] = pd.cut(data["PriceUSD"], bins=bucket_ranges)
-
-    # Calculate the number of unique index values (days) in each bucket
-    bucket_days_count = data.groupby("PriceBucket").apply(lambda x: x.index.nunique())
-
-    # Get the current price and its bucket
-    current_price = data["PriceUSD"].iloc[-1]
-    current_bucket = pd.cut([current_price], bins=bucket_ranges)[0]
-
-    # Extract the count of days for the current price bucket
-    current_bucket_days = bucket_days_count[current_bucket]
-
-    # Create DataFrame for current price data with bucket and days count
-    current_price_data = pd.DataFrame(
-        {
-            "Current Bitcoin Price (USD)": [current_price],
-            f"Current {bucket_size} Price Bucket": [
-                f"${int(current_bucket.left / 1000)}K-${int(current_bucket.right / 1000)}K"
-            ],
-            "Days in Current Bucket": [current_bucket_days],
-        }
-    )
-
-    # Save current price data to a CSV file
-    current_price_data.to_csv(f"csv/trading_range_data_{bucket_size}.csv", index=False)
-
-    # Count the number of entries in each bucket (not days)
-    bucket_counts = data["PriceBucket"].value_counts().sort_index()
-
-    # Create DataFrame for bucket counts with formatted price range
-    bucket_counts_df = bucket_counts.reset_index()
-    bucket_counts_df.columns = ["Price Range ($)", "Count"]
-    bucket_counts_df["Price Range ($)"] = bucket_counts_df["Price Range ($)"].apply(
-        lambda x: f"${int(x.left / 1000)}K-${int(x.right / 1000)}K"
-    )
-
-    return bucket_counts_df
-
-
-def style_bucket_counts_table(bucket_counts_df):
-    # Define the style for the table: smaller font size
-    table_style = [
-        {
-            "selector": "th",
-            "props": "font-size: 12px;",  # Adjust header font size
-        },
-        {
-            "selector": "td",
-            "props": "font-size: 12px;",  # Adjust cell font size
-        },
-    ]
-
-    # Apply the style to the table and hide the index
-    styled_table = bucket_counts_df.style.set_table_styles(table_style).hide_index()
-
-    return styled_table
-
-
-def monthly_heatmap(data, export_csv=True):
-    """
-    Creates a monthly and yearly returns heatmap for Bitcoin price data.
-    """
-    # Filter data to start from January 2011
-    data = data[data.index >= pd.to_datetime("2012-01-01")]
-
-    # Calculate monthly returns
-    monthly_returns = data["PriceUSD"].resample("M").last().pct_change()
-
-    # Calculate YTD returns based on the first price of the year
-    start_of_year = data["PriceUSD"].groupby(data.index.year).transform("first")
-    ytd_returns = (data["PriceUSD"] / start_of_year) - 1
-
-    # Aggregate YTD returns by year
-    yearly_returns = ytd_returns.groupby(data.index.year).last()
-
-    # Prepare the data for the heatmap: years as rows, months as columns
-    heatmap_data = (
-        monthly_returns.groupby(
-            [monthly_returns.index.year, monthly_returns.index.month]
-        )
-        .mean()
-        .unstack()
-    )
-
-    # Add the YTD returns as a separate column
-    heatmap_data[13] = yearly_returns
-
-    # Get the last date in the data to check if the current month is complete
-    last_date = data.index[-1]
-    current_year, current_month = last_date.year, last_date.month
-
-    # Check if the current month is incomplete
-    is_incomplete_month = last_date.day != (last_date + MonthEnd(0)).day
-
-    if is_incomplete_month:
-        # Get the first price of the current month
-        start_of_month = data["PriceUSD"].loc[last_date.strftime("%Y-%m")].iloc[0]
-        # Calculate the MTD return for the incomplete month
-        current_month_return = (data["PriceUSD"].iloc[-1] / start_of_month) - 1
-        # Add the MTD return to the heatmap for display
-        if current_year in heatmap_data.index:
-            heatmap_data.loc[current_year, current_month] = current_month_return
-
-    # Create a copy of the data excluding the incomplete month for additional calculations
-    heatmap_data_excluded = heatmap_data.copy()
-    if is_incomplete_month and current_year in heatmap_data.index:
-        heatmap_data_excluded.loc[current_year, current_month] = pd.NA
-
-    # Add the "4-Year Average" row (last 4 years for each month)
-    heatmap_data.loc["4-Year Average"] = heatmap_data_excluded.iloc[-4:].apply(
-        lambda col: col[~col.isna()].mean(), axis=0
-    )
-
-    # Add the "Median" row, excluding the incomplete month
-    heatmap_data.loc["Median"] = heatmap_data_excluded.apply(
-        lambda col: col[~col.isna()].median(), axis=0
-    )
-
-    # Add the "Average" row, excluding the incomplete month
-    heatmap_data.loc["Average"] = heatmap_data_excluded.apply(
-        lambda col: col[~col.isna()].mean(), axis=0
-    )
-
-    # Rename columns to month names
-    month_names = [calendar.month_abbr[i] for i in range(1, 13)] + ["Yearly"]
-    heatmap_data.columns = month_names
-
-    # Optionally export the heatmap data to CSV
-    if export_csv:
-        heatmap_data.to_csv("csv/monthly_heatmap_data.csv")
-
-    # Create text values for annotations in the heatmap
-    text_values = heatmap_data.applymap(
-        lambda x: f"{x:.2%}" if pd.notnull(x) else ""
-    ).values
-
-    # Define a custom colorscale: shades of red (-1 to 0) to white (0) to green (0 to 3)
-    custom_colorscale = [
-        [0.0, "red"],  # -1 mapped to red
-        [0.5, "white"],  # 0 mapped to white
-        [1.0, "green"],  # 3 mapped to green
-    ]
-
-    # Create the Plotly heatmap figure
-    fig = go.Figure(
-        data=go.Heatmap(
-            z=heatmap_data.values,
-            x=heatmap_data.columns,
-            y=heatmap_data.index.astype(str),
-            colorscale=custom_colorscale,
-            zmin=-1,  # Minimum value for the color scale
-            zmax=1,  # Maximum value for the color scale
-            text=text_values,
-            hoverinfo="text",
-            texttemplate="%{text}",
-        )
-    )
-
-    # Update the layout of the figure
-    fig.update_layout(
-        title="Monthly Bitcoin Price Return Heatmap",
-        xaxis_nticks=13,
-        yaxis_nticks=25,
-        autosize=False,
-        width=1200,
-        height=600,
-    )
-
-    # Create a Datapane plot
-    dp_chart = dp.Plot(fig)
-
-    return dp_chart
-
-
-def weekly_heatmap(data, last_n_years=5, export_csv=False):
-    """
-    Creates a weekly returns heatmap for Bitcoin data over the specified number of years.
-
-    Parameters:
-    data (pd.DataFrame): DataFrame containing Bitcoin price data with a DateTime index.
-    last_n_years (int): The number of years to include in the heatmap.
-    export_csv (bool): Whether to export the heatmap data to a CSV file.
-
-    Returns:
-    dp.Plot: A Datapane Plot object with the weekly returns heatmap.
-    """
-    # Filter data to include only the last `last_n_years` years
-    start_date = datetime.now() - pd.DateOffset(years=last_n_years)
-    data_last_n_years = data.loc[start_date:]
-
-    # Calculate weekly returns, filling forward for partial weeks
-    weekly_returns = data_last_n_years["PriceUSD"].resample("W").ffill().pct_change()
-
-    # Exclude the current incomplete week if necessary
-    current_year, current_week, _ = datetime.now().isocalendar()
-    last_date = data.index[-1]
-    if last_date.isocalendar().week == current_week and last_date.year == current_year:
-        weekly_returns = weekly_returns.drop(
-            weekly_returns[
-                (weekly_returns.index.isocalendar().week == current_week)
-                & (weekly_returns.index.isocalendar().year == current_year)
-            ].index,
-            errors="ignore",
-        )
-
-    # Prepare the heatmap data with weeks as rows and years as columns
-    heatmap_data = (
-        weekly_returns.groupby(
-            [
-                weekly_returns.index.isocalendar().week,
-                weekly_returns.index.isocalendar().year,
-            ]
-        )
-        .mean()
-        .unstack()
-    )
-
-    # Add an "Average" column showing the average return for each week
-    heatmap_data["Average"] = heatmap_data.mean(axis=1)
-
-    # Convert indices and columns to strings for Plotly compatibility
-    heatmap_data.columns = heatmap_data.columns.astype(str)
-    heatmap_data.index = heatmap_data.index.astype(str)
-
-    # Optionally export heatmap data to a CSV file
-    if export_csv:
-        heatmap_data.to_csv("csv/weekly_heatmap_data.csv")
-
-    # Create text annotations for the heatmap, formatted as percentages
-    text_values = heatmap_data.applymap(
-        lambda x: f"{x:.2%}" if pd.notnull(x) else ""
-    ).values
-
-    # Create the Plotly heatmap figure
-    fig = go.Figure(
-        data=go.Heatmap(
-            z=heatmap_data.values,
-            y=heatmap_data.index,
-            x=heatmap_data.columns,
-            colorscale="RdYlGn",
-            zmin=-0.1,  # Minimum value for color scale
-            zmax=0.1,  # Maximum value for color scale
-            zmid=0,  # Midpoint for the color scale
-            text=text_values,
-            hoverinfo="text",
-            texttemplate="%{text}",
-        )
-    )
-
-    # Update the layout for readability and styling
-    fig.update_layout(
-        title=f"Bitcoin Weekly Returns Heatmap (Last {last_n_years} Years)",
-        xaxis_title="Years",
-        yaxis_title="Weeks",
-        xaxis_nticks=10,
-        yaxis_nticks=52,
-        autosize=False,
-        width=800,
-        height=800,
-        margin=dict(l=10, r=10, t=50, b=50),
-    )
-
-    # Create and return a Datapane plot
-    dp_chart = dp.Plot(fig)
-    return dp_chart
-
-
-def plot_yoy_change(data, column_name):
-    """
-    Plots the Year-Over-Year (YOY) percentage change of a specified column and the Bitcoin price on dual y-axes with log scaling.
-
-    Parameters:
-    data (pd.DataFrame): DataFrame containing historical data with a DateTime index.
-    column_name (str): The name of the column in the data for YOY change calculations.
-
-    Returns:
-    matplotlib.figure.Figure: A Matplotlib figure with the YOY change and Bitcoin price plot.
-    """
-    # Filter the data from 2012 onwards
-    data_since_2012 = data[data.index.year >= 2012]
-
-    # Create the figure and first axis
-    fig, ax1 = plt.subplots(figsize=(14, 7))
-
-    # Get the most recent YOY change and Bitcoin price
-    latest_yoy_change = data_since_2012[column_name].iloc[-1]
-    latest_bitcoin_price = data_since_2012["PriceUSD"].iloc[-1]
-
-    # Format the latest YOY change and Bitcoin price for the legend
-    yoy_legend_label = f"YOY Change (latest: {latest_yoy_change:.0%})"
-    btc_price_legend_label = f"Bitcoin Price (latest: ${latest_bitcoin_price:,.2f})"
-
-    # Plot the YOY data on ax1
-    ax1.plot(
-        data_since_2012.index,
-        data_since_2012[column_name],
-        label=yoy_legend_label,
-        color="tab:blue",
-    )
-    ax1.set_yscale("symlog", linthresh=1)  # Set the y-axis to symlog scale
-    ax1.yaxis.set_major_formatter(
-        mticker.FuncFormatter(lambda y, _: "{:.0%}".format(y))
-    )  # Format as percentages
-    ax1.set_xlabel("Year")
-    ax1.set_ylabel("Percent Change", color="tab:blue")
-    ax1.tick_params(axis="y", labelcolor="tab:blue")
-    ax1.grid(True, which="both", ls="--", linewidth=0.5)
-    ax1.set_title("Bitcoin Year-Over-Year Change and Price on Log Scale")
-
-    # Create a second y-axis for the bitcoin price with log scale
-    ax2 = ax1.twinx()
-    ax2.plot(
-        data_since_2012.index,
-        data_since_2012["PriceUSD"],
-        label=btc_price_legend_label,
-        color="tab:orange",
-    )
-    ax2.set_yscale("log")  # Set the y-axis to log scale
-
-    # Add legends
-    lines, labels = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines + lines2, labels + labels2, loc="upper left")
-
-    dp.Plot(fig)
-
-    return fig
-
-
-def create_price_buckets_chart(bucket_counts_df):
-    """
-    Creates a horizontal bar chart of Bitcoin price ranges and the number of days spent in each range.
-
-    Parameters:
-    bucket_counts_df (pd.DataFrame): DataFrame containing price range data with 'Price Range ($)' and 'Count' columns.
-
-    Returns:
-    dp.Plot: A Datapane Plot object containing the price buckets bar chart.
-    """
-    # Exclude the 0-1K range from the plotting data
-    plot_data = bucket_counts_df[
-        bucket_counts_df["Price Range ($)"] != "$0K-$1K"
-    ].copy()
-
-    # Convert the 'Price Range ($)' to a sortable numeric value
-    plot_data["Sort Key"] = plot_data["Price Range ($)"].apply(
-        lambda x: int(x.split("-")[0][1:-1])
-    )
-
-    # Sort the DataFrame by 'Sort Key' in descending order
-    plot_data = plot_data.sort_values(by="Sort Key", ascending=False)
-
-    # Create the bar chart using Plotly
-    fig = px.bar(
-        plot_data,
-        y="Price Range ($)",
-        x="Count",  # Change 'Days Count' to 'Count'
-        orientation="h",  # Makes the bars horizontal
-        color="Count",  # Use 'Count' as the color scale
-        color_continuous_scale="Viridis",  # Choose a color scale
-        title="Number of Days Bitcoin Traded within 1K Price Ranges",
-    )
-
-    # Update figure layout
-    fig.update_layout(height=500, width=800, margin=dict(l=5, r=5, t=50, b=5))
-
-    # Create a Datapane Plot object
-    dp_chart = dp.Plot(fig)
-
-    return dp_chart
-
-
-def calculate_roi_table(data, report_date, price_column="PriceUSD"):
-    """
-    Calculates the return on investment (ROI) for Bitcoin over various time frames from the report date.
-
-    Parameters:
-    data (pd.DataFrame): DataFrame containing price data with a DateTime index.
-    report_date (str or datetime): The date for which to calculate ROI.
-    price_column (str): The column name for Bitcoin price data.
-
-    Returns:
-    pd.DataFrame: DataFrame containing ROI, Start Date, and BTC Price for each time frame.
-    """
-    if price_column not in data.columns:
-        raise ValueError(
-            f"The price column '{price_column}' does not exist in the data."
-        )
-
-    if data.empty:
-        raise ValueError("The input data is empty.")
-
-    periods = {
-        "1 day": 1,
-        "3 day": 3,
-        "7 day": 7,
-        "30 day": 30,
-        "90 day": 90,
-        "1 Year": 365,
-        "2 Year": 730,
-        "4 Year": 1460,
-        "5 Year": 1825,
-        "10 Year": 3650,
-    }
-
-    today = pd.to_datetime(report_date).normalize()
-
-    # Pre-compute the 'Start Date' and 'BTC Price' for each period
-    start_dates = {
-        period: today - pd.Timedelta(days=days) for period, days in periods.items()
-    }
-    btc_prices = {
-        period: data.loc[start_dates[period], price_column]
-        if start_dates[period] in data.index
-        else None
-        for period in periods
-    }
-
-    roi_data = {
-        period: data[price_column].pct_change(days).iloc[-1] * 100
-        for period, days in periods.items()
-    }
-
-    # Combine the ROI, Start Dates, and BTC Prices into a DataFrame
-    roi_table = pd.DataFrame(
-        {
-            "Time Frame": periods.keys(),
-            "ROI": roi_data.values(),
-            "Start Date": start_dates.values(),
-            "BTC Price": btc_prices.values(),
-        }
-    )
-    roi_table.to_csv("csv/roi_table.csv")
-    return roi_table.set_index("Time Frame")
-
-
-def style_roi_table(roi_table):
-    """
-    Styles the ROI table by formatting the 'ROI' column with colors and the 'BTC Price' column as currency.
-
-    Parameters:
-    roi_table (pd.DataFrame): DataFrame containing the ROI data.
-
-    Returns:
-    pd.io.formats.style.Styler: Styled DataFrame for display.
-    """
-
-    # Function to color ROI values
-    def color_roi(val):
-        color = "green" if val > 0 else ("red" if val < 0 else "black")
-        return "color: %s" % color
-
-    # Function to format BTC Price as currency
-    def format_currency(val):
-        return "${:,.2f}".format(val)
-
-    return (
-        roi_table.style.applymap(color_roi, subset=["ROI"])
-        .format(
-            {
-                "ROI": "{:.2f}%",  # Format ROI as percentage with 2 decimal places
-                "BTC Price": format_currency,
-            }
-        )  # Format BTC Price as currency
-        .set_properties(**{"font-size": "10pt"})
-    )
-
-
-def calculate_ma_table(data, price_column="PriceUSD"):
-    """
-    Calculates various moving averages and their respective 7-day percentage changes for Bitcoin prices.
-
-    Parameters:
-    data (pd.DataFrame): DataFrame containing price data with a DateTime index.
-    price_column (str): The column name for Bitcoin price data.
-
-    Returns:
-    pd.DataFrame: DataFrame containing moving averages and 7-day percentage changes.
-    """
-    periods = {
-        "3 Day MA": 3,
-        "7 Day MA": 7,
-        "30 Day MA": 30,
-        "50 Day MA": 50,
-        "100 Day MA": 100,
-        "200 Day MA": 200,
-        "50 Week MA": 50 * 7,
-        "200 Week MA": 200 * 7,
-        "50 Month MA": 50 * 30,
-    }
-
-    ma_data = {
-        period: {
-            "Price": data[price_column].rolling(window=days).mean().iloc[-1],
-            "7 Day % Change": (
-                (
-                    data[price_column].rolling(window=days).mean().iloc[-1]
-                    / data[price_column].rolling(window=days).mean().iloc[-8]
-                )
-                - 1
-            )
-            * 100,
-        }
-        for period, days in periods.items()
-    }
-    ma_data["Current Price"] = {
-        "Price": data[price_column].iloc[-1],
-        "7 Day % Change": (
-            (data[price_column].iloc[-1] / data[price_column].iloc[-8]) - 1
-        )
-        * 100,
-    }
-    ma_table = pd.DataFrame.from_dict(ma_data, orient="index")
-    ma_table.index.name = "Moving Average"
-    ma_table.to_csv("csv/ma_table.csv")
-    return ma_table[["Price", "7 Day % Change"]]
-
-
-def style_ma_table(ma_table):
-    """
-    Styles the MA table by formatting the 'Price' as currency and the '7 Day % Change' as a percentage with colors.
-
-    Parameters:
-    ma_table (pd.DataFrame): DataFrame containing moving average data.
-
-    Returns:
-    pd.io.formats.style.Styler: Styled DataFrame for display.
-    """
-
-    # Function to color percentage values
-    def color_percentage(val):
-        color = "green" if val > 0 else ("red" if val < 0 else "black")
-        return "color: %s" % color
-
-    return (
-        ma_table.style.format(
-            {
-                "Price": "${:,.2f}",  # Format 'Bitcoin Price' as currency with two decimal places
-                "7 Day % Change": "{:.2f}%",  # Format '7 Day Avg % Change' as percentage with two decimal places
-            }
-        )
-        .applymap(
-            color_percentage, subset=["7 Day % Change"]
-        )  # Color the '7 Day Avg % Change' based on value
-        .set_properties(**{"font-size": "10pt"})
-    )
-
-
-def calculate_weekly_values(df, column_name, start_of_week, latest_date):
-    """
-    Calculates daily values for each weekday (Monday to Friday) and the weekly total
-    based on the provided start date (Monday) and latest date.
-
-    Parameters:
-    df (pd.DataFrame): DataFrame with time-indexed data containing the specified column.
-    column_name (str): The column name for which weekly values are calculated.
-    start_of_week (datetime): The starting Monday of the week.
-    latest_date (datetime): The latest date available in the data.
-
-    Returns:
-    tuple: A tuple containing:
-        - weekly_values (list): List of daily values from Monday to Friday.
-        - week_total (float): The total sum of values from Monday to the latest available date.
-    """
-    # Generate dates from Monday to Friday for the given week
-    week_days = pd.date_range(start=start_of_week, periods=5, freq="D").date
-    # Select values for each day; if missing, fill with None
-    weekly_values = (
-        df.loc[df.index.date.isin(week_days), column_name]
-        .reindex(week_days, fill_value=None)
-        .values
-    )
-
-    # Sum values for the week, capped at the latest available date
-    week_total = df.loc[
-        (df.index.date >= start_of_week.date()) & (df.index.date <= latest_date.date()),
-        column_name,
-    ].sum()
-    return weekly_values, week_total
-
-
-def create_metrics_table(df, metrics_template):
-    """
-    Generates a weekly metrics table with custom formatting based on a provided template.
-
-    Parameters:
-    df (pd.DataFrame): DataFrame with time-indexed data containing columns specified in the template.
-    metrics_template (dict): Dictionary where keys are section headers and values are dictionaries
-                             with metric names as keys and tuples (column_name, format_type) as values.
-
-    Returns:
-    pd.io.formats.style.Styler: A styled DataFrame ready for display with customized formatting.
-    """
-    # Define formatting functions
-    formatters = {
-        "number": lambda val: f"{val:,.0f}" if pd.notnull(val) else "",
-        "number2": lambda val: f"{val:,.2f}" if pd.notnull(val) else "",
-        "currency": lambda val: f"${val:,.2f}" if pd.notnull(val) else "",
-        "percent": lambda val: f"{val:.2f}%" if pd.notnull(val) else "",
-        "percent_change": lambda val: (
-            f"<span style='color: {'green' if val > 0 else 'red'};'>{val:.2f}%</span>"
-            if pd.notnull(val)
-            else ""
-        ),
-    }
-
-    def apply_format(column, format_type):
-        """Apply the correct formatting function based on format_type."""
-        return column.apply(formatters[format_type])
-
-    # Initialize a list to hold the calculated values
-    table_data = []
-
-    # Get the most recent date in the DataFrame for current week calculations
-    latest_date = df.index.max()
-    start_of_week = latest_date - timedelta(days=latest_date.weekday())  # Monday
-
-    # Helper function to append header and metric rows
-    def append_row(data, row, header=False):
-        """Append a row with specific formatting and track headers for styling."""
-        if header:
-            header_style_indices.append(len(data))  # Track header row index
-        data.append(row)
-
-    header_style_indices = []  # Store header row indices
-
-    # Loop through each section and metric in the template
-    for section, metrics in metrics_template.items():
-        # Add section header row
-        append_row(
-            table_data,
-            {
-                "Metric": f"<strong>{section}</strong>",
-                "7 Day Avg": "-",
-                "7 Day Avg % Change": "-",
-                "Monday": "-",
-                "Tuesday": "-",
-                "Wednesday": "-",
-                "Thursday": "-",
-                "Friday": "-",
-            },
-            header=True,
-        )
-
-        # Process each metric
-        for metric_display_name, (column_name, format_type) in metrics.items():
-            # Calculate the 7-day average and percentage change from the previous 7-day average
-            week_avg = df[column_name].tail(7).mean()
-            prev_week_avg = df[column_name].tail(14).head(7).mean()
-            pct_change = (
-                ((week_avg - prev_week_avg) / prev_week_avg) * 100
-                if prev_week_avg != 0
-                else np.nan
-            )
-
-            # Get weekly values (Mon-Fri) up to the latest available date
-            weekly_values = (
-                df[column_name][start_of_week:latest_date]
-                .reindex(
-                    pd.date_range(start=start_of_week, periods=5, freq="D").date,
-                    fill_value=None,
-                )
-                .tolist()
-            )
-
-            # Add the metric data with formatted values
-            append_row(
-                table_data,
-                {
-                    "Metric": metric_display_name,
-                    "7 Day Avg": apply_format(pd.Series([week_avg]), format_type)[0],
-                    "7 Day Avg % Change": apply_format(
-                        pd.Series([pct_change]), "percent_change"
-                    )[0],
-                    "Monday": apply_format(pd.Series([weekly_values[0]]), format_type)[
-                        0
-                    ],
-                    "Tuesday": apply_format(pd.Series([weekly_values[1]]), format_type)[
-                        0
-                    ],
-                    "Wednesday": apply_format(
-                        pd.Series([weekly_values[2]]), format_type
-                    )[0],
-                    "Thursday": apply_format(
-                        pd.Series([weekly_values[3]]), format_type
-                    )[0],
-                    "Friday": apply_format(pd.Series([weekly_values[4]]), format_type)[
-                        0
-                    ],
-                },
-            )
-
-    # Create the final DataFrame and style it
-    table_df = pd.DataFrame(table_data)
-
-    # Apply styling to hide index and adjust text properties
-    styled_table = table_df.style.hide_index().set_properties(
-        **{"font-size": "10pt", "white-space": "nowrap"}
-    )
-
-    # Define specific styles for the header rows
-    header_styles = [
-        {
-            "selector": f".row{row_index}",
-            "props": [
-                ("border-top", "1px solid black"),
-                ("border-bottom", "1px solid black"),
-            ],
-        }
-        for row_index in header_style_indices
-    ]
-
-    # Apply header row styles to the styled table
-    styled_table = styled_table.set_table_styles(header_styles, overwrite=False)
-
-    return styled_table
-
-
-def create_ohlc_chart(ohlc_data, report_data, chart_template):
-    """
-    Creates an interactive OHLC (candlestick) chart with Plotly, including additional metrics and optional event markers.
-
-    Parameters:
-    - ohlc_data (pd.DataFrame): Time-indexed DataFrame with OHLC data, containing 'Open', 'High', 'Low', and 'Close' columns.
-    - report_data (pd.DataFrame): DataFrame with additional metrics for overlaying on the OHLC chart (e.g., moving averages).
-    - chart_template (dict): Dictionary defining chart settings, including title, labels, filename, and event markers.
-
-    Returns:
-    - fig (plotly.graph_objs.Figure): Plotly figure object containing the candlestick chart with overlays and event annotations.
-    """
-    # Ensure the index is timezone-naive for compatibility
-
-    ohlc_data.index = ohlc_data.index.tz_localize(None)
-    report_data.index = report_data.index.tz_localize(None)
-
-    # Extract chart attributes from the template
-    title = chart_template["title"]
-    x_label = chart_template["x_label"]
-    y_label = chart_template["y1_label"]
-    filename = chart_template["filename"]
-
-    # Calculate the extended x-axis range
-    start_date = ohlc_data.index.min() - timedelta(days=30)  # Extend 30 days back
-    end_date = ohlc_data.index.max() + timedelta(days=30)  # Extend 30 days forward
-
-    # Filter `report_data` to align with OHLC data range
-    report_data_filtered = report_data[report_data.index >= ohlc_data.index.min()]
-
-    # Initialize the candlestick chart with OHLC data
-    fig = go.Figure(
-        data=[
-            go.Candlestick(
-                x=ohlc_data.index,
-                open=ohlc_data["Open"],
-                high=ohlc_data["High"],
-                low=ohlc_data["Low"],
-                close=ohlc_data["Close"],
-                name="Weekly Price",
-            )
-        ]
-    )
-
-    # Overlay additional metrics on the chart
-    for metric in [
-        "200_week_ma_priceUSD",
-        "realised_price",
-        "realizedcap_multiple_3",
-        "realizedcap_multiple_5",
-        "thermocap_price_multiple_8",
-        "thermocap_price_multiple_16",
-        "thermocap_price_multiple_32",
-    ]:
-        if metric in report_data_filtered.columns:
-            fig.add_trace(
-                go.Scatter(
-                    x=report_data_filtered.index,
-                    y=report_data_filtered[metric],
-                    mode="lines",
-                    name=metric,
-                )
-            )
-
-    # Update the layout, including axis settings, legend, and custom buttons for y-axis scaling
-    fig.update_layout(
-        title=dict(text=title, x=0.5, xanchor="center", y=0.95),
-        xaxis=dict(
-            title=x_label,
-            showgrid=False,
-            tickformat="%B-%d-%Y",
-            rangeslider_visible=False,
-            range=[start_date, end_date],  # Use extended range
-        ),
-        yaxis=dict(title=y_label, showgrid=False, type="log", autorange=True),
-        plot_bgcolor="rgba(255, 255, 255, 1)",
-        hovermode="x",
-        autosize=True,
-        legend=dict(
-            orientation="h", yanchor="bottom", y=-0.23, xanchor="center", x=0.5
-        ),
-        template="plotly_white",
-        updatemenus=[
-            dict(
-                buttons=list(
-                    [
-                        dict(
-                            label="Y1-axis: Linear",
-                            method="relayout",
-                            args=["yaxis.type", "linear"],
-                        ),
-                        dict(
-                            label="Y1-axis: Log",
-                            method="relayout",
-                            args=["yaxis.type", "log"],
-                        ),
-                    ]
-                ),
-                direction="right",
-                x=-0.1,
-                xanchor="left",
-                y=-0.25,
-                yanchor="top",
-            )
-        ],
-        width=1400,
-        height=700,
-        margin=dict(l=50, r=50, b=50, t=50, pad=50),
-        font=dict(family="PT Sans Narrow", size=14, color="black"),
-    )
-
-    # Add event markers (vertical lines and annotations) from the template
-    if "events" in chart_template:
-        for event in chart_template["events"]:
-            event_dates = pd.to_datetime(event["dates"])
-            for date in event_dates:
-                if ohlc_data.index.min() <= date <= ohlc_data.index.max():
-                    fig.add_vline(
-                        x=date.timestamp() * 1000,
-                        line=dict(color="black", width=1, dash="dash"),
-                    )
-                    fig.add_annotation(
-                        x=date, y=0.5, text=event["name"], showarrow=False, yref="paper"
-                    )
-
-    # Add a watermark to the chart
-    fig.add_annotation(
-        xref="paper",
-        yref="paper",
-        x=0.5,
-        y=0.5,
-        text="SecretSatoshis.com",
-        showarrow=False,
-        font=dict(size=50, color="rgba(128, 128, 128, 0.5)"),
-        align="center",
-    )
-    return fig
-
-
-def calculate_weekly_ohlc(ohlc_data, output_file="csv/weekly_ohlc.csv"):
-    """
-    Calculates the latest weekly OHLC (Open, High, Low, Close) values from daily data and saves them to a CSV file.
-
-    Parameters:
-    - ohlc_data (pd.DataFrame): DataFrame with daily OHLC data containing 'Open', 'High', 'Low', and 'Close' columns.
-    - output_file (str): Filename for saving the weekly OHLC values as a CSV file.
-
-    Returns:
-    - pd.DataFrame: DataFrame containing the latest weekly OHLC values for the most recent week.
-    """
-    # Ensure the index is a datetime index for resampling
-    ohlc_data.index = pd.to_datetime(ohlc_data.index)
-
-    # Resample daily data to get weekly OHLC values
-    weekly_ohlc = ohlc_data.resample("W").agg(
-        {"Open": "first", "High": "max", "Low": "min", "Close": "last"}
-    )
-
-    # Extract the most recent weekly OHLC values
-    latest_weekly_ohlc = weekly_ohlc.iloc[-1]
-
-    # Convert to a DataFrame for export and save to CSV
-    latest_weekly_ohlc_df = pd.DataFrame(latest_weekly_ohlc).T
-    latest_weekly_ohlc_df.to_csv(output_file)
-
-    return latest_weekly_ohlc_df
-
-
-def create_btc_correlation_tables(report_date, tickers, correlations_data):
+def create_btc_correlation_data(report_date, tickers, correlations_data):
     """
     Creates tables of Bitcoin correlations for specified assets at a given date.
 
@@ -2938,247 +1887,184 @@ def create_btc_correlation_tables(report_date, tickers, correlations_data):
     return btc_correlations
 
 
-def create_monthly_returns_table(selected_metrics):
-    today = datetime.today().date()
-    current_year = today.year
-    current_month = today.month
-    current_day = today.day
-
-    # Ensure data is filtered to entries from January 1, 2014, onwards
-    selected_metrics = selected_metrics[selected_metrics.index >= "2014-01-01"].copy()
-
-    monthly_returns = {}
-    report_date_returns = {}
-
-    # Get the starting price for the current month of the current year
-    current_month_data = selected_metrics[
-        (selected_metrics.index.year == current_year)
-        & (selected_metrics.index.month == current_month)
-    ]
-    if current_month_data.empty:
-        return None  # No data for current month
-
-    current_start_price = current_month_data["PriceUSD"].iloc[0]
-
-    # Calculate monthly returns for each year
-    for year in selected_metrics.index.year.unique():
-        monthly_data = selected_metrics[
-            (selected_metrics.index.year == year)
-            & (selected_metrics.index.month == current_month)
-        ]
-
-        if not monthly_data.empty:
-            start_price = monthly_data["PriceUSD"].iloc[0]
-            end_price = monthly_data["PriceUSD"].iloc[-1]
-            return_pct = (end_price / start_price - 1) * 100
-            monthly_returns[year] = (start_price, end_price, return_pct)
-
-            # Report Date Return Calculation
-            report_date_data = monthly_data[(monthly_data.index.day == current_day)]
-            if not report_date_data.empty:
-                report_date_price = report_date_data["PriceUSD"].iloc[-1]
-                report_date_return = (report_date_price / start_price - 1) * 100
-                report_date_returns[year] = report_date_return
-            else:
-                report_date_returns[year] = None
-
-    # Convert dictionary to DataFrame
-    df = pd.DataFrame.from_dict(
-        monthly_returns,
-        orient="index",
-        columns=["Start Price ($)", "End Price ($)", "Return (%)"],
-    )
-    df.index.name = "Year"
-
-    # Add report date return column
-    df["Report Date Return (%)"] = pd.Series(report_date_returns)
-
-    # Extract the current year's data
-    current_year_row = df.loc[[current_year]].reset_index()
-
-    # Calculate the historical median return
-    median_return = df["Return (%)"].median()
-    median_end_price = current_start_price * (1 + median_return / 100)
-
-    # Calculate the median return at the current date (not full period)
-    median_report_date_return = df["Report Date Return (%)"].median()
-
-    # Create the projected median row
-    median_row = pd.DataFrame(
-        {
-            "Year": ["Median Projection"],
-            "Start Price ($)": [current_start_price],
-            "End Price ($)": [median_end_price],
-            "Return (%)": [median_return],
-            "Report Date Return (%)": [median_report_date_return],
-        }
-    )
-
-    # Concatenate current year and median projection rows
-    df_filtered = pd.concat([current_year_row, median_row], ignore_index=True)
-
-    return df_filtered
-
-
-def create_yearly_returns_table(selected_metrics):
-    today = datetime.today().date()
-    current_year = today.year
-    current_day_of_year = today.timetuple().tm_yday
-
-    # Ensure data is filtered correctly
-    selected_metrics = selected_metrics[selected_metrics.index >= "2014-01-01"].copy()
-
-    yearly_returns = {}
-    report_date_returns = {}
-
-    # Get the starting price for the current year
-    current_year_data = selected_metrics[selected_metrics.index.year == current_year]
-    if current_year_data.empty:
-        return None  # No data for current year
-
-    current_start_price = current_year_data["PriceUSD"].iloc[0]
-
-    # Calculate yearly returns for each year
-    for year in selected_metrics.index.year.unique():
-        yearly_data = selected_metrics[selected_metrics.index.year == year]
-
-        if not yearly_data.empty:
-            start_price = yearly_data["PriceUSD"].iloc[0]
-            end_price = yearly_data["PriceUSD"].iloc[-1]
-            return_pct = (end_price / start_price - 1) * 100
-            yearly_returns[year] = (start_price, end_price, return_pct)
-
-            # Report Date Return Calculation
-            report_date_data = yearly_data[
-                yearly_data.index.dayofyear == current_day_of_year
-            ]
-            if not report_date_data.empty:
-                report_date_price = report_date_data["PriceUSD"].iloc[-1]
-                report_date_return = (report_date_price / start_price - 1) * 100
-                report_date_returns[year] = report_date_return
-            else:
-                report_date_returns[year] = None
-
-    # Convert dictionary to DataFrame
-    df = pd.DataFrame.from_dict(
-        yearly_returns,
-        orient="index",
-        columns=["Start Price ($)", "End Price ($)", "Return (%)"],
-    )
-    df.index.name = "Year"
-
-    # Add report date return column
-    df["Report Date Return (%)"] = pd.Series(report_date_returns)
-
-    # Extract the current year's data
-    current_year_row = df.loc[[current_year]].reset_index()
-
-    # Calculate the historical median return
-    median_return = df["Return (%)"].median()
-    median_end_price = current_start_price * (1 + median_return / 100)
-
-    # **Fix the Median Report Date Return (%)**
-    median_report_date_return_pct = df["Report Date Return (%)"].dropna().median()
-
-    # Create the projected median row
-    median_row = pd.DataFrame(
-        {
-            "Year": ["Median Projection"],
-            "Start Price ($)": [current_start_price],
-            "End Price ($)": [median_end_price],
-            "Return (%)": [median_return],
-            "Report Date Return (%)": [median_report_date_return_pct],
-        }
-    )
-
-    # Concatenate current year and median projection rows
-    df_filtered = pd.concat([current_year_row, median_row], ignore_index=True)
-
-    return df_filtered
-
-
-def create_asset_valuation_table(report_data):
+def compute_drawdowns(data):
     """
-    Generates a valuation table for various assets compared to Bitcoin.
+    Compute drawdown metrics for each major Bitcoin drawdown cycle.
 
     Parameters:
-    - report_data (pd.DataFrame): DataFrame containing asset market cap and BTC price data.
+    data (pd.DataFrame): DataFrame containing the historical price data with a DateTime index.
 
     Returns:
-    - pd.DataFrame: DataFrame summarizing asset valuations and Bitcoin price targets.
+    pd.DataFrame: DataFrame containing drawdown percentages and days since all-time high for each cycle.
     """
-    assets = [
-        {"name": "Bitcoin", "data": "PriceUSD", "marketcap": "CapMrktCurUSD"},
-        {
-            "name": "Total Silver Market",
-            "data": "silver_marketcap_btc_price",
-            "marketcap": "silver_marketcap_billion_usd",
-        },
-        {
-            "name": "UK M0",
-            "data": "United_Kingdom_btc_price",
-            "marketcap": "United_Kingdom_cap",
-        },
-        {"name": "Meta", "data": "META_mc_btc_price", "marketcap": "META_MarketCap"},
-        {"name": "Amazon", "data": "AMZN_mc_btc_price", "marketcap": "AMZN_MarketCap"},
-        {
-            "name": "Gold Country Holdings",
-            "data": "gold_official_country_holdings_marketcap_btc_price",
-            "marketcap": "gold_marketcap_official_country_holdings_billion_usd",
-        },
-        {"name": "NVIDIA", "data": "NVDA_mc_btc_price", "marketcap": "NVDA_MarketCap"},
-        {
-            "name": "Gold Private Investment",
-            "data": "gold_private_investment_marketcap_btc_price",
-            "marketcap": "gold_marketcap_private_investment_billion_usd",
-        },
-        {"name": "Apple", "data": "AAPL_mc_btc_price", "marketcap": "AAPL_MarketCap"},
-        {
-            "name": "US M0",
-            "data": "United_States_btc_price",
-            "marketcap": "United_States_cap",
-        },
-        {
-            "name": "Total Gold Market",
-            "data": "gold_marketcap_btc_price",
-            "marketcap": "gold_marketcap_billion_usd",
-        },
+    drawdown_periods = [
+        # Define major drawdown periods with start and end dates
+        ("2011-06-08", "2013-02-28"),
+        ("2013-11-29", "2017-03-03"),
+        ("2017-12-17", "2020-12-16"),
+        ("2021-11-10", pd.to_datetime("today")),
     ]
 
-    # Get the latest values (last row)
-    latest_data = report_data.iloc[-1]
-    bitcoin_price = latest_data.get("PriceUSD", float("nan"))
+    drawdown_data = (
+        pd.DataFrame()
+    )  # Initialize an empty DataFrame to store drawdown metrics
 
-    valuation_data = []
-    for asset in assets:
-        marketcap_btc_price = latest_data.get(asset["data"], float("nan"))
-        marketcap_value = latest_data.get(asset["marketcap"], float("nan"))
+    # Loop through each drawdown period to calculate metrics
+    for i, period in enumerate(drawdown_periods, 1):
+        start_date, end_date = pd.to_datetime(period[0]), pd.to_datetime(period[1])
+        # Filter data for the specific drawdown period
+        period_data = data[(data.index >= start_date) & (data.index <= end_date)].copy()
+        # Calculate the all-time high (ATH) within the drawdown period
+        period_data[f"ath_cycle_{i}"] = period_data["PriceUSD"].cummax()
+        # Calculate drawdown percentage from ATH
+        period_data[f"drawdown_cycle_{i}"] = (
+            period_data["PriceUSD"] / period_data[f"ath_cycle_{i}"] - 1
+        ) * 100
+        # Calculate days since the start of the drawdown period
+        period_data["index_as_date"] = pd.to_datetime(period_data.index)
+        period_data[f"days_since_ath_cycle_{i}"] = (
+            period_data["index_as_date"] - start_date
+        ).dt.days
 
-        # Avoid division by zero or invalid values
-        if (
-            pd.notna(bitcoin_price)
-            and pd.notna(marketcap_btc_price)
-            and bitcoin_price > 0
-        ):
-            percent_move = ((marketcap_btc_price - bitcoin_price) / bitcoin_price) * 100
+        # Select relevant columns for the current drawdown cycle
+        selected_columns = [f"days_since_ath_cycle_{i}", f"drawdown_cycle_{i}"]
+        # Append the results to drawdown_data DataFrame
+        if drawdown_data.empty:
+            drawdown_data = period_data[selected_columns].rename(
+                columns={
+                    f"days_since_ath_cycle_{i}": "days_since_ath",
+                    f"drawdown_cycle_{i}": f"drawdown_cycle_{i}",
+                }
+            )
         else:
-            percent_move = "N/A"
+            drawdown_data = pd.concat(
+                [
+                    drawdown_data,
+                    period_data[selected_columns].rename(
+                        columns={
+                            f"days_since_ath_cycle_{i}": "days_since_ath",
+                            f"drawdown_cycle_{i}": f"drawdown_cycle_{i}",
+                        }
+                    ),
+                ]
+            )
 
-        valuation_data.append(
-            {
-                "Asset": asset["name"],
-                "Market Cap (USD)": f"${marketcap_value:,.0f}"
-                if pd.notna(marketcap_value)
-                else "N/A",
-                "Market Cap BTC Price": f"${marketcap_btc_price:,.0f}"
-                if pd.notna(marketcap_btc_price)
-                else "N/A",
-                "BTC % Move to Marketcap BTC Price": f"{percent_move:.0f}%"
-                if percent_move != "N/A"
-                else "N/A",
-            }
-        )
+    return drawdown_data
 
-    valuation_df = pd.DataFrame(valuation_data)
 
-    return valuation_df
+def compute_cycle_lows(data):
+    """
+    Compute metrics related to cycle lows for each Bitcoin cycle.
+
+    Parameters:
+    data (pd.DataFrame): DataFrame containing the historical price data with a DateTime index.
+
+    Returns:
+    pd.DataFrame: DataFrame containing days since cycle low and return since cycle low for each cycle.
+    """
+    cycle_periods = [
+        # Define cycle periods with start and end dates to identify cycle lows
+        ("2010-07-25", "2011-11-18"),
+        ("2011-11-18", "2015-01-14"),
+        ("2015-01-14", "2018-12-16"),
+        ("2018-12-16", "2022-11-20"),
+        ("2022-11-20", pd.to_datetime("today")),
+    ]
+
+    cycle_low_data = (
+        pd.DataFrame()
+    )  # Initialize an empty DataFrame to store cycle low metrics
+
+    # Loop through each cycle period and calculate metrics
+    for i, period in enumerate(cycle_periods, 1):
+        start_date, end_date = pd.to_datetime(period[0]), pd.to_datetime(period[1])
+        # Filter data for the specific cycle period
+        period_data = data[(data.index >= start_date) & (data.index <= end_date)].copy()
+        # Calculate the lowest price in the cycle
+        cycle_low_price = period_data["PriceUSD"].min()
+        # Identify the date of the cycle low
+        cycle_low_date = period_data["PriceUSD"].idxmin()
+        # Calculate days since the cycle low
+        period_data["index_as_date"] = pd.to_datetime(period_data.index)
+        period_data[f"days_since_cycle_low_{i}"] = (
+            period_data["index_as_date"] - cycle_low_date
+        ).dt.days
+        # Calculate return since the cycle low
+        period_data[f"return_since_cycle_low_{i}"] = (
+            period_data["PriceUSD"] / cycle_low_price - 1
+        ) * 100
+
+        # Select relevant columns for the current cycle low period
+        selected_columns = [f"days_since_cycle_low_{i}", f"return_since_cycle_low_{i}"]
+        # Append the results to cycle_low_data DataFrame
+        if cycle_low_data.empty:
+            cycle_low_data = period_data[selected_columns].rename(
+                columns={
+                    f"days_since_cycle_low_{i}": "days_since_cycle_low",
+                    f"return_since_cycle_low_{i}": f"return_since_cycle_low_{i}",
+                }
+            )
+        else:
+            cycle_low_data = pd.concat(
+                [
+                    cycle_low_data,
+                    period_data[selected_columns].rename(
+                        columns={
+                            f"days_since_cycle_low_{i}": "days_since_cycle_low",
+                            f"return_since_cycle_low_{i}": f"return_since_cycle_low_{i}",
+                        }
+                    ),
+                ]
+            )
+
+    return cycle_low_data
+
+
+def compute_halving_days(data):
+    """
+    Compute metrics related to Bitcoin halving events.
+
+    Parameters:
+    data (pd.DataFrame): DataFrame containing the historical price data with a DateTime index.
+
+    Returns:
+    pd.DataFrame: DataFrame containing days since halving and return since halving for each halving period.
+    """
+    bitcoin_halvings = [
+        # Define Bitcoin halving periods with start and end dates
+        ("Genesis Era", "2009-01-03", "2012-11-28"),
+        ("2nd Era", "2012-11-28", "2016-07-09"),
+        ("3rd Era", "2016-07-09", "2020-05-11"),
+        ("4th Era", "2020-05-11", "2024-04-20"),
+        ("5th Era", "2024-04-20", pd.to_datetime("today").strftime("%Y-%m-%d")),
+    ]
+
+    # Initialize an empty DataFrame to store halving metrics
+    halving_data = pd.DataFrame()
+
+    # Loop through each halving period and calculate metrics
+    for i, (era_name, start_date, end_date) in enumerate(bitcoin_halvings, 1):
+        start_date, end_date = pd.to_datetime(start_date), pd.to_datetime(end_date)
+        # Filter data for the specific halving period
+        period_data = data[(data.index >= start_date) & (data.index <= end_date)].copy()
+        # Calculate days since the halving event
+        period_data["index_as_date"] = pd.to_datetime(period_data.index)
+        period_data["days_since_halving"] = (
+            period_data["index_as_date"] - start_date
+        ).dt.days
+        # Calculate return since the halving date
+        period_data[f"return_since_halving_{i}"] = (
+            period_data["PriceUSD"] / period_data.loc[start_date, "PriceUSD"] - 1
+        ) * 100
+
+        # Add era identifier column
+        period_data["Era"] = era_name
+
+        # Select relevant columns for the current halving period
+        selected_columns = ["days_since_halving", f"return_since_halving_{i}", "Era"]
+        period_data = period_data[selected_columns]
+
+        # Append to main DataFrame
+        halving_data = pd.concat([halving_data, period_data], ignore_index=True)
+
+    return halving_data
