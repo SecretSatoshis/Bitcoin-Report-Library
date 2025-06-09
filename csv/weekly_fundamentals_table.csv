@@ -1,27 +1,27 @@
 Metric,7 Day Avg,7 Day Avg % Change,Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday
 <strong>Network Performance</strong>,-,-,-,-,-,-,-,-,-
-Total Address Count,"53,554,393",<span style='color: red;'>-0.10%</span>,"53,602,482","53,518,439","53,521,214","53,553,144","53,535,195","53,575,138","53,575,138"
-Address Count > $10,"37,360,831",<span style='color: red;'>-0.45%</span>,"37,475,925","37,373,301","37,338,606","37,198,452","37,317,976","37,410,779","37,410,779"
-Active Addresses,"746,674",<span style='color: red;'>-0.17%</span>,"771,787","864,048","720,304","781,431","781,673","653,737","653,737"
-Supply Held 1+ Year %,62.10%,<span style='color: red;'>-0.09%</span>,62.09%,62.08%,62.03%,62.04%,62.04%,62.21%,62.21%
-Transaction Count,"319,986",<span style='color: red;'>-15.58%</span>,"348,163","360,069","332,769","321,208","296,656","290,519","290,519"
-Transfer Count,"720,979",<span style='color: red;'>-7.97%</span>,"742,976","821,540","734,364","739,624","690,562","658,893","658,893"
-Transaction Volume,"$13,091,821,271.73",<span style='color: green;'>2.74%</span>,"$15,723,208,588.57","$16,010,159,301.23","$17,030,724,740.41","$14,155,231,628.49","$14,785,474,380.91","$6,968,975,131.26","$6,968,975,131.26"
-Transaction Fee USD,"$450,249.30",<span style='color: red;'>-21.23%</span>,"$500,056.32","$516,700.61","$483,309.07","$503,665.76","$455,013.30","$346,500.03","$346,500.03"
+Total Address Count,"53,554,320",<span style='color: red;'>-0.12%</span>,"53,588,554",,,,,,
+Address Count > $10,"37,354,181",<span style='color: red;'>-0.42%</span>,"37,420,075",,,,,,
+Active Addresses,"717,730",<span style='color: red;'>-4.52%</span>,"611,460",,,,,,
+Supply Held 1+ Year %,62.12%,<span style='color: green;'>0.01%</span>,62.23%,,,,,,
+Transaction Count,"321,121",<span style='color: red;'>-15.12%</span>,"323,313",,,,,,
+Transfer Count,"719,204",<span style='color: red;'>-8.33%</span>,"694,724",,,,,,
+Transaction Volume,"$11,379,989,191.53",<span style='color: red;'>-13.94%</span>,"$5,354,679,579.21",,,,,,
+Transaction Fee USD,"$430,168.36",<span style='color: red;'>-23.93%</span>,"$352,994.88",,,,,,
 <strong>Network Security</strong>,-,-,-,-,-,-,-,-,-
-Hash Rate,"862,984,819",<span style='color: red;'>-7.43%</span>,"839,539,042","908,974,603","795,352,778","845,851,371","845,851,371","902,662,284","902,662,284"
-Network Difficulty,"126,982,285,146,989",<span style='color: green;'>2.45%</span>,"126,982,285,146,989","126,982,285,146,989","126,982,285,146,989","126,982,285,146,989","126,982,285,146,989","126,982,285,146,989","126,982,285,146,989"
-Miner Revenue,"$45,235,546.68",<span style='color: red;'>-11.84%</span>,"$44,514,617.86","$47,984,494.10","$41,741,554.25","$43,077,639.28","$44,181,328.64","$47,574,596.31","$47,574,596.31"
-Fee % Of Reward,1.00%,<span style='color: red;'>-9.43%</span>,1.12%,1.08%,1.16%,1.17%,1.03%,0.73%,0.73%
+Hash Rate,"890,037,634",<span style='color: red;'>-3.26%</span>,"965,785,516",,,,,,
+Network Difficulty,"126,982,285,146,989",<span style='color: green;'>1.83%</span>,"126,982,285,146,989",,,,,,
+Miner Revenue,"$46,623,964.77",<span style='color: red;'>-6.98%</span>,"$50,904,070.39",,,,,,
+Fee % Of Reward,0.94%,<span style='color: red;'>-16.47%</span>,0.69%,,,,,,
 <strong>Network Economics</strong>,-,-,-,-,-,-,-,-,-
-Bitcoin Supply,"19,874,642",<span style='color: green;'>0.02%</span>,"19,873,429","19,873,879","19,874,273","19,874,691","19,875,110","19,875,557","19,875,557"
-Bitcoin Supply In 10 Years,"20,801,216",<span style='color: green;'>0.00%</span>,"20,800,912","20,801,025","20,801,123","20,801,228","20,801,333","20,801,445","20,801,445"
-% Supply Issued,0.95%,<span style='color: green;'>0.02%</span>,0.95%,0.95%,0.95%,0.95%,0.95%,0.95%,0.95%
-Bitcoin Mined Per Day,427,<span style='color: red;'>-10.23%</span>,416,450,394,419,419,447,447
-Annual Inflation Rate,0.78%,<span style='color: red;'>-10.24%</span>,0.76%,0.83%,0.72%,0.77%,0.77%,0.82%,0.82%
-Velocity,4.43,<span style='color: green;'>0.07%</span>,4.43,4.43,4.43,4.43,4.43,4.43,4.43
+Bitcoin Supply,"19,875,083",<span style='color: green;'>0.02%</span>,"19,876,035",,,,,,
+Bitcoin Supply In 10 Years,"20,801,326",<span style='color: green;'>0.00%</span>,"20,801,564",,,,,,
+% Supply Issued,0.95%,<span style='color: green;'>0.02%</span>,0.95%,,,,,,
+Bitcoin Mined Per Day,441,<span style='color: red;'>-5.64%</span>,478,,,,,,
+Annual Inflation Rate,0.81%,<span style='color: red;'>-5.66%</span>,0.88%,,,,,,
+Velocity,4.43,<span style='color: green;'>0.06%</span>,4.42,,,,,,
 <strong>Network Valuation</strong>,-,-,-,-,-,-,-,-,-
-Market Cap,"$2,082,939,865,585.78",<span style='color: red;'>-1.71%</span>,"$2,104,590,104,579.17","$2,096,375,961,866.66","$2,082,482,835,627.24","$2,020,643,792,695.65","$2,075,379,908,381.18","$2,100,553,227,975.27","$2,100,553,227,975.27"
-Bitcoin Price,"$104,803.90",<span style='color: red;'>-1.73%</span>,"$105,899.70","$105,483.99","$104,782.84","$101,669.19","$104,421.05","$105,685.25","$105,685.25"
-Realised Price,"$46,960.40",<span style='color: green;'>0.91%</span>,"$46,792.56","$46,901.58","$46,974.56","$46,972.91","$47,007.35","$47,036.92","$47,036.92"
-Thermocap Price,"$4,001.26",<span style='color: green;'>0.39%</span>,"$3,995.05","$3,997.38","$3,999.40","$4,001.48","$4,003.62","$4,005.92","$4,005.92"
+Market Cap,"$2,082,618,896,967.46",<span style='color: red;'>-1.27%</span>,"$2,101,448,276,113.12",,,,,,
+Bitcoin Price,"$104,785.40",<span style='color: red;'>-1.28%</span>,"$105,727.74",,,,,,
+Realised Price,"$47,002.30",<span style='color: green;'>0.85%</span>,"$47,061.37",,,,,,
+Thermocap Price,"$4,003.51",<span style='color: green;'>0.39%</span>,"$4,008.39",,,,,,
