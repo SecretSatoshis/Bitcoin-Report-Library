@@ -6,6 +6,7 @@ import warnings
 import datapane as dp
 import sys
 
+
 # Ignore FutureWarning & Cache
 warnings.simplefilter(action="ignore", category=FutureWarning)
 sys.dont_write_bytecode = True
