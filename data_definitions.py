@@ -1,4 +1,4 @@
-import datetime
+rt datetime
 import pandas as pd
 
 # TradFi Data
@@ -155,7 +155,6 @@ moving_avg_metrics = [
 filter_data_columns = {
     "Report_Metrics": [
         "SplyCur",
-        "SplyExpFut10yr",
         "7_day_ma_IssContNtv",
         "365_day_ma_IssContNtv",
         "TxCnt",
@@ -171,7 +170,6 @@ filter_data_columns = {
         "200_week_ma_priceUSD",
         "TxTfrValAdjUSD",
         "7_day_ma_TxTfrValMeanUSD",
-        "TxTfrCnt",
         "7_day_ma_TxTfrValAdjUSD",
         "365_day_ma_TxTfrValAdjUSD",
         "RevUSD",
@@ -198,7 +196,6 @@ filter_data_columns = {
         "365_day_ma_nvt_price",
         "NVTAdj",
         "NVTAdj90",
-        "NVTAdjFF",
         "realised_price",
         "VelCur1yr",
         "supply_pct_1_year_plus",
@@ -206,8 +203,9 @@ filter_data_columns = {
         "realizedcap_multiple_3",
         "realizedcap_multiple_5",
         "nupl",
-        "RevHashRateUSD",
         "CapMrktCurUSD",
+        "AdrBalUSD10Cnt",
+        "AdrBalCnt",
         "DiffLast",
         "AAPL_close",
         "^IXIC_close",
@@ -257,30 +255,8 @@ filter_data_columns = {
         "365_day_ma_RevUSD",
         "30_day_ma_TxTfrValMeanUSD",
         "30_day_ma_TxTfrValMedUSD",
-        "AdrBalUSD1MCnt",
-        "AdrBalUSD10MCnt",
-        "AdrBalUSD10KCnt",
-        "AdrBalUSD1KCnt",
-        "AdrBalUSD10Cnt",
-        "AdrBalUSD1Cnt",
-        "AdrBalCnt",
-        "SplyAct1d",
-        "SplyAct30d",
-        "SplyAct90d",
-        "SplyAct180d",
-        "SplyAct1yr",
-        "SplyAct3yr",
-        "SplyAct4yr",
-        "SplyAct2yr",
-        "SplyAct5yr",
-        "SplyAct10yr",
-        "SplyFF",
-        "CapMVRVCur",
         "liquid_supply",
         "illiquid_supply",
-        "SplyMiner0HopAllNtv",
-        "SplyMiner1HopAllNtv",
-        "TxTfrValAdjNtv",
         "United_Kingdom_btc_price",
         "United_Kingdom_cap",
         "United_States_btc_price",
@@ -426,7 +402,6 @@ metrics_template = {
         "Active Addresses": ("AdrActCnt", "number"),
         "Supply Held 1+ Year %": ("supply_pct_1_year_plus", "percent"),
         "Transaction Count": ("TxCnt", "number"),
-        "Transfer Count": ("TxTfrCnt", "number"),
         "Transaction Volume": ("TxTfrValAdjUSD", "currency"),
         "Transaction Fee USD": ("FeeTotUSD", "currency"),
     },
@@ -438,7 +413,6 @@ metrics_template = {
     },
     "Network Economics": {
         "Bitcoin Supply": ("SplyCur", "number"),
-        "Bitcoin Supply In 10 Years": ("SplyExpFut10yr", "number"),
         "% Supply Issued": ("pct_supply_issued", "percent"),
         "Bitcoin Mined Per Day": ("IssContNtv", "number"),
         "Annual Inflation Rate": ("IssContPctAnn", "percent"),
@@ -464,4 +438,134 @@ chart_template = {
         {"name": "Coinbase IPO", "dates": ["2021-04-14"], "orientation": "v"},
         {"name": "FTX Bankrupt", "dates": ["2022-11-11"], "orientation": "v"},
     ],
+}
+
+
+BRK_BULK_URL = "https://eu1.bitview.space/api/metrics/bulk"
+
+
+BRK_METRICS = [
+    "timestamp",
+    "price_close",
+    "market_cap",
+    "block_count",
+    "difficulty",
+    "difficulty_adjustment",
+    "hash_rate",
+    "realized_price",
+    "realized_cap",
+    "sth_realized_price",
+    "sth_realized_cap",
+    "lth_realized_price",
+    "lth_realized_cap",
+    "coindays_destroyed",
+    "utxo_count",
+    "supply_btc",
+    "supply_usd",
+    "sth_supply",
+    "lth_supply",
+    "fee_usd_sum",
+    "fee_btc_sum",
+    "subsidy_usd_sum",
+    "subsidy_btc_sum",
+    "coinbase_usd_sum",
+    "coinbase_btc_sum",
+    "fee_usd_avg",
+    "fee_btc_avg",
+    "fee_rate_avg",
+    "fee_dominance",
+    "utxos_at_least_1y_old_supply_rel_to_circulating_supply",
+    "tx_v1",
+    "tx_v2",
+    "tx_v3",
+    "tx_btc_velocity",
+    "tx_usd_velocity",
+    "sent_usd",
+    "inflation_rate",
+    "addrs_above_1sat_addr_count",
+    "addrs_above_10k_sats_addr_count",
+    "addrs_above_1sat_sent",
+    # Address balance distribution (address counts)
+    "addrs_under_1btc_addr_count",
+    "addrs_under_10btc_addr_count",
+    "addrs_under_10k_sats_addr_count",
+    "addrs_under_1k_sats_addr_count",
+    "addrs_under_10sats_addr_count",
+
+    # Active supply buckets (UTXO age band supply)
+    "utxos_up_to_1d_supply",
+    "utxos_up_to_1m_old_supply",
+    "utxos_up_to_3m_old_supply",
+    "utxos_up_to_6m_old_supply",
+    "utxos_up_to_1y_old_supply",
+    "utxos_up_to_2y_old_supply",
+    "utxos_up_to_3y_old_supply",
+    "utxos_up_to_4y_old_supply",
+    "utxos_up_to_5y_old_supply",
+    "utxos_up_to_10y_old_supply",
+]
+
+
+BRK_RENAME = {
+    "price_close": "PriceUSD",
+    "market_cap": "CapMrktCurUSD",
+    "realized_cap": "CapRealUSD",
+    "realized_price": "RealizedPriceUSD",
+    "supply_btc": "SplyCur",
+
+    # Difficulty / hash
+    "difficulty": "DiffLast",
+    "hash_rate": "HashRate",
+
+    # Velocity (keep both)
+    "tx_btc_velocity": "VelCur1yr_BTC",
+    "tx_usd_velocity": "VelCur1yr",
+
+    # Tx volume (your TxTfrValAdjUSD input)
+    "sent_usd": "TxTfrValAdjUSD",
+
+    # Inflation / issuance %
+    "inflation_rate": "IssContPctAnn",
+
+    # Fee mean native
+    "transactioncoinmining_fee_btc": "FeeMeanNtv",
+
+    # Active/addrs (per your selection)
+    "addrs_above_1sat_sent": "AdrActCnt",
+    "addrs_above_1sat_addr_count": "AdrBalCnt",
+    "addrs_above_10k_sats_addr_count": "AdrBalUSD10Cnt",
+
+   
+    "fee_usd_avg": "FeeMeanUSD",
+    "fee_btc_avg": "FeeMeanNtv",
+    "fee_rate_avg": "FeeRateAvg",
+    # Fees (daily totals)
+    "fee_usd_sum": "FeeTotUSD",
+    "fee_btc_sum": "FeeTotNtv",   # optional but useful
+
+    # Subsidy (daily totals)
+    "subsidy_usd_sum": "IssContUSD",
+    "subsidy_btc_sum": "IssContNtv",
+
+    # Total miner revenue (fees + subsidy)
+    "coinbase_usd_sum": "RevUSD",
+    "coinbase_btc_sum": "RevNtv",
+
+    "addrs_under_1btc_addr_count":  "AdrBalUSD1MCnt",
+    "addrs_under_10btc_addr_count": "AdrBalUSD10MCnt",
+    "addrs_under_10k_sats_addr_count": "AdrBalUSD10KCnt",
+    "addrs_under_1k_sats_addr_count":  "AdrBalUSD1KCnt",
+    "addrs_under_10sats_addr_count":   "AdrBalUSD1Cnt",
+
+    "utxos_up_to_1d_supply":   "SplyAct1d",
+    "utxos_up_to_1m_old_supply": "SplyAct30d",
+    "utxos_up_to_3m_old_supply": "SplyAct90d",
+    "utxos_up_to_6m_old_supply": "SplyAct180d",
+    "utxos_up_to_1y_old_supply": "SplyAct1yr",
+    "utxos_up_to_2y_old_supply": "SplyAct2yr",
+    "utxos_up_to_3y_old_supply": "SplyAct3yr",
+    "utxos_up_to_4y_old_supply": "SplyAct4yr",
+    "utxos_up_to_5y_old_supply": "SplyAct5yr",
+    "utxos_up_to_10y_old_supply": "SplyAct10yr",
+
 }
