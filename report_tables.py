@@ -432,7 +432,6 @@ def create_bitcoin_fundamentals_table(
 
     return bitcoin_fundamentals_df
 
-
 def style_bitcoin_fundamentals_table(fundamentals_table):
     """
     Applies specific formatting and styles to the Bitcoin fundamentals table for readability.
@@ -508,15 +507,19 @@ def style_bitcoin_fundamentals_table(fundamentals_table):
     ]
 
     # Apply the formatting and the background gradient only to the specified columns
-    styled_table_colors = (
+    styler = (
         fundamentals_table.style.format(format_dict_fundamentals)
         .applymap(color_values, subset=gradient_columns)
-        .hide_index()
         .set_properties(**{"white-space": "nowrap"})
     )
 
-    return styled_table_colors
+    # pandas >= 1.4: use .hide(axis="index"); older pandas: .hide_index()
+    if hasattr(styler, "hide"):
+        styler = styler.hide(axis="index")
+    else:
+        styler = styler.hide_index()
 
+    return styler
 
 def create_weekly_metrics_table(df, metrics_template):
     """
@@ -719,8 +722,6 @@ def create_ohlc_chart(ohlc_data, report_data, chart_template):
         "qtm_price_multiple_5",
         "Electricity_Cost",
         "Bitcoin_Production_Cost",
-
-
     ]:
         if metric in report_data_filtered.columns:
             fig.add_trace(
