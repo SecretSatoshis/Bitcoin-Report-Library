@@ -470,16 +470,16 @@ BRK_METRICS = [
     "subsidy_btc_sum",
     "coinbase_usd_sum",
     "coinbase_btc_sum",
-    "fee_usd_avg",
-    "fee_btc_avg",
-    "fee_rate_avg",
+    "fee_usd_average",
+    "fee_btc_average",
+    "fee_rate_average",
     "fee_dominance",
     "utxos_at_least_1y_old_supply_rel_to_circulating_supply",
     "tx_v1",
     "tx_v2",
     "tx_v3",
-    "tx_btc_velocity",
-    "tx_usd_velocity",
+    "btc_velocity",
+    "usd_velocity",
     "sent_usd",
     "inflation_rate",
     "addrs_above_1sat_addr_count",
@@ -493,7 +493,7 @@ BRK_METRICS = [
     "addrs_under_10sats_addr_count",
 
     # Active supply buckets (UTXO age band supply)
-    "utxos_up_to_1d_supply",
+    "utxos_at_least_1h_up_to_1d_old_supply",
     "utxos_up_to_1m_old_supply",
     "utxos_up_to_3m_old_supply",
     "utxos_up_to_6m_old_supply",
@@ -518,8 +518,8 @@ BRK_RENAME = {
     "hash_rate": "HashRate",
 
     # Velocity (keep both)
-    "tx_btc_velocity": "VelCur1yr_BTC",
-    "tx_usd_velocity": "VelCur1yr",
+    "btc_velocity": "VelCur1yr_BTC",
+    "usd_velocity": "VelCur1yr",
 
     # Tx volume (your TxTfrValAdjUSD input)
     "sent_usd": "TxTfrValAdjUSD",
@@ -536,9 +536,9 @@ BRK_RENAME = {
     "addrs_above_10k_sats_addr_count": "AdrBalUSD10Cnt",
 
    
-    "fee_usd_avg": "FeeMeanUSD",
-    "fee_btc_avg": "FeeMeanNtv",
-    "fee_rate_avg": "FeeRateAvg",
+    "fee_usd_average": "FeeMeanUSD",
+    "fee_btc_average": "FeeMeanNtv",
+    "fee_rate_average": "FeeRateAvg",
     # Fees (daily totals)
     "fee_usd_sum": "FeeTotUSD",
     "fee_btc_sum": "FeeTotNtv",   # optional but useful
@@ -557,7 +557,7 @@ BRK_RENAME = {
     "addrs_under_1k_sats_addr_count":  "AdrBalUSD1KCnt",
     "addrs_under_10sats_addr_count":   "AdrBalUSD1Cnt",
 
-    "utxos_up_to_1d_supply":   "SplyAct1d",
+    "utxos_at_least_1h_up_to_1d_old_supply":   "SplyAct1d",
     "utxos_up_to_1m_old_supply": "SplyAct30d",
     "utxos_up_to_3m_old_supply": "SplyAct90d",
     "utxos_up_to_6m_old_supply": "SplyAct180d",
