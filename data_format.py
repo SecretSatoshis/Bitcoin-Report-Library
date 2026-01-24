@@ -836,7 +836,7 @@ def calculate_btc_price_to_surpass_metal_categories(
     pd.DataFrame: DataFrame with added columns for BTC prices needed to surpass metal categories.
     """
     # Ensure 'SplyCur' is forward filled to avoid NaN values
-    data["SplyCur"].ffill(inplace=True)
+    data["SplyCur"] = data["SplyCur"].ffill()
 
     # Early return if 'SplyCur' for the latest row is zero or NaN to avoid division by zero
     if data["SplyCur"].iloc[-1] == 0 or pd.isna(data["SplyCur"].iloc[-1]):

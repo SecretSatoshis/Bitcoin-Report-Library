@@ -1,40 +1,37 @@
 # ============================================================================
 # BITCOIN REPORT LIBRARY - DEPENDENCIES
-# Educational quant analysis repository using industry-standard libraries
+# Python 3.11+ compatible (tested up to Python 3.13)
 # ============================================================================
 
 # === Core Data Manipulation ===
-pandas==2.2.0              # DataFrame operations (upgraded for deprecated method fixes)
-numpy==1.26.3              # Numerical computing
-pyarrow==10.0.0            # Fast data serialization
+pandas>=1.5.3,<2.0.0       # DataFrame 1.x (required by datapane 0.17.0)
+numpy>=1.24.0,<2.0.0       # Numerical computing
 
-# === Quantitative Analysis Libraries ===
-# These libraries replace ~1000 lines of custom performance metric calculations
-# with battle-tested, professionally-maintained implementations
-quantstats==0.0.62         # Comprehensive performance analytics (Sharpe, Sortino, etc.)
-empyrical==0.5.5           # Financial metrics - validation and cross-reference
-pandas-ta==0.3.14b         # Technical indicators (optional - for future enhancements)
+# === Report Generation ===
+datapane==0.17.0           # HTML report generation (requires pandas 1.x)
 
 # === Data Sources ===
-yfinance==0.2.60           # Yahoo Finance data (stocks, ETFs, indices)
-requests==2.31.0           # HTTP requests for API calls (auto-installed with yfinance)
+yfinance>=0.2.40           # Yahoo Finance data (stocks, ETFs, indices)
+requests>=2.31.0           # HTTP requests for API calls
 
 # === Visualization ===
-datapane==0.17.0           # HTML report generation
-plotly==5.24.1             # Interactive charts
-matplotlib==3.9.2          # Static charts and plots
-seaborn==0.13.2            # Statistical visualization
-mplfinance==0.12.10b0      # Financial OHLC charts
-kaleido==0.2.1             # Static image export for Plotly
-Pillow==11.0.0             # Image processing
+plotly>=5.20.0             # Interactive charts (express + graph_objects)
+matplotlib>=3.8.0          # Static charts and plots
+seaborn>=0.13.0            # Statistical visualization
 
-# === Statistical Analysis ===
-scipy==1.14.1              # Scientific computing and statistical functions
+# === Export Support ===
+kaleido>=0.2.1             # Static image export for Plotly charts
+Pillow>=10.0.0             # Image processing (used by matplotlib)
 
 # ============================================================================
-# OPTIONAL: Code Quality Tools (for educational development)
-# Uncomment these if you want to contribute or learn best practices
+# REMOVED UNUSED DEPENDENCIES
 # ============================================================================
-# black==24.1.0            # Automatic code formatting
-# ruff==0.1.11             # Fast Python linter
-# jupyter==1.0.0           # Jupyter notebooks for learning/exploration
+# pyarrow - Not imported in codebase
+# scipy - Not imported in codebase
+# mplfinance - Not imported in codebase
+# quantstats - Added but never integrated
+# empyrical - Added but never integrated
+# pandas-ta - Added but never integrated
+# ============================================================================
+
+
