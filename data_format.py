@@ -702,93 +702,21 @@ def calculate_custom_on_chain_metrics(data):
 
 def calculate_moving_averages(data: pd.DataFrame, metrics: list) -> pd.DataFrame:
     """
-    Calculate moving averages (MA) for smoothing noisy on-chain metrics.
+    Calculate 7/30/365-day moving averages for smoothing on-chain metrics.
 
-    ## What are Moving Averages?
-    A moving average smooths time series data by averaging values over a rolling
-    window. MAs are fundamental in technical analysis and signal processing.
-
-    ## Why Multiple Windows?
-    Different MA windows serve different analytical purposes:
-
-    ### 7-Day MA (Weekly Smoothing)
-    - Removes day-of-week effects
-    - Smooths minor noise while preserving short-term trends
-    - Useful for: Transaction counts, hash rate, active addresses
-
-    ### 30-Day MA (Monthly Smoothing)
-    - Removes weekly patterns and short-term volatility
-    - Shows medium-term trends
-    - Useful for: Fee analysis, mining revenue trends
-
-    ### 365-Day MA (Yearly Smoothing)
-    - Removes seasonal patterns
-    - Shows long-term secular trends
-    - Useful for: Market cycles, adoption trends, cost basis models
-
-    ## Bitcoin-Specific Applications
-
-    ### Price Moving Averages
-    - 50-day MA: Short-term trend indicator
-    - 200-day MA: Long-term trend indicator (bull/bear line)
-    - 200-week MA: Major support level (historically never broken)
-
-    ### On-Chain Moving Averages
-    - Hash rate MA: Mining difficulty adjustment predictor
-    - Transaction MA: Network usage trends
-    - Active address MA: Adoption and activity trends
-
-    ## Industry Standard
-    This implementation uses pandas' efficient rolling window calculation,
-    which is the standard approach in quantitative analysis. The calculation
-    is O(n) per window via rolling sum optimization.
-
-    Alternative approaches:
-    - Exponential MA (EMA): Weights recent data more heavily
-    - Weighted MA (WMA): Custom weighting schemes
-    - Savitzky-Golay: Preserves peaks better than simple MA
-
-    For this educational repo, we use Simple Moving Average (SMA) as it's
-    easiest to understand and interpret.
+    Uses pandas rolling windows with min_periods=1 for partial window calculations.
 
     Parameters
     ----------
     data : pd.DataFrame
-        DataFrame containing on-chain and price metrics
+        On-chain and price metrics
     metrics : list of str
-        Column names to calculate moving averages for
-        Example: ['HashRate', 'TxCnt', 'PriceUSD']
+        Column names to calculate MAs for
 
     Returns
     -------
     pd.DataFrame
-        Original data with added MA columns
-        Format: '{window}_day_ma_{metric}'
-        Example: '7_day_ma_HashRate', '30_day_ma_TxCnt'
-
-    Example
-    -------
-    >>> # Calculate MAs for hash rate and transactions
-    >>> metrics = ['HashRate', 'TxCnt']
-    >>> data_with_ma = calculate_moving_averages(data, metrics)
-    >>> # Now data has: '7_day_ma_HashRate', '30_day_ma_HashRate', etc.
-
-    See Also
-    --------
-    calculate_custom_on_chain_metrics : Calculates the input metrics
-    pandas.DataFrame.rolling : Underlying pandas implementation
-
-    Notes
-    -----
-    The min_periods parameter is set to 1, meaning:
-    - First 6 days of 7-day MA will use available data (1-6 days)
-    - This prevents NaN values at the start of the series
-    - Full window average begins when sufficient data is available
-
-    References
-    ----------
-    - Murphy, J. J. (1999). Technical Analysis of Financial Markets
-    - Kirkpatrick & Dahlquist (2010). Technical Analysis: The Complete Resource
+        Original data with added MA columns ('{window}_day_ma_{metric}')
     """
     # Define MA windows (order matters for readability)
     windows = [7, 30, 365]
@@ -1005,166 +933,37 @@ def calculate_btc_price_for_stock_mkt_caps(
 
 def calculate_stock_to_flow_metrics(data):
     """
-    Calculate Stock-to-Flow (S2F) model metrics using PlanB's formula.
+    Calculate Stock-to-Flow (S2F) model metrics using PlanB's power law.
 
-    ## ═══════════════════════════════════════════════════════════════════════
-    ## BITCOIN VALUATION MODEL: STOCK-TO-FLOW
-    ## ═══════════════════════════════════════════════════════════════════════
+    Formula: Market_Value = e^14.6 × (S2F)^3.3
+    where S2F = Current_Supply / Annual_Issuance
 
-    ## What is Stock-to-Flow?
-    Stock-to-Flow treats Bitcoin as a scarce commodity similar to gold or silver.
-    The model posits that scarcity (measured by S2F ratio) is the primary driver
-    of Bitcoin's value.
+    Model parameters derived from regression (R²=0.947 in original paper):
+    - Intercept: 14.6 (ln of base market value scaling)
+    - Power: 3.3 (non-linear scarcity premium)
 
-    ### Key Concepts
-    - **Stock**: Existing supply (coins already mined)
-    - **Flow**: New supply (coins mined per year)
-    - **S2F Ratio**: Stock / Flow (how many years to double supply)
-
-    ## The Formula
-
-    ### Step 1: Calculate S2F Ratio
-    S2F = Current Supply / Annual Issuance
-
-    For Bitcoin (as of 2024):
-    - Stock: ~19.5M BTC
-    - Flow: ~328 BTC/day × 365 = ~120K BTC/year
-    - S2F: 19.5M / 120K ≈ 162
-
-    ### Step 2: PlanB's Power Law Model
-    Market Value = e^14.6 × (S2F)^3.3
-
-    Then: Price = Market Value / Current Supply
-
-    ## Model Parameters (Empirically Derived)
-
-    ### Intercept: 14.6
-    - Derived from regression analysis of Bitcoin's historical data
-    - Represents the baseline valuation factor
-    - e^14.6 ≈ 2 million (base market value scaling factor)
-
-    ### Power: 3.3
-    - Non-linear scaling factor (power law)
-    - Indicates that scarcity has compounding effects on value
-    - Higher S2F → Exponentially higher value (not just linearly)
-
-    ### R-Squared: 0.947 (Original Paper)
-    - 94.7% of Bitcoin's price variance explained by S2F
-    - Exceptionally high for financial models
-    - Suggests strong relationship between scarcity and value
-
-    ## Bitcoin's S2F Evolution (Halving Cycle)
-
-    | Period        | S2F | Model Price | Actual Price Range |
-    |---------------|-----|-------------|--------------------|
-    | 2009-2012     | 1.5 | $1-10       | $0-$15             |
-    | 2012-2016     | 8   | $50-$500    | $10-$1,200         |
-    | 2016-2020     | 25  | $5K-$10K    | $200-$20K          |
-    | 2020-2024     | 56  | $50K-$100K  | $4K-$69K           |
-    | 2024-2028     | 112 | $200K-$500K | TBD                |
-
-    ## Interpreting the S2F Multiple
-
-    SF Multiple = Current Price / Model Price
-
-    ### Bull Market (Multiple > 1)
-    - 1.0-2.0: Fair value to slightly overvalued
-    - 2.0-3.0: Significantly overvalued
-    - > 3.0: Extreme overvaluation (bubble territory)
-    - Historical peaks: 3-5x in 2013, 2017, 2021
-
-    ### Bear Market (Multiple < 1)
-    - 0.5-1.0: Slightly undervalued to fair value
-    - 0.3-0.5: Significantly undervalued
-    - < 0.3: Extreme undervaluation (buying opportunity)
-    - Historical bottoms: 0.2-0.4 in 2015, 2018, 2022
-
-    ## Criticisms & Limitations
-
-    ### 1. Assumes Scarcity = Value
-    - Doesn't account for demand side
-    - Many scarce things have no value
-    - Requires continued/growing demand
-
-    ### 2. Past Performance ≠ Future Results
-    - Model fit to historical data
-    - May break down as market matures
-    - Diminishing returns possible
-
-    ### 3. Ignores Other Factors
-    - Regulatory developments
-    - Technological improvements
-    - Macro economic conditions
-    - Competition from other cryptocurrencies
-
-    ### 4. Model Breakdown Risks
-    - Loss of faith in digital scarcity
-    - Superior alternative emerges
-    - Regulatory ban in major economies
-
-    ## Why This Model Matters
-
-    Despite limitations, S2F provides:
-    1. **Quantitative Framework**: Objective valuation method
-    2. **Historical Context**: Shows position in cycle
-    3. **Risk Assessment**: Overvalued/undervalued signals
-    4. **Long-term Perspective**: Focuses on fundamentals not noise
-
-    ## Industry Usage
-
-    S2F is widely referenced by:
-    - Bitcoin analysts and researchers
-    - Crypto hedge funds and asset managers
-    - Long-term Bitcoin holders ("HODLers")
-    - Financial media (Bloomberg, Forbes, etc.)
-
-    Not recommended as sole investment decision tool, but valuable as
-    one input in comprehensive analysis framework.
+    SF_Multiple = Current_Price / Model_Price indicates over/undervaluation:
+    - > 2.0: Overvalued (bubble territory)
+    - < 0.5: Undervalued (potential buy zone)
 
     Parameters
     ----------
     data : pd.DataFrame
-        Must contain columns:
-        - 'SplyCur': Current circulating supply
-        - 'PriceUSD': Current Bitcoin price in USD
+        Must contain 'SplyCur' (supply) and 'PriceUSD' (price)
 
     Returns
     -------
     pd.DataFrame
-        Original DataFrame with added columns:
-        - 'SF': Stock-to-Flow ratio
-        - 'SF_Predicted_Market_Value': Total market value predicted by model
-        - 'SF_Predicted_Price': Per-coin price predicted by model
-        - 'SF_Predicted_Price_MA365': 365-day smoothed prediction
-        - 'SF_Multiple': Actual price / predicted price
-
-    Example
-    -------
-    >>> data = pd.DataFrame({
-    ...     'SplyCur': [19_000_000, 19_000_100],
-    ...     'PriceUSD': [50000, 51000]
-    ... }, index=pd.date_range('2024-01-01', periods=2))
-    >>> result = calculate_stock_to_flow_metrics(data)
-    >>> print(f"S2F Ratio: {result['SF'].iloc[-1]:.1f}")
-    >>> print(f"Model Price: ${result['SF_Predicted_Price'].iloc[-1]:,.0f}")
-    >>> print(f"Multiple: {result['SF_Multiple'].iloc[-1]:.2f}")
+        Original data with added columns:
+        - SF: Stock-to-Flow ratio
+        - SF_Predicted_Market_Value: Total market cap predicted
+        - SF_Predicted_Price: Per-coin price predicted
+        - SF_Predicted_Price_MA365: Smoothed prediction
+        - SF_Multiple: Actual/predicted price ratio
 
     References
     ----------
-    - PlanB (2019). "Modeling Bitcoin's Value with Scarcity"
-      https://medium.com/@100trillionUSD/modeling-bitcoins-value-with-scarcity-91fa0fc03e25
-    - Ammous, S. (2018). "The Bitcoin Standard" - Wiley
-    - Ammous, S. (2021). "The Fiat Standard" - Wiley
-
-    See Also
-    --------
-    calculate_hayes_production_cost : Alternative valuation via energy cost
-    calculate_energy_value : CoinMetrics energy valuation model
-
-    Notes
-    -----
-    The 365-day moving average helps smooth the predicted price curve and
-    reduces noise from daily issuance variations and supply calculation errors.
+    PlanB (2019). "Modeling Bitcoin's Value with Scarcity"
     """
     # Model parameters from PlanB's regression analysis
     PLANB_INTERCEPT = 14.6  # ln(market value) intercept
@@ -1493,43 +1292,20 @@ def calculate_rolling_cagr_for_all_metrics(data):
 
 def calculate_ytd_change(data):
     """
-    Calculate Year-to-Date (YTD) percentage change for all columns.
+    Calculate Year-to-Date (YTD) percentage change from Jan 1st to current date.
 
-    ## What is YTD Change?
-    YTD return measures performance from January 1st of the current year to the
-    present date. It's a standard metric in portfolio management for comparing
-    year-to-date performance across assets.
-
-    ## Educational Note
-    YTD is particularly useful for:
-    - Comparing current year performance across different assets
-    - Evaluating fund manager performance against benchmarks
-    - Understanding seasonal patterns in asset returns
-
-    ## Industry Standard
-    Uses pandas groupby + transform for efficient vectorized calculation.
-    This approach is ~10x faster than iterating through rows.
+    Uses vectorized groupby for efficient calculation.
 
     Parameters
     ----------
     data : pd.DataFrame
-        DataFrame with datetime index containing price/value data
+        DataFrame with datetime index
 
     Returns
     -------
     pd.DataFrame
-        DataFrame with YTD percentage change columns (suffixed with '_YTD_change')
-
-    Example
-    -------
-    >>> prices = pd.DataFrame({
-    ...     'BTC': [30000, 35000, 40000],
-    ...     'ETH': [2000, 2200, 2500]
-    ... }, index=pd.date_range('2024-01-01', periods=3, freq='M'))
-    >>> ytd = calculate_ytd_change(prices)
-    >>> # BTC YTD at March: (40000 / 30000 - 1) * 100 = 33.33%
+        YTD percentage changes (columns suffixed '_YTD_change')
     """
-    # Vectorized calculation using groupby - industry standard for efficiency
     start_of_year = data.groupby(data.index.year).transform("first")
     ytd_change = ((data / start_of_year) - 1) * 100
     ytd_change.columns = [f"{col}_YTD_change" for col in ytd_change.columns]
@@ -1538,41 +1314,20 @@ def calculate_ytd_change(data):
 
 def calculate_mtd_change(data):
     """
-    Calculate Month-to-Date (MTD) percentage change for all columns.
+    Calculate Month-to-Date (MTD) percentage change from month start to current date.
 
-    ## What is MTD Change?
-    MTD return measures performance from the 1st day of the current month to
-    the present date. Essential for tracking short-term performance trends.
-
-    ## Educational Note
-    MTD is crucial for:
-    - Short-term performance monitoring
-    - Identifying monthly momentum shifts
-    - Tactical asset allocation decisions
-    - Understanding intra-month volatility patterns
-
-    ## Industry Standard
-    Uses hierarchical groupby [year, month] for accurate month boundaries.
+    Uses hierarchical groupby [year, month] for accurate boundaries.
 
     Parameters
     ----------
     data : pd.DataFrame
-        DataFrame with datetime index containing price/value data
+        DataFrame with datetime index
 
     Returns
     -------
     pd.DataFrame
-        DataFrame with MTD percentage change columns (suffixed with '_MTD_change')
-
-    Example
-    -------
-    >>> prices = pd.DataFrame({
-    ...     'BTC': [30000, 32000, 35000]
-    ... }, index=pd.date_range('2024-06-01', periods=3, freq='D'))
-    >>> mtd = calculate_mtd_change(prices)
-    >>> # BTC MTD at June 3rd: (35000 / 30000 - 1) * 100 = 16.67%
+        MTD percentage changes (columns suffixed '_MTD_change')
     """
-    # Hierarchical groupby ensures correct month boundaries across years
     start_of_month = data.groupby([data.index.year, data.index.month]).transform("first")
     mtd_change = ((data / start_of_month) - 1) * 100
     mtd_change.columns = [f"{col}_MTD_change" for col in mtd_change.columns]
@@ -1581,43 +1336,20 @@ def calculate_mtd_change(data):
 
 def calculate_yoy_change(data):
     """
-    Calculate Year-over-Year (YoY) percentage change for all columns.
+    Calculate Year-over-Year (YoY) percentage change (365-day lag).
 
-    ## What is YoY Change?
-    YoY return compares the current value to the value exactly 365 days ago.
-    This removes seasonal effects and provides clear year-over-year comparison.
-
-    ## Educational Note
-    YoY is the gold standard for:
-    - Eliminating seasonal biases (holidays, tax periods, etc.)
-    - Comparing growth rates across different years
-    - Economic analysis (GDP growth, inflation, etc.)
-    - Long-term trend identification
-
-    ## Why 365 Days?
-    For crypto (24/7 markets), we use 365 calendar days. Traditional finance
-    often uses 252 trading days, but crypto's continuous trading makes calendar
-    days more appropriate.
+    Uses 365 calendar days for crypto markets (24/7 trading).
 
     Parameters
     ----------
     data : pd.DataFrame
-        DataFrame with datetime index containing price/value data
+        DataFrame with datetime index
 
     Returns
     -------
     pd.DataFrame
-        DataFrame with YoY percentage change columns (suffixed with '_YOY_change')
-
-    Example
-    -------
-    >>> # Bitcoin price 365 days ago vs today
-    >>> prices = pd.DataFrame({'BTC': [20000, 45000]},
-    ...     index=[pd.Timestamp('2023-01-01'), pd.Timestamp('2024-01-01')])
-    >>> yoy = calculate_yoy_change(prices)
-    >>> # YoY = (45000 / 20000 - 1) * 100 = 125%
+        YoY percentage changes (columns suffixed '_YOY_change')
     """
-    # pandas pct_change with periods parameter - efficient built-in method
     yoy_change = data.pct_change(periods=365) * 100
     yoy_change.columns = [f"{col}_YOY_change" for col in yoy_change.columns]
     return yoy_change
@@ -1625,35 +1357,19 @@ def calculate_yoy_change(data):
 
 def calculate_trading_week_change(data):
     """
-    Calculate week-to-date change from Monday of each week (vectorized).
+    Calculate week-to-date percentage change from Monday (vectorized).
 
-    ## What is Trading Week Change?
-    Measures performance from the Monday of the current week to the present day.
-    Useful for tracking intra-week momentum and short-term trading patterns.
-
-    ## Educational Note
-    Weekly returns are important in crypto because:
-    - Weekend trading patterns differ from weekdays
-    - Monday often shows "weekend effect" volatility
-    - Week-over-week analysis helps identify short-term trends
-
-    ## Industry Standard - Vectorized Implementation
-    This refactored version replaces row-by-row iteration with vectorized pandas
-    operations, improving performance by ~50x on large datasets.
-
-    Original: O(n*m) loop through rows and columns
-    Refactored: O(n) vectorized operations
+    Uses vectorized pandas operations for O(n) performance.
 
     Parameters
     ----------
     data : pd.DataFrame
-        DataFrame with datetime index containing numeric trading data
+        DataFrame with datetime index
 
     Returns
     -------
     pd.DataFrame
-        DataFrame with weekly change columns (suffixed with '_trading_week_change')
-        Values are forward-filled for continuity
+        Weekly changes (columns suffixed '_trading_week_change'), forward-filled
     """
     # Find Monday of each week (vectorized)
     start_of_week = data.index - pd.to_timedelta(data.index.dayofweek, unit="d")
@@ -1818,20 +1534,16 @@ def calculate_rolling_correlations(data, periods):
 
 def _calculate_volatility_generic(prices, windows, annualization_factor):
     """
-    Generic volatility calculator - DRY principle implementation.
-
-    This internal helper eliminates code duplication between tradfi and crypto
-    volatility calculations. Industry standard: use a single implementation with
-    parameterized annualization factors.
+    Calculate rolling annualized volatility (internal helper).
 
     Parameters
     ----------
     prices : pd.DataFrame
-        Price data for assets
+        Price data
     windows : list of int
-        Rolling window sizes in days
+        Rolling windows in days
     annualization_factor : int
-        Trading days per year (252 for tradfi, 365 for crypto)
+        252 for tradfi, 365 for crypto
 
     Returns
     -------
@@ -1851,144 +1563,56 @@ def _calculate_volatility_generic(prices, windows, annualization_factor):
 
 def calculate_volatility_tradfi(prices, windows):
     """
-    Calculate rolling annualized volatility for traditional financial assets.
-
-    ## What is Annualized Volatility?
-    Volatility measures the dispersion of returns, commonly using standard
-    deviation. Annualizing converts daily/period volatility to yearly terms
-    for easier comparison across assets and time periods.
-
-    ## Formula
-    Annualized Vol = Daily Vol × √(Trading Days per Year)
-
-    For traditional finance: √252 (typical trading days in a year)
-    For crypto: √365 (markets open 24/7/365)
-
-    ## Why This Matters for Bitcoin Analysis
-    Bitcoin's volatility is typically 3-5x higher than stocks:
-    - S&P 500: ~15-20% annualized volatility
-    - Bitcoin: ~60-80% annualized volatility (varies by cycle)
-
-    High volatility means:
-    - Greater return potential (and greater risk)
-    - Larger position sizing adjustments needed
-    - More significant drawdown periods
-
-    ## Industry Standard
-    Uses pandas rolling standard deviation - the de facto method in quantitative
-    finance. This approach matches calculations used by:
-    - Bloomberg Terminal
-    - Thomson Reuters Eikon
-    - QuantStats library
-    - Empyrical library
+    Calculate rolling annualized volatility for traditional finance (252 trading days).
 
     Parameters
     ----------
     prices : pd.DataFrame
-        Daily price data for each asset as columns
+        Daily price data
     windows : list of int
-        Rolling window sizes in days (e.g., [30, 90, 180, 365])
+        Rolling windows (e.g., [30, 90, 180, 365])
 
     Returns
     -------
     pd.DataFrame
-        Annualized volatilities for each window (columns: '{window}_day_volatility')
-
-    Example
-    -------
-    >>> prices = pd.DataFrame({'SPY': [...], 'BTC': [...]})
-    >>> vol = calculate_volatility_tradfi(prices, [30, 365])
-    >>> # SPY 30-day vol might show ~0.15 (15%)
-    >>> # BTC 30-day vol might show ~0.65 (65%)
-
-    References
-    ----------
-    - Hull, J. C. (2017). Options, Futures, and Other Derivatives
-    - Tsay, R. S. (2010). Analysis of Financial Time Series
+        Annualized volatility (columns: '{window}_day_volatility')
     """
     return _calculate_volatility_generic(prices, windows, annualization_factor=252)
 
 
 def calculate_volatility_crypto(prices, windows):
     """
-    Calculate rolling annualized volatility for cryptocurrency assets.
+    Calculate rolling annualized volatility for crypto (365 calendar days).
 
-    ## Why Different Annualization?
-    Cryptocurrencies trade 24/7/365, unlike traditional markets that close on
-    weekends and holidays. Therefore, we annualize using 365 days rather than
-    252 trading days.
-
-    ## Bitcoin Volatility Characteristics
-    Bitcoin volatility exhibits interesting patterns:
-    1. **Cycle Pattern**: High in bull markets, low in bear markets
-    2. **Declining Trend**: Historical volatility decreases as market matures
-       - 2011-2013: 150-200% annualized
-       - 2017-2020: 60-100% annualized
-       - 2020-2024: 40-80% annualized
-    3. **Volatility Clustering**: Calm periods followed by volatile periods
-
-    ## Educational Note
-    For portfolio allocation, many quantitative models use:
-    - Target Volatility: Adjust position size to maintain constant portfolio vol
-    - Risk Parity: Allocate based on volatility contribution
-    - Kelly Criterion: Optimal position size considering volatility
-
-    For Bitcoin at 70% volatility vs S&P 500 at 15% volatility:
-    Position size adjustment = 15% / 70% ≈ 21% (much smaller position)
+    Crypto markets trade 24/7, so we use 365 days vs 252 for tradfi.
 
     Parameters
     ----------
     prices : pd.DataFrame
-        Daily price data for each cryptocurrency as columns
+        Daily price data
     windows : list of int
-        Rolling window sizes in days (e.g., [30, 90, 180, 365])
+        Rolling windows (e.g., [30, 90, 180, 365])
 
     Returns
     -------
     pd.DataFrame
-        Annualized volatilities for each window (columns: '{window}_day_volatility')
-
-    Example
-    -------
-    >>> btc_prices = pd.DataFrame({'BTC': [...]}, index=date_range)
-    >>> vol = calculate_volatility_crypto(btc_prices, [90])
-    >>> # Typical result: 0.60-0.80 (60-80% annualized volatility)
-
-    See Also
-    --------
-    calculate_volatility_tradfi : For traditional financial assets
-    calculate_sharpe_ratio : Risk-adjusted returns using volatility
+        Annualized volatility (columns: '{window}_day_volatility')
     """
     return _calculate_volatility_generic(prices, windows, annualization_factor=365)
 
 
 def calculate_daily_expected_return(price_series, time_frame, trading_days_in_year):
     """
-    Calculate rolling annualized expected return (mean return).
-
-    ## Educational Note
-    Expected return is the arithmetic mean of historical returns, annualized.
-    While simple, it's a fundamental building block for:
-    - Sharpe Ratio calculation
-    - Portfolio optimization (mean-variance)
-    - Performance attribution
-
-    ## Limitation to Consider
-    Arithmetic mean can overstate expected returns in volatile assets due to
-    volatility drag: geometric mean < arithmetic mean when volatility is high.
-
-    For Bitcoin with 70% volatility:
-    - Arithmetic mean might show 50% annual return
-    - Geometric mean (actual compounded) might be closer to 30%
+    Calculate rolling annualized expected return (arithmetic mean).
 
     Parameters
     ----------
     price_series : pd.Series
-        Daily price data for the asset
+        Daily prices
     time_frame : int
-        Rolling window size in days
+        Rolling window in days
     trading_days_in_year : int
-        Annualization factor (252 for stocks, 365 for crypto)
+        Annualization factor (252 or 365)
 
     Returns
     -------
@@ -2008,30 +1632,19 @@ def calculate_standard_deviation_of_returns(
     """
     Calculate rolling annualized standard deviation of returns.
 
-    ## Educational Note
-    Standard deviation measures the dispersion of returns around the mean.
-    It's the denominator in the Sharpe Ratio and a key input to most
-    risk models in quantitative finance.
-
-    ## Why Annualize?
-    Annualizing allows comparison across:
-    - Different assets (stocks vs crypto vs bonds)
-    - Different time periods (30-day vol vs 1-year vol)
-    - Historical vs implied volatility
-
     Parameters
     ----------
     price_series : pd.Series
-        Daily price data
+        Daily prices
     time_frame : int
-        Rolling window size in days
+        Rolling window in days
     trading_days_in_year : int
-        Annualization factor (252 for stocks, 365 for crypto)
+        Annualization factor (252 or 365)
 
     Returns
     -------
     pd.Series
-        Rolling annualized standard deviation
+        Rolling annualized std dev
     """
     daily_returns = price_series.pct_change()
     rolling_std_dev = daily_returns.rolling(window=time_frame).std() * (
@@ -2044,61 +1657,23 @@ def calculate_sharpe_ratio(
     expected_return_series, std_dev_series, risk_free_rate_series
 ):
     """
-    Calculate Sharpe Ratio: risk-adjusted return metric.
+    Calculate Sharpe Ratio: (Return - RiskFreeRate) / Volatility
 
-    ## What is the Sharpe Ratio?
-    Developed by William F. Sharpe (Nobel Prize 1990), the Sharpe Ratio measures
-    excess return per unit of risk:
-
-    Sharpe = (Return - Risk_Free_Rate) / Volatility
-
-    ## Interpretation
-    - Sharpe > 1.0: Good risk-adjusted returns
-    - Sharpe > 2.0: Very good risk-adjusted returns
-    - Sharpe > 3.0: Excellent (rare outside of leverage)
-    - Sharpe < 0: Underperforming risk-free rate
-
-    ## Bitcoin's Sharpe Ratio History
-    Bitcoin has shown exceptional risk-adjusted returns despite high volatility:
-    - 2011-2024 Average: ~2.0 Sharpe (outstanding for any asset)
-    - Bull markets: 3-5+ Sharpe (exceptional)
-    - Bear markets: -0.5 to 0.5 Sharpe (challenging)
-
-    For comparison:
-    - S&P 500 historical: ~0.4-0.6 Sharpe
-    - Hedge funds average: ~0.7 Sharpe
-    - Bitcoin: ~2.0 Sharpe (including major drawdowns)
-
-    ## Why This Matters
-    Even with 70% volatility, Bitcoin's high returns have produced superior
-    Sharpe ratios, making it attractive for portfolio allocation under Modern
-    Portfolio Theory and risk parity frameworks.
-
-    ## Industry Standard
-    This implementation follows the classical Sharpe formula used by:
-    - Academic research (Fama-French, etc.)
-    - Professional asset managers
-    - Bloomberg, Reuters terminals
-    - quantstats, empyrical libraries
+    Classical Sharpe (1966) implementation for risk-adjusted returns.
 
     Parameters
     ----------
     expected_return_series : pd.Series
-        Annualized expected returns
+        Annualized returns
     std_dev_series : pd.Series
-        Annualized standard deviation (volatility)
+        Annualized volatility
     risk_free_rate_series : pd.Series
-        Risk-free rate (typically US 3-month T-Bill)
+        Risk-free rate (e.g., 3-month T-Bill)
 
     Returns
     -------
     pd.Series
-        Rolling Sharpe ratios
-
-    References
-    ----------
-    - Sharpe, W. F. (1966). "Mutual Fund Performance". Journal of Business
-    - Sharpe, W. F. (1994). "The Sharpe Ratio". Journal of Portfolio Management
+        Sharpe ratios
     """
     sharpe_ratio_series = (
         expected_return_series - risk_free_rate_series
@@ -2108,43 +1683,19 @@ def calculate_sharpe_ratio(
 
 def calculate_daily_sharpe_ratios(data):
     """
-    Calculate rolling Sharpe ratios for multiple assets across timeframes.
+    Calculate rolling Sharpe ratios for multiple assets across 1/2/3/4-year timeframes.
 
-    ## Educational Note
-    This function computes Sharpe ratios for both traditional finance (252 trading
-    days) and crypto (365 days) assets across multiple lookback periods.
-
-    ## Why Multiple Timeframes?
-    Different timeframes reveal different characteristics:
-    - 1-year: Short-term risk-adjusted performance
-    - 2-year: Medium-term trends
-    - 3-4 year: Full Bitcoin cycle analysis (important!)
-
-    Bitcoin's 4-year halving cycle means 4-year Sharpe ratios are particularly
-    meaningful for capturing complete bull/bear cycle performance.
-
-    ## Industry Standard
-    Multi-timeframe Sharpe analysis is standard in:
-    - Hedge fund reporting (monthly, quarterly, annual Sharpe)
-    - Performance attribution analysis
-    - Portfolio construction and rebalancing decisions
+    Uses 252 trading days for equities, 365 for crypto.
 
     Parameters
     ----------
     data : pd.DataFrame
-        Price data with columns for assets and risk-free rate (^IRX_close)
+        Price data with ^IRX_close (risk-free rate) column
 
     Returns
     -------
     pd.DataFrame
-        Multi-index DataFrame: (asset, timeframe) -> Sharpe ratio series
-
-    Example
-    -------
-    >>> sharpe_df = calculate_daily_sharpe_ratios(data)
-    >>> # Access Bitcoin 4-year Sharpe
-    >>> btc_4y_sharpe = sharpe_df[('PriceUSD', '4_year')]
-    >>> print(f"Current 4Y Sharpe: {btc_4y_sharpe.iloc[-1]:.2f}")
+        Multi-index: (asset, timeframe) -> Sharpe ratio series
     """
     # Define time frames with appropriate annualization
     time_frames = {

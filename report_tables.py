@@ -1086,93 +1086,35 @@ def create_summary_big_numbers_weekly_bitcoin_recap(weekly_summary_df, report_da
 
 
 # ============================================================================
-# PERFORMANCE TABLE GENERATION - INDUSTRY STANDARD PATTERN
+# PERFORMANCE TABLE GENERATION - Factory Pattern (DRY Principle)
 # ============================================================================
-# This section uses the Factory Pattern to eliminate code duplication.
-# Instead of 4 separate ~80-line functions, we have:
-# - 1 generic factory function (~40 lines)
-# - 4 thin configuration wrappers (~10 lines each)
-# Total: ~80 lines vs original ~320 lines (75% reduction)
+# Generic factory + 4 configuration wrappers (75% code reduction vs original)
 
 
 def _create_performance_table_generic(
     report_data, report_date, correlation_results, asset_config
 ):
     """
-    Generic performance table factory (DRY principle implementation).
+    Generic performance table factory using configuration-driven approach.
 
-    ## Industry Standard: Factory Pattern
-    This function demonstrates the Factory Pattern, a core design pattern in
-    software engineering that eliminates code duplication.
-
-    ## Why This Matters
-    The original codebase had 4 nearly-identical functions (~80 lines each):
-    - create_equity_performance_table
-    - create_sector_performance_table
-    - create_macro_performance_table_weekly_bitcoin_recap
-    - create_bitcoin_performance_table
-
-    This created maintenance issues:
-    - Bug fixes needed in 4 places
-    - New metrics required 4 updates
-    - Higher chance of inconsistencies
-
-    ## Educational Note: DRY (Don't Repeat Yourself)
-    DRY is a fundamental principle in software development:
-    - Every piece of knowledge should have a single, authoritative representation
-    - Changes happen in one place
-    - Reduces bugs and maintenance burden
-
-    ## Pattern Benefits
-    1. **Maintainability**: Change logic once, affects all tables
-    2. **Consistency**: All tables use identical calculation logic
-    3. **Testability**: Test one function instead of four
-    4. **Extensibility**: Easy to add new asset categories
+    Eliminates duplication across equity/sector/macro/bitcoin performance tables.
+    Single source of truth for performance metric calculations.
 
     Parameters
     ----------
     report_data : pd.DataFrame
-        DataFrame containing historical price and return data
+        Historical price and return data
     report_date : pd.Timestamp or str
-        Date for which to retrieve performance metrics
+        Date for performance metrics
     correlation_results : dict
-        Dictionary with correlation DataFrames (e.g., {'priceusd_90_days': df})
+        Correlation DataFrames (e.g., {'priceusd_90_days': df})
     asset_config : dict
-        Configuration dictionary mapping asset keys to their display names
-        and column prefixes. Format:
-        {
-            'BTC': {
-                'display_name': 'Bitcoin - [BTC]',
-                'price_col': 'PriceUSD'
-            },
-            ...
-        }
+        Asset configuration: {'key': {'display_name': str, 'price_col': str}}
 
     Returns
     -------
     pd.DataFrame
-        Performance table with columns:
-        - Asset: Display name
-        - Price: Current price
-        - 7 Day Return: Weekly return (%)
-        - MTD Return: Month-to-date return (%)
-        - YTD Return: Year-to-date return (%)
-        - 90 Day Return: Quarterly return (%)
-        - 90 Day BTC Correlation: 90-day correlation with Bitcoin
-
-    Example
-    -------
-    >>> config = {
-    ...     'BTC': {'display_name': 'Bitcoin', 'price_col': 'PriceUSD'},
-    ...     'SPY': {'display_name': 'S&P 500', 'price_col': 'SPY_close'}
-    ... }
-    >>> table = _create_performance_table_generic(data, date, corr, config)
-
-    See Also
-    --------
-    create_equity_performance_table : Equity-specific wrapper
-    create_sector_performance_table : Sector ETF wrapper
-    create_macro_performance_table_weekly_bitcoin_recap : Macro asset wrapper
+        Performance table: Asset, Price, 7D/MTD/YTD/90D Returns, BTC Correlation
     """
     performance_metrics = {}
 
@@ -1198,48 +1140,15 @@ def _create_performance_table_generic(
 
 def create_equity_performance_table(report_data, report_date, correlation_results):
     """
-    Create performance table for equity ETFs (Bitcoin + major stock indices).
+    Create equity performance table for BTC, SPY, QQQ, VTI, VXUS.
 
-    ## Assets Included
-    - **Bitcoin (BTC)**: Digital asset benchmark
-    - **SPY**: S&P 500 Index ETF (large-cap US stocks)
-    - **QQQ**: Nasdaq-100 ETF (tech-heavy index)
-    - **VTI**: Total US Stock Market ETF (entire US market)
-    - **VXUS**: International Stock ETF (ex-US developed + emerging)
-
-    ## Educational Note: Why These ETFs?
-    These ETFs represent core building blocks of modern portfolio construction:
-
-    1. **SPY (S&P 500)**: Gold standard US equity benchmark
-       - $400B+ AUM, most liquid ETF globally
-       - Represents ~80% of US stock market cap
-       - Used by institutions as core holding
-
-    2. **QQQ (Nasdaq-100)**: Tech sector proxy
-       - Heavy exposure to FAANG+ stocks
-       - Higher growth, higher volatility than SPY
-       - Useful for comparing Bitcoin vs tech stocks
-
-    3. **VTI (Total Market)**: Complete US equity exposure
-       - Includes small, mid, and large cap
-       - ~4,000 holdings vs SPY's ~500
-       - More diversified than SPY
-
-    4. **VXUS (International)**: Geographic diversification
-       - Developed markets (Europe, Japan, etc.)
-       - Emerging markets (China, India, etc.)
-       - Lower correlation with US stocks
-
-    ## Why Compare Bitcoin to Equities?
-    - Asset allocation decisions (% BTC vs % stocks)
-    - Risk-adjusted return comparison
-    - Correlation analysis for portfolio construction
-    - Identifying macro regime shifts
+    Compares Bitcoin against major US equity benchmarks and international stocks
+    for asset allocation and correlation analysis.
 
     Parameters
     ----------
     report_data : pd.DataFrame
-        Historical price and return data
+        Price and return data
     report_date : pd.Timestamp
         Reporting date
     correlation_results : dict
@@ -1248,7 +1157,7 @@ def create_equity_performance_table(report_data, report_date, correlation_result
     Returns
     -------
     pd.DataFrame
-        Performance table with 6 rows (BTC + 5 ETFs)
+        Performance table (5 assets × 7 metrics)
     """
     # Asset configuration - easily extensible for new assets
     equity_config = {
