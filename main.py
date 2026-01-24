@@ -34,7 +34,8 @@ from data_definitions import (
 data = data_format.get_data(tickers, market_data_start_date)
 
 ## Forward fill the data for all columns
-data.ffill(inplace=True)
+# Industry Standard: Explicit assignment (pandas 2.x deprecates inplace=True)
+data = data.ffill()
 
 ## Kraken OHLC data
 start_timestamp = int(pd.Timestamp("2017-01-01").timestamp())

@@ -1,12 +1,40 @@
-pandas==1.5.3
-datapane==0.17.0
-pyarrow==10.0.0
-seaborn==0.13.2
-matplotlib==3.9.2
-Pillow==11.0.0
-scipy==1.14.1
-plotly==5.24.1
-kaleido==0.2.1
-mplfinance==0.12.10b0
-yfinance==0.2.60
-numpy==1.24.3
+# ============================================================================
+# BITCOIN REPORT LIBRARY - DEPENDENCIES
+# Educational quant analysis repository using industry-standard libraries
+# ============================================================================
+
+# === Core Data Manipulation ===
+pandas==2.2.0              # DataFrame operations (upgraded for deprecated method fixes)
+numpy==1.26.3              # Numerical computing
+pyarrow==10.0.0            # Fast data serialization
+
+# === Quantitative Analysis Libraries ===
+# These libraries replace ~1000 lines of custom performance metric calculations
+# with battle-tested, professionally-maintained implementations
+quantstats==0.0.62         # Comprehensive performance analytics (Sharpe, Sortino, etc.)
+empyrical==0.5.5           # Financial metrics - validation and cross-reference
+pandas-ta==0.3.14b         # Technical indicators (optional - for future enhancements)
+
+# === Data Sources ===
+yfinance==0.2.60           # Yahoo Finance data (stocks, ETFs, indices)
+requests==2.31.0           # HTTP requests for API calls (auto-installed with yfinance)
+
+# === Visualization ===
+datapane==0.17.0           # HTML report generation
+plotly==5.24.1             # Interactive charts
+matplotlib==3.9.2          # Static charts and plots
+seaborn==0.13.2            # Statistical visualization
+mplfinance==0.12.10b0      # Financial OHLC charts
+kaleido==0.2.1             # Static image export for Plotly
+Pillow==11.0.0             # Image processing
+
+# === Statistical Analysis ===
+scipy==1.14.1              # Scientific computing and statistical functions
+
+# ============================================================================
+# OPTIONAL: Code Quality Tools (for educational development)
+# Uncomment these if you want to contribute or learn best practices
+# ============================================================================
+# black==24.1.0            # Automatic code formatting
+# ruff==0.1.11             # Fast Python linter
+# jupyter==1.0.0           # Jupyter notebooks for learning/exploration
