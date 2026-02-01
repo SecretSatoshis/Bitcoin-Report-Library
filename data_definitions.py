@@ -1,7 +1,25 @@
+"""
+Data definitions and configuration for Bitcoin analytics pipeline.
+
+This module contains all static configuration, ticker lists, reference data,
+and API settings used throughout the Bitcoin report generation system.
+
+Sections:
+    - Market Data: Tickers, dates, and asset categories
+    - Reference Data: Fiat supply, precious metals supply
+    - Report Configuration: Metrics, columns, and templates
+    - API Configuration: BRK metrics, URLs, and request settings
+    - Model Parameters: Electric price model constants
+"""
 import datetime
 import pandas as pd
 
-# TradFi Data
+
+# =============================================================================
+# MARKET DATA CONFIGURATION
+# =============================================================================
+
+# Asset tickers organized by category for yfinance/CoinGecko API calls
 tickers = {
     "stocks": [
         "AAPL",
@@ -64,13 +82,25 @@ tickers = {
     "crypto": ["ethereum", "ripple", "dogecoin", "binancecoin", "tether"],
 }
 
-# Start date for TradFi Data
+# Stock tickers extracted for market cap calculations
+stock_tickers = tickers["stocks"]
+
+# Start date for historical TradFi data (format: YYYY-MM-DD)
 market_data_start_date = "2010-01-01"
 
-# First Halving Date Start Stats Calculation
+# First Bitcoin halving date - used as start date for statistics calculations
 stats_start_date = "2012-11-28"
 
-# Fiat Money Supply M0 Data
+# Report date defaults to yesterday (T-1) to ensure data availability
+report_date = pd.Timestamp(datetime.date.today() - datetime.timedelta(days=1))
+
+
+# =============================================================================
+# REFERENCE DATA
+# =============================================================================
+
+# Global fiat money supply (M0) by country in USD trillions
+# Source: Central bank data, updated periodically
 fiat_money_data_top10 = pd.DataFrame(
     {
         "Country": [
@@ -102,7 +132,8 @@ fiat_money_data_top10 = pd.DataFrame(
     }
 )
 
-# Gold And Silver Supply Data
+# Above-ground precious metals supply in troy ounces
+# Gold: ~6.1B oz, Silver: ~30.9B oz (World Gold Council estimates)
 gold_silver_supply = pd.DataFrame(
     {
         "Metal": ["Gold", "Silver"],
@@ -110,7 +141,7 @@ gold_silver_supply = pd.DataFrame(
     }
 )
 
-# Gold Market Supply Breakdown
+# Gold market allocation by use case (World Gold Council)
 gold_supply_breakdown = pd.DataFrame(
     {
         "Gold Supply Breakdown": [
@@ -123,209 +154,67 @@ gold_supply_breakdown = pd.DataFrame(
     }
 )
 
-# Just stock tickers for marketcap calculation
-stock_tickers = tickers["stocks"]
 
-# Get today's date
-today = datetime.date.today()
+# =============================================================================
+# REPORT CONFIGURATION
+# =============================================================================
 
-# Get yesterday's date
-yesterday = today - datetime.timedelta(days=1)
-
-# Create report data and convert to pandas.Timestamp
-report_date = pd.Timestamp(yesterday)
-
-# On-Chain Metrics to create moving averages of for data smoothing
+# Metrics for which to calculate 7/30/365-day moving averages
 moving_avg_metrics = [
-    "HashRate",
-    "AdrActCnt",
+    "hash_rate",
+    "daily_active_addresses_sending",
     "TxCnt",
-    "TxTfrValAdjUSD",
+    "sent_usd",
     "TxTfrValMeanUSD",
     "TxTfrValMedUSD",
-    "FeeMeanUSD",
-    "FeeMeanNtv",
-    "IssContNtv",
-    "RevUSD",
+    "fee_usd_average",
+    "fee_btc_average",
+    "subsidy_btc_sum",
+    "coinbase_usd_sum",
     "nvt_price",
     "nvt_price_adj",
 ]
 
-# Define report data and fields
-filter_data_columns = {
-    "Report_Metrics": [
-        "SplyCur",
-        "7_day_ma_IssContNtv",
-        "365_day_ma_IssContNtv",
-        "TxCnt",
-        "7_day_ma_TxCnt",
-        "365_day_ma_TxCnt",
-        "HashRate",
-        "7_day_ma_HashRate",
-        "365_day_ma_HashRate",
-        "PriceUSD",
-        "50_day_ma_priceUSD",
-        "200_day_ma_priceUSD",
-        "200_day_multiple",
-        "200_week_ma_priceUSD",
-        "TxTfrValAdjUSD",
-        "7_day_ma_TxTfrValMeanUSD",
-        "7_day_ma_TxTfrValAdjUSD",
-        "365_day_ma_TxTfrValAdjUSD",
-        "RevUSD",
-        "pct_fee_of_reward",
-        "IssContPctAnn",
-        "IssContNtv",
-        "pct_supply_issued",
-        "AdrActCnt",
-        "7_day_ma_priceUSD",
-        "30_day_ma_AdrActCnt",
-        "365_day_ma_AdrActCnt",
-        "FeeTotUSD",
-        "thermocap_price",
-        "thermocap_multiple",
-        "thermocap_price_multiple_4",
-        "thermocap_price_multiple_8",
-        "thermocap_price_multiple_16",
-        "thermocap_price_multiple_32",
-        "nvt_price",
-        "nvt_price_adj",
-        "nvt_price_multiple",
-        "30_day_ma_nvt_price",
-        "nvt_price_multiple_ma",
-        "365_day_ma_nvt_price",
-        "NVTAdj",
-        "NVTAdj90",
-        "realised_price",
-        "VelCur1yr",
-        "supply_pct_1_year_plus",
-        "mvrv_ratio",
-        "realizedcap_multiple_3",
-        "realizedcap_multiple_5",
-        "nupl",
-        "CapMrktCurUSD",
-        "AdrBalUSD10Cnt",
-        "AdrBalCnt",
-        "DiffLast",
-        "AAPL_close",
-        "^IXIC_close",
-        "^GSPC_close",
-        "XLF_close",
-        "XLRE_close",
-        "GC=F_close",
-        "SI=F_close",
-        "DX=F_close",
-        "SHY_close",
-        "TLT_close",
-        "^TNX_close",
-        "^TYX_close",
-        "^FVX_close",
-        "^IRX_close",
-        "XLE_close",
-        "BITQ_close",
-        "^BCOM_close",
-        "FANG.AX_close",
-        "SPY_close",
-        "IEMG_close",
-        "AGG_close",
-        "WGMI_close",
-        "QQQ_close",
-        "VTI_close",
-        "GLD_close",
-        "XLK_close",
-        "VXUS_close",
-        "AAPL_mc_btc_price",
-        "AAPL_MarketCap",
-        "AUDUSD=X_close",
-        "CHFUSD=X_close",
-        "CNYUSD=X_close",
-        "EURUSD=X_close",
-        "GBPUSD=X_close",
-        "HKDUSD=X_close",
-        "INRUSD=X_close",
-        "JPYUSD=X_close",
-        "RUBUSD=X_close",
-        "silver_marketcap_billion_usd",
-        "gold_marketcap_billion_usd",
-        "30_day_ma_IssContNtv",
-        "30_day_ma_TxCnt",
-        "30_day_ma_HashRate",
-        "30_day_ma_TxTfrValAdjUSD",
-        "30_day_ma_RevUSD",
-        "365_day_ma_RevUSD",
-        "30_day_ma_TxTfrValMeanUSD",
-        "30_day_ma_TxTfrValMedUSD",
-        "liquid_supply",
-        "illiquid_supply",
-        "United_Kingdom_btc_price",
-        "United_Kingdom_cap",
-        "United_States_btc_price",
-        "United_States_cap",
-        "Global_Fiat_Supply_btc_price",
-        "SF_Predicted_Price",
-        "SF_Multiple",
-        "China_btc_price",
-        "Eurozone_btc_price",
-        "Japan_btc_price",
-        "Switzerland_btc_price",
-        "India_btc_price",
-        "Australia_btc_price",
-        "Russia_btc_price",
-        "MSFT_mc_btc_price",
-        "GOOGL_mc_btc_price",
-        "NVDA_mc_btc_price",
-        "AMZN_mc_btc_price",
-        "V_mc_btc_price",
-        "TSLA_mc_btc_price",
-        "JPM_mc_btc_price",
-        "PYPL_mc_btc_price",
-        "GS_mc_btc_price",
-        "META_mc_btc_price",
-        "gold_marketcap_btc_price",
-        "silver_marketcap_btc_price",
-        "gold_jewellery_marketcap_btc_price",
-        "gold_private_investment_marketcap_btc_price",
-        "gold_official_country_holdings_marketcap_btc_price",
-        "gold_other_marketcap_btc_price",
-        "sat_per_dollar",
-        "Lagged_Energy_Value",
-        "Hayes_Network_Price_Per_BTC",
-        "Electricity_Cost",
-        "Bitcoin_Production_Cost",
-        "CM_Energy_Value",
-        "Energy_Value_Multiple",
-        "SF_Predicted_Price_MA365",
-        "ethereum_close",
-        "ripple_close",
-        "dogecoin_close",
-        "binancecoin_close",
-        "tether_close",
-        "bitcoin_dominance",
-        "btc_trading_volume",
-        "ethereum_market_cap",
-        "ripple_market_cap",
-        "dogecoin_market_cap",
-        "binancecoin_market_cap",
-        "tether_market_cap",
-        "COIN_close",
-        "XYZ_close",
-        "MSTR_close",
-        "MARA_close",
-        "RIOT_close",
-        "CL=F_close",
-        "qtm_price",
-        "qtm_price_multiple_2",
-        "qtm_price_multiple_5",
-        "qtm_price_multiple_10",
-    ]
-}
+# Columns that need change calculations (7d, 90d, MTD, YTD)
+# These are the only columns passed to run_data_analysis()
+analysis_columns = [
+    # Bitcoin price and on-chain metrics
+    "price_close",
+    "hash_rate",
+    "TxCnt",
+    "sent_usd",
+    "7_day_ma_TxTfrValMeanUSD",
+    "daily_active_addresses_sending",
+    "addrs_over_10k_sats_addr_count",
+    "coinbase_usd_sum",
+    "fee_usd_sum",
+    "supply_pct_1_year_plus",
+    "usd_velocity",
+    # Equity ETFs
+    "SPY_close",
+    "QQQ_close",
+    "VTI_close",
+    "VXUS_close",
+    # Sector ETFs
+    "XLK_close",
+    "XLF_close",
+    "XLE_close",
+    "XLRE_close",
+    # Macro indicators
+    "DX=F_close",
+    "GLD_close",
+    "AGG_close",
+    "^BCOM_close",
+    # Bitcoin-related equities
+    "MSTR_close",
+    "XYZ_close",
+    "COIN_close",
+    "WGMI_close",
+]
 
-# Timeframes to calculate volatility 
-volatility_windows = [30, 90, 180, 365]
-
-# Data to run correlations on
+# Column names for correlation analysis
 correlation_data = [
-    "PriceUSD",
+    "price_close",
     "AAPL_close",
     "MSFT_close",
     "GOOGL_close",
@@ -394,55 +283,44 @@ correlation_data = [
     "RIOT_close",
 ]
 
-# Weekly Fundamentals Table Metrics
+# Template for weekly fundamentals table: {section: {label: (column, format_type)}}
 metrics_template = {
     "Network Performance": {
-        "Total Address Count": ("AdrBalCnt", "number"),
-        "Address Count > $10": ("AdrBalUSD10Cnt", "number"),
-        "Active Addresses": ("AdrActCnt", "number"),
+        "Total Address Count": ("addrs_over_1sat_addr_count", "number"),
+        "Address Count > $10": ("addrs_over_10k_sats_addr_count", "number"),
+        "Active Addresses": ("daily_active_addresses_sending", "number"),
         "Supply Held 1+ Year %": ("supply_pct_1_year_plus", "percent"),
         "Transaction Count": ("TxCnt", "number"),
-        "Transaction Volume": ("TxTfrValAdjUSD", "currency"),
-        "Transaction Fee USD": ("FeeTotUSD", "currency"),
+        "Transaction Volume": ("sent_usd", "currency"),
+        "Transaction Fee USD": ("fee_usd_sum", "currency"),
     },
     "Network Security": {
-        "Hash Rate": ("HashRate", "number"),
-        "Network Difficulty": ("DiffLast", "number"),
-        "Miner Revenue": ("RevUSD", "currency"),
+        "Hash Rate": ("hash_rate", "number"),
+        "Network Difficulty": ("difficulty", "number"),
+        "Miner Revenue": ("coinbase_usd_sum", "currency"),
         "Fee % Of Reward": ("pct_fee_of_reward", "percent"),
     },
     "Network Economics": {
-        "Bitcoin Supply": ("SplyCur", "number"),
+        "Bitcoin Supply": ("supply_btc", "number"),
         "% Supply Issued": ("pct_supply_issued", "percent"),
-        "Bitcoin Mined Per Day": ("IssContNtv", "number"),
-        "Annual Inflation Rate": ("IssContPctAnn", "percent"),
-        "Velocity": ("VelCur1yr", "number2"),
+        "Bitcoin Mined Per Day": ("subsidy_btc_sum", "number"),
+        "Annual Inflation Rate": ("inflation_rate", "percent"),
+        "Velocity": ("usd_velocity", "number2"),
     },
     "Network Valuation": {
-        "Market Cap": ("CapMrktCurUSD", "currency"),
-        "Bitcoin Price": ("PriceUSD", "currency"),
+        "Market Cap": ("market_cap", "currency"),
+        "Bitcoin Price": ("price_close", "currency"),
         "Realised Price": ("realised_price", "currency"),
         "Thermocap Price": ("thermocap_price", "currency"),
     },
 }
 
-# Chart Template OHLC
-chart_template = {
-    "title": "Bitcoin Weekly Price Chart",
-    "x_label": "Date",
-    "y1_label": "USD Price",
-    "filename": "png/Bitcoin_OHLC",
-    "events": [
-        {"name": "CME Futures", "dates": ["2017-12-17"], "orientation": "v"},
-        {"name": "Bitcoin Winter", "dates": ["2018-12-15"], "orientation": "v"},
-        {"name": "Coinbase IPO", "dates": ["2021-04-14"], "orientation": "v"},
-        {"name": "FTX Bankrupt", "dates": ["2022-11-11"], "orientation": "v"},
-    ],
-}
 
+# =============================================================================
+# BRK API CONFIGURATION
+# =============================================================================
 
-BRK_BULK_URL = "https://eu1.bitview.space/api/metrics/bulk"
-
+BRK_BULK_URL = "https://bitview.space/api/metrics/bulk"
 
 BRK_METRICS = [
     "timestamp",
@@ -474,7 +352,7 @@ BRK_METRICS = [
     "fee_btc_average",
     "fee_rate_average",
     "fee_dominance",
-    "utxos_at_least_1y_old_supply_rel_to_circulating_supply",
+    "utxos_over_1y_old_supply_rel_to_circulating_supply",
     "tx_v1",
     "tx_v2",
     "tx_v3",
@@ -482,90 +360,55 @@ BRK_METRICS = [
     "usd_velocity",
     "sent_usd",
     "inflation_rate",
-    "addrs_above_1sat_addr_count",
-    "addrs_above_10k_sats_addr_count",
-    "addrs_above_1sat_sent",
-    # Address balance distribution (address counts)
+    "addrs_over_1sat_addr_count",
+    "addrs_over_10k_sats_addr_count",
+    "address_activity_sending_average",
+    "address_activity_receiving_average",
     "addrs_under_1btc_addr_count",
     "addrs_under_10btc_addr_count",
     "addrs_under_10k_sats_addr_count",
     "addrs_under_1k_sats_addr_count",
     "addrs_under_10sats_addr_count",
-
-    # Active supply buckets (UTXO age band supply)
-    "utxos_at_least_1h_up_to_1d_old_supply",
-    "utxos_up_to_1m_old_supply",
-    "utxos_up_to_3m_old_supply",
-    "utxos_up_to_6m_old_supply",
-    "utxos_up_to_1y_old_supply",
-    "utxos_up_to_2y_old_supply",
-    "utxos_up_to_3y_old_supply",
-    "utxos_up_to_4y_old_supply",
-    "utxos_up_to_5y_old_supply",
-    "utxos_up_to_10y_old_supply",
+    "utxos_1h_to_1d_old_supply",
+    "utxos_under_1m_old_supply",
+    "utxos_under_3m_old_supply",
+    "utxos_under_6m_old_supply",
+    "utxos_under_1y_old_supply",
+    "utxos_under_2y_old_supply",
+    "utxos_under_3y_old_supply",
+    "utxos_under_4y_old_supply",
+    "utxos_under_5y_old_supply",
+    "utxos_under_10y_old_supply",
 ]
 
+# =============================================================================
+# MODEL PARAMETERS
+# =============================================================================
 
-BRK_RENAME = {
-    "price_close": "PriceUSD",
-    "market_cap": "CapMrktCurUSD",
-    "realized_cap": "CapRealUSD",
-    "realized_price": "RealizedPriceUSD",
-    "supply_btc": "SplyCur",
+# Bitcoin mining electricity cost model parameters
+ELECTRICITY_COST = 0.05  # USD per kWh (global average estimate)
+PUE = 1.1  # Power Usage Effectiveness (datacenter overhead factor)
+ELEC_TO_TOTAL_COST_RATIO = 0.6  # Electricity as fraction of total mining cost
 
-    # Difficulty / hash
-    "difficulty": "DiffLast",
-    "hash_rate": "HashRate",
+# Bitcoin unit conversion
+SATS_PER_BTC = 100_000_000  # Satoshis per Bitcoin
 
-    # Velocity (keep both)
-    "btc_velocity": "VelCur1yr_BTC",
-    "usd_velocity": "VelCur1yr",
+# Trading days per year by asset class
+STOCK_TRADING_DAYS = 252  # Traditional financial markets
+CRYPTO_TRADING_DAYS = 365  # Cryptocurrency markets (24/7)
 
-    # Tx volume (your TxTfrValAdjUSD input)
-    "sent_usd": "TxTfrValAdjUSD",
 
-    # Inflation / issuance %
-    "inflation_rate": "IssContPctAnn",
+# =============================================================================
+# EXTERNAL DATA SOURCES
+# =============================================================================
 
-    # Fee mean native
-    "transactioncoinmining_fee_btc": "FeeMeanNtv",
+# Google Sheets URL for miner efficiency data
+MINER_DATA_SHEET_URL = "https://docs.google.com/spreadsheets/d/1GXaY6XE2mx5jnCu5uJFejwV95a0gYDJYHtDE0lmkGeA/edit?usp=sharing"
 
-    # Active/addrs (per your selection)
-    "addrs_above_1sat_sent": "AdrActCnt",
-    "addrs_above_1sat_addr_count": "AdrBalCnt",
-    "addrs_above_10k_sats_addr_count": "AdrBalUSD10Cnt",
 
-   
-    "fee_usd_average": "FeeMeanUSD",
-    "fee_btc_average": "FeeMeanNtv",
-    "fee_rate_average": "FeeRateAvg",
-    # Fees (daily totals)
-    "fee_usd_sum": "FeeTotUSD",
-    "fee_btc_sum": "FeeTotNtv",   # optional but useful
+# =============================================================================
+# API CONFIGURATION
+# =============================================================================
 
-    # Subsidy (daily totals)
-    "subsidy_usd_sum": "IssContUSD",
-    "subsidy_btc_sum": "IssContNtv",
-
-    # Total miner revenue (fees + subsidy)
-    "coinbase_usd_sum": "RevUSD",
-    "coinbase_btc_sum": "RevNtv",
-
-    "addrs_under_1btc_addr_count":  "AdrBalUSD1MCnt",
-    "addrs_under_10btc_addr_count": "AdrBalUSD10MCnt",
-    "addrs_under_10k_sats_addr_count": "AdrBalUSD10KCnt",
-    "addrs_under_1k_sats_addr_count":  "AdrBalUSD1KCnt",
-    "addrs_under_10sats_addr_count":   "AdrBalUSD1Cnt",
-
-    "utxos_at_least_1h_up_to_1d_old_supply":   "SplyAct1d",
-    "utxos_up_to_1m_old_supply": "SplyAct30d",
-    "utxos_up_to_3m_old_supply": "SplyAct90d",
-    "utxos_up_to_6m_old_supply": "SplyAct180d",
-    "utxos_up_to_1y_old_supply": "SplyAct1yr",
-    "utxos_up_to_2y_old_supply": "SplyAct2yr",
-    "utxos_up_to_3y_old_supply": "SplyAct3yr",
-    "utxos_up_to_4y_old_supply": "SplyAct4yr",
-    "utxos_up_to_5y_old_supply": "SplyAct5yr",
-    "utxos_up_to_10y_old_supply": "SplyAct10yr",
-
-}
+# Default timeout for HTTP requests (seconds)
+API_TIMEOUT = 30
