@@ -775,6 +775,58 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
     data["daily_active_addresses_sending"] = data["address_activity_sending_average"] * data["block_count"]
     data["daily_active_addresses_receiving"] = data["address_activity_receiving_average"] * data["block_count"]
 
+    # =========================================================================
+    # Reserve Risk Pipeline (calculated from raw BDD, Price, Supply)
+    # =========================================================================
+
+    # Step 1: Adjusted BDD = BDD / Circulating Supply
+    data["adjusted_bdd"] = data["coindays_destroyed"] / data["supply_btc"]
+
+    # Step 2: Mean Adjusted BDD (binary indicator: above/below average)
+    data["adjusted_bdd_mean"] = data["adjusted_bdd"].expanding().mean()
+    data["adjusted_bdd_above_avg"] = data["adjusted_bdd"] > data["adjusted_bdd_mean"]
+
+    # Step 3: VOCD = Price x Adjusted BDD
+    data["vocd"] = data["price_close"] * data["adjusted_bdd"]
+
+    # Step 4: MVOCD = 30-day rolling median of VOCD
+    data["mvocd"] = data["vocd"].rolling(window=30).median()
+
+    # Step 5: HODL Bank = cumulative opportunity cost (when MVOCD < Price)
+    data["daily_hodl_value"] = (data["price_close"] - data["mvocd"]).clip(lower=0)
+    data["hodl_bank_calc"] = data["daily_hodl_value"].cumsum()
+
+    # Step 6: Reserve Risk = Price / HODL Bank
+    data["reserve_risk_calc"] = data["price_close"] / data["hodl_bank_calc"]
+
+    # =========================================================================
+    # Average Cap and Delta Cap
+    # =========================================================================
+
+    data["cumulative_market_cap"] = data["market_cap"].cumsum()
+    data["days_since_start"] = range(1, len(data) + 1)
+    data["average_cap"] = data["cumulative_market_cap"] / data["days_since_start"]
+    data["delta_cap"] = data["realized_cap"] - data["average_cap"]
+    data["average_cap_price"] = data["average_cap"] / data["supply_btc"]
+    data["delta_cap_price"] = data["delta_cap"] / data["supply_btc"]
+
+    # =========================================================================
+    # Bitcoin Volatility Metrics
+    # =========================================================================
+
+    daily_returns = data["price_close"].pct_change()
+    data["VtyDayRet30d"] = daily_returns.rolling(30).std() * np.sqrt(365)
+    data["VtyDayRet180d"] = daily_returns.rolling(180).std() * np.sqrt(365)
+
+    # =========================================================================
+    # Supply in Profit/Loss Percentages
+    # =========================================================================
+
+    data["supply_in_profit_btc"] = data["supply_in_profit"] / SATS_PER_BTC
+    data["supply_in_loss_btc"] = data["supply_in_loss"] / SATS_PER_BTC
+    data["supply_in_profit_pct"] = (data["supply_in_profit_btc"] / data["supply_btc"]) * 100
+    data["supply_in_loss_pct"] = (data["supply_in_loss_btc"] / data["supply_btc"]) * 100
+
     print("Custom Metrics Created")
     return data
 
@@ -1373,6 +1425,10 @@ def calculate_rolling_cagr_for_all_columns(data, years):
     days_per_year = 365
     start_value = data.shift(int(years * days_per_year))
 
+    # Replace zero start values with NaN to avoid ZeroDivisionError
+    # (CAGR from zero is mathematically undefined)
+    start_value = start_value.replace(0, np.nan)
+
     # Calculate CAGR using the formula: ((End Value / Start Value)^(1/years)) - 1
     # Division by zero or negative values will produce NaN/inf, which is mathematically correct
     with pd.option_context("mode.use_inf_as_na", True):
@@ -1527,12 +1583,13 @@ def calculate_all_changes(data: pd.DataFrame, periods: Optional[list] = None) ->
     # Calculate changes for the specified periods
     changes = calculate_time_changes(data, periods)
 
-    # Calculate YTD and MTD changes (always needed for reports)
+    # Calculate YTD, MTD, and YOY changes (needed for reports and charts)
     ytd_change = calculate_ytd_change(data)
     mtd_change = calculate_mtd_change(data)
+    yoy_change = calculate_yoy_change(data)
 
     # Concatenate all changes into a single DataFrame
-    changes = pd.concat([changes, ytd_change, mtd_change], axis=1)
+    changes = pd.concat([changes, ytd_change, mtd_change, yoy_change], axis=1)
 
     return changes
 
@@ -2053,3 +2110,153 @@ def create_btc_correlation_data(report_date, tickers, correlations_data):
     return btc_correlations
 
 
+# =============================================================================
+# CHART-READY COMPUTE FUNCTIONS
+# =============================================================================
+
+
+def compute_drawdowns(data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Long-form drawdown series:
+      - days_since_ath
+      - drawdown_pct (0 at ATH, negative when below ATH)
+      - Cycle (label)
+
+    Aligns each cycle to its start ATH date (your provided start_date).
+    """
+    drawdown_periods = [
+        ("Drawdown Cycle 1", "2011-06-08", "2013-02-28"),
+        ("Drawdown Cycle 2", "2013-11-29", "2017-03-03"),
+        ("Drawdown Cycle 3", "2017-12-17", "2020-12-16"),
+        ("Drawdown Cycle 4", "2021-11-10", pd.to_datetime("today").strftime("%Y-%m-%d")),
+    ]
+
+    df = data.copy()
+    if not isinstance(df.index, pd.DatetimeIndex):
+        df.index = pd.to_datetime(df.index)
+    df = df.sort_index()
+
+    out = []
+
+    for cycle_name, start_date, end_date in drawdown_periods:
+        start_dt = pd.to_datetime(start_date)
+        end_dt = pd.to_datetime(end_date)
+
+        period = df.loc[(df.index >= start_dt) & (df.index <= end_dt)].copy()
+        if period.empty:
+            continue
+
+        # ATH path within the period
+        period["ath"] = period["price_close"].cummax()
+
+        # Drawdown percent
+        period["drawdown_pct"] = (period["price_close"] / period["ath"] - 1.0) * 100.0
+
+        # Days since the cycle's ATH start anchor (your start_dt)
+        period["days_since_ath"] = (period.index - start_dt).days
+
+        period["Cycle"] = cycle_name
+
+        out.append(period[["days_since_ath", "drawdown_pct", "Cycle"]])
+
+    if not out:
+        return pd.DataFrame(columns=["days_since_ath", "drawdown_pct", "Cycle"])
+
+    return pd.concat(out, ignore_index=True)
+
+
+def compute_cycle_lows(data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Compute market cycle performance indexed from cycle lows.
+
+    Returns DataFrame with:
+      - days_since_cycle_low
+      - index_value (1.0 at cycle low, 2.0 = 2x gain, etc.)
+      - Cycle (label)
+    """
+    cycle_periods = [
+        ("Market Cycle 1", "2010-07-25", "2011-11-18"),
+        ("Market Cycle 2", "2011-11-18", "2015-01-14"),
+        ("Market Cycle 3", "2015-01-14", "2018-12-16"),
+        ("Market Cycle 4", "2018-12-16", "2022-11-20"),
+        ("Market Cycle 5", "2022-11-20", pd.to_datetime("today").strftime("%Y-%m-%d")),
+    ]
+
+    df = data.copy()
+    if not isinstance(df.index, pd.DatetimeIndex):
+        df.index = pd.to_datetime(df.index)
+    df = df.sort_index()
+
+    out = []
+    for cycle_name, start_date, end_date in cycle_periods:
+        start_dt = pd.to_datetime(start_date)
+        end_dt = pd.to_datetime(end_date)
+
+        period = df.loc[(df.index >= start_dt) & (df.index <= end_dt)].copy()
+        if period.empty:
+            continue
+
+        low_date = period["price_close"].idxmin()
+        low_px = float(period.loc[low_date, "price_close"])
+
+        period["days_since_cycle_low"] = (period.index - low_date).days
+        period["index_value"] = period["price_close"] / low_px
+        period["Cycle"] = cycle_name
+
+        out.append(period[["days_since_cycle_low", "index_value", "Cycle"]])
+
+    return pd.concat(out, ignore_index=True) if out else pd.DataFrame(
+        columns=["days_since_cycle_low", "index_value", "Cycle"]
+    )
+
+
+def compute_halving_days(data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Build a single long-form dataframe with:
+      - days_since_halving
+      - index_value (cycle index; 1.0 at halving, 2.0 = 2x, etc.)
+      - Era (string name)
+    """
+    bitcoin_halvings = [
+        ("Genesis Era", "2009-01-03", "2012-11-28"),
+        ("2nd Era",     "2012-11-28", "2016-07-09"),
+        ("3rd Era",     "2016-07-09", "2020-05-11"),
+        ("4th Era",     "2020-05-11", "2024-04-20"),
+        ("5th Era",     "2024-04-20", pd.to_datetime("today").strftime("%Y-%m-%d")),
+    ]
+
+    # Ensure datetime index
+    data = data.copy()
+    if not isinstance(data.index, pd.DatetimeIndex):
+        data.index = pd.to_datetime(data.index)
+
+    # Ensure sorted
+    data = data.sort_index()
+
+    out = []
+
+    for era_name, start_date, end_date in bitcoin_halvings:
+        start_dt = pd.to_datetime(start_date)
+        end_dt = pd.to_datetime(end_date)
+
+        period = data.loc[(data.index >= start_dt) & (data.index <= end_dt)].copy()
+        if period.empty:
+            continue
+
+        # Pick normalization price:
+        # If exact halving date is missing (common), use first available price AFTER start_dt
+        if start_dt in period.index:
+            start_px = float(period.loc[start_dt, "price_close"])
+        else:
+            start_px = float(period["price_close"].iloc[0])
+
+        period["days_since_halving"] = (period.index - start_dt).days
+        period["index_value"] = period["price_close"] / start_px  # 1.0 at halving
+        period["Era"] = era_name
+
+        out.append(period[["days_since_halving", "index_value", "Era"]])
+
+    if not out:
+        return pd.DataFrame(columns=["days_since_halving", "index_value", "Era"])
+
+    return pd.concat(out, ignore_index=True)

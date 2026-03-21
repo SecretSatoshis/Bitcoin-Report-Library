@@ -83,6 +83,24 @@ weekly_high_low = data_format.calculate_52_week_high_low(report_data, report_dat
 ## Create Growth Rate Data
 cagr_results = data_format.calculate_rolling_cagr_for_all_metrics(data)
 
+## Merge only the CAGR columns that Chart Library charts actually reference.
+## Full CAGR data is exported separately as cagr_data.csv.
+chart_cagr_columns = [
+    "price_close_4_Year_CAGR",
+    "SPY_close_4_Year_CAGR",
+    "QQQ_close_4_Year_CAGR",
+    "XLK_close_4_Year_CAGR",
+    "XLF_close_4_Year_CAGR",
+    "GLD_close_4_Year_CAGR",
+    "AGG_close_4_Year_CAGR",
+    "DX=F_close_4_Year_CAGR",
+    "WGMI_close_4_Year_CAGR",
+]
+available_cagr = [c for c in chart_cagr_columns if c in cagr_results.columns]
+report_data = report_data.merge(
+    cagr_results[available_cagr], left_index=True, right_index=True, how="left"
+)
+
 ## Filter Stat Data
 stat_data = data[correlation_data]
 
@@ -194,5 +212,30 @@ roi_table.to_csv("csv/roi_table.csv", index=False)
 eoy_model_data = report_tables.create_eoy_model_table(data, cagr_results)
 eoy_model_data.to_csv("csv/eoy_model_data.csv", index=True)
 
-## Master CSV - All calculated metrics after analysis
-data.to_csv("csv/master_metrics_data.csv", index=True)
+## Master CSV - All calculated metrics after analysis (includes change calculations)
+## Gzipped to reduce file size (~99MB raw → ~5-10MB compressed)
+report_data.to_csv("csv/master_metrics_data.csv.gz", index=True, compression="gzip")
+
+## Remove old uncompressed master if it exists (prevent stale 99MB file in repo)
+import os
+old_master = "csv/master_metrics_data.csv"
+if os.path.exists(old_master):
+    os.remove(old_master)
+
+# --- Chart-Ready CSV Exports --- #
+# These datasets are consumed by Bitcoin-Chart-Library for visualization
+
+## Drawdown data (ATH drawdown cycles)
+drawdown_data = data_format.compute_drawdowns(report_data)
+drawdown_data.to_csv("csv/drawdown_data.csv", index=False)
+
+## Cycle low data (market cycle performance from lows)
+cycle_low_data = data_format.compute_cycle_lows(report_data)
+cycle_low_data.to_csv("csv/cycle_low_data.csv", index=False)
+
+## Halving era data (performance indexed from each halving)
+halving_data = data_format.compute_halving_days(report_data)
+halving_data.to_csv("csv/halving_data.csv", index=False)
+
+## CAGR results
+cagr_results.to_csv("csv/cagr_data.csv", index=True)
