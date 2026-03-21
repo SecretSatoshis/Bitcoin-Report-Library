@@ -427,7 +427,7 @@ def create_macro_performance_table(
     """
     asset_configs = [
         {"name": "BTC", "label": "Bitcoin - [BTC]", "ticker": "price_close"},
-        {"name": "DXY", "label": "US Dollar Index - [DXY]", "ticker": "DX=F"},
+        {"name": "DXY", "label": "US Dollar Index - [DXY]", "ticker": "DX-Y.NYB"},
         {"name": "GLD", "label": "Gold ETF - [GLD]", "ticker": "GLD"},
         {"name": "AGG", "label": "Aggregate Bond ETF - [AGG]", "ticker": "AGG"},
         {"name": "BCOM", "label": "Bloomberg Commodity Index - [BCOM]", "ticker": "^BCOM"},

@@ -68,7 +68,7 @@ tickers = {
     "indices": ["^GSPC", "^VIX", "^IXIC", "^TNX", "^TYX", "^FVX", "^IRX", "^BCOM"],
     "commodities": ["GC=F", "CL=F", "SI=F"],
     "forex": [
-        "DX=F",
+        "DX-Y.NYB",
         "AUDUSD=X",
         "CHFUSD=X",
         "CNYUSD=X",
@@ -212,7 +212,7 @@ analysis_columns = [
     "XLE_close",
     "XLRE_close",
     # Macro indicators
-    "DX=F_close",
+    "DX-Y.NYB_close",
     "GLD_close",
     "AGG_close",
     "^BCOM_close",
@@ -271,7 +271,7 @@ correlation_data = [
     "GC=F_close",
     "CL=F_close",
     "SI=F_close",
-    "DX=F_close",
+    "DX-Y.NYB_close",
     "AUDUSD=X_close",
     "^BCOM_close",
     "CHFUSD=X_close",

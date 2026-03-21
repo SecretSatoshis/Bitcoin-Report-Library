@@ -93,7 +93,7 @@ chart_cagr_columns = [
     "XLF_close_4_Year_CAGR",
     "GLD_close_4_Year_CAGR",
     "AGG_close_4_Year_CAGR",
-    "DX=F_close_4_Year_CAGR",
+    "DX-Y.NYB_close_4_Year_CAGR",
     "WGMI_close_4_Year_CAGR",
 ]
 available_cagr = [c for c in chart_cagr_columns if c in cagr_results.columns]
