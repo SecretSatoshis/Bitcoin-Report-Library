@@ -69,15 +69,19 @@ def calculate_price_buckets(data, bucket_size):
     current_price = data["price_close"].iloc[-1]
     current_bucket = pd.cut([current_price], bins=bucket_ranges)[0]
 
-    # Extract the count of unique days for the current price bucket
-    current_bucket_days = bucket_days_count.get(current_bucket, 0)
-
     # Create a DataFrame for bucket counts with formatted price ranges
     bucket_counts_df = bucket_days_count.reset_index()
-    bucket_counts_df.columns = ["Price Range ($)", "Count"]
-    bucket_counts_df["Price Range ($)"] = bucket_counts_df["Price Range ($)"].apply(
+    bucket_counts_df.columns = ["Price Range Interval", "Count"]
+    bucket_counts_df["Is Current Bucket"] = (
+        bucket_counts_df["Price Range Interval"] == current_bucket
+    )
+    bucket_counts_df["Current Price"] = current_price
+    bucket_counts_df["Price Range ($)"] = bucket_counts_df["Price Range Interval"].apply(
         lambda x: f"${int(x.left / 1000)}K-${int(x.right / 1000)}K"
     )
+    bucket_counts_df = bucket_counts_df[
+        ["Price Range ($)", "Count", "Is Current Bucket", "Current Price"]
+    ]
 
     return bucket_counts_df
 
@@ -92,7 +96,7 @@ def calculate_roi_table(data, report_date, price_column="price_close"):
     price_column (str): The column name for Bitcoin price data.
 
     Returns:
-    pd.DataFrame: DataFrame containing ROI, Start Date, and BTC Price for each time frame.
+    pd.DataFrame: DataFrame containing Time Frame, ROI, Start Date, and BTC Price.
     """
     if price_column not in data.columns:
         raise ValueError(
@@ -142,7 +146,7 @@ def calculate_roi_table(data, report_date, price_column="price_close"):
             "BTC Price": btc_prices.values(),
         }
     )
-    return roi_table.set_index("Time Frame")
+    return roi_table
 
 
 def create_fundamentals_table(df, metrics_template):
@@ -240,9 +244,9 @@ def create_summary_table(report_data, report_date):
     market_cap = report_data.loc[report_date, "market_cap"]
     sats_per_dollar = SATS_PER_BTC / price_usd
 
-    bitcoin_supply = report_data.loc[report_date, "supply_btc"]
-    miner_revenue_30d = report_data.loc[report_date, "30_day_ma_coinbase_usd_sum"]
-    tx_volume_30d = report_data.loc[report_date, "30_day_ma_sent_usd"]
+    bitcoin_supply = report_data.loc[report_date, "supply"]
+    miner_revenue_30d = report_data.loc[report_date, "30_day_ma_coinbase_sum_24h_usd"]
+    tx_volume_30d = report_data.loc[report_date, "30_day_ma_transfer_volume_sum_24h_usd"]
     btc_dominance = report_data.loc[report_date, "bitcoin_dominance"]
 
     # Placeholder for additional derived metrics
@@ -268,17 +272,14 @@ def create_summary_table(report_data, report_date):
         },
     }
 
-    # Convert the dictionary into a structured DataFrame
-    weekly_summary_df = pd.DataFrame.from_dict(
-        {k: v for d in categorized_data.values() for k, v in d.items()},
-        orient="index",
-        columns=["Value"],
-    )
+    summary_rows = []
+    for category, metrics in categorized_data.items():
+        for metric, value in metrics.items():
+            summary_rows.append(
+                {"Metric": metric, "Value": value, "Category": category}
+            )
 
-    # Add a category column
-    weekly_summary_df["Category"] = [
-        category for category, metrics in categorized_data.items() for _ in metrics
-    ]
+    weekly_summary_df = pd.DataFrame(summary_rows)
 
     return weekly_summary_df
 

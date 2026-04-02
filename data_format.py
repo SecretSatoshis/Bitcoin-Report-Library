@@ -455,14 +455,28 @@ def get_miner_data(google_sheet_url: str = "") -> pd.DataFrame:
         return pd.DataFrame(columns=["time"])
 
 
-def _brk_fetch_csv(metrics, index="dateindex", from_=0, timeout=120, verbose=False):
+def _brk_error_code(response: requests.Response) -> Optional[str]:
+    """Extract a BRK error code from a non-2xx response when available."""
+    try:
+        payload = response.json()
+    except ValueError:
+        return None
+
+    error = payload.get("error")
+    if isinstance(error, dict):
+        return error.get("code")
+
+    return None
+
+
+def _brk_fetch_csv(metrics, index="dateindex", start=0, timeout=120, verbose=False):
     """
-    Fetch metrics from BRK bulk API as CSV.
+    Fetch series from BRK bulk API as CSV.
 
     Parameters:
-    metrics (list): List of metric names to fetch.
+    metrics (list): List of series names to fetch.
     index (str): Index type for the API request.
-    from_ (int): Starting timestamp for data retrieval.
+    start (int | str): Starting range bound for data retrieval.
     timeout (int): Request timeout in seconds.
     verbose (bool): If True, print debug information.
 
@@ -475,9 +489,9 @@ def _brk_fetch_csv(metrics, index="dateindex", from_=0, timeout=120, verbose=Fal
     r = requests.get(
         BRK_BULK_URL,
         params={
-            "metrics": ",".join(metrics),
+            "series": ",".join(metrics),
             "index": index,
-            "from": from_,
+            "start": start,
             "format": "csv",
         },
         timeout=timeout,
@@ -486,7 +500,15 @@ def _brk_fetch_csv(metrics, index="dateindex", from_=0, timeout=120, verbose=Fal
     if verbose:
         print(f"[BRK] status={r.status_code} bytes={len(r.text)}")
 
-    r.raise_for_status()
+    if not r.ok:
+        code = _brk_error_code(r)
+        message = f"[BRK] request failed status={r.status_code}"
+        if code:
+            message += f" code={code}"
+        if r.text:
+            snippet = r.text[:300].replace("\n", " ")
+            message += f" body={snippet}"
+        raise requests.HTTPError(message, response=r)
 
     rows = list(csv.reader(io.StringIO(r.text)))
     if not rows:
@@ -506,6 +528,41 @@ def _brk_fetch_csv(metrics, index="dateindex", from_=0, timeout=120, verbose=Fal
     return header, data_rows, r.text
 
 
+def _brk_fetch_csv_resilient(metrics, index="dateindex", start=0, timeout=120, verbose=False):
+    """
+    Fetch a BRK bulk CSV request, recursively splitting oversized or invalid chunks.
+
+    Returns:
+    list[tuple]: One or more (header, rows, raw_text) responses.
+    """
+    try:
+        return [_brk_fetch_csv(metrics, index=index, start=start, timeout=timeout, verbose=verbose)]
+    except requests.HTTPError as exc:
+        response = exc.response
+        code = _brk_error_code(response) if response is not None else None
+        non_ts = [metric for metric in metrics if metric != "timestamp"]
+
+        if code in {"weight_exceeded", "series_not_found", "metric_not_found"} and len(non_ts) > 1:
+            midpoint = len(non_ts) // 2
+            left = ["timestamp"] + non_ts[:midpoint]
+            right = ["timestamp"] + non_ts[midpoint:]
+
+            if verbose:
+                print(f"[BRK] splitting chunk ({code}): {non_ts}")
+
+            return (
+                _brk_fetch_csv_resilient(left, index=index, start=start, timeout=timeout, verbose=verbose)
+                + _brk_fetch_csv_resilient(right, index=index, start=start, timeout=timeout, verbose=verbose)
+            )
+
+        if code in {"series_not_found", "metric_not_found"} and len(non_ts) == 1:
+            if verbose:
+                print(f"[BRK] skipping missing series: {non_ts[0]}")
+            return []
+
+        raise
+
+
 def get_brk_onchain(
     start_date: str,
     index: str = "dateindex",
@@ -523,10 +580,15 @@ def get_brk_onchain(
     if "timestamp" not in metric_list:
         metric_list = ["timestamp"] + metric_list
 
-    # chunk to avoid 500s; timestamp always included so rows align
+    # Query from the requested start date instead of genesis to reduce BRK request weight.
+    query_start = start_date or from_
+
+    # Conservative initial chunk size; resilient fetcher will split again if needed.
+    chunk_size = 2
+    non_ts = [m for m in metric_list if m != "timestamp"]
     chunks = [
-        ["timestamp"] + [m for m in metric_list if m != "timestamp"][i : i + 6]
-        for i in range(0, len(metric_list) - 1, 6)
+        ["timestamp"] + non_ts[i : i + chunk_size]
+        for i in range(0, len(non_ts), chunk_size)
     ]
 
     data = {}
@@ -535,20 +597,22 @@ def get_brk_onchain(
     raw_parts = []  # keep each raw CSV response if you want to debug / concatenate
 
     for chunk in chunks:
-        header, rows, raw_csv = _brk_fetch_csv(
-            chunk, index=index, from_=from_, verbose=verbose
+        responses = _brk_fetch_csv_resilient(
+            chunk, index=index, start=query_start, verbose=verbose
         )
-        raw_parts.append(raw_csv.strip())
 
-        for r in rows:
-            ts = r[0]
-            d = data.setdefault(ts, {"timestamp": ts})
-            for k, v in zip(header[1:], r[1:]):
-                d[k] = v
+        for header, rows, raw_csv in responses:
+            raw_parts.append(raw_csv.strip())
 
-        for c in header[1:]:
-            if c not in ordered_cols:
-                ordered_cols.append(c)
+            for r in rows:
+                ts = r[0]
+                d = data.setdefault(ts, {"timestamp": ts})
+                for k, v in zip(header[1:], r[1:]):
+                    d[k] = v
+
+            for c in header[1:]:
+                if c not in ordered_cols:
+                    ordered_cols.append(c)
 
     if verbose:
         print(f"[BRK] merged rows: {len(data)}")
@@ -572,6 +636,11 @@ def get_brk_onchain(
 
     # load into pandas
     df = pd.read_csv(StringIO(merged_csv), low_memory=False)
+
+    # Keep downstream code stable even if BRK temporarily removes or renames a series.
+    for metric in non_ts:
+        if metric not in df.columns:
+            df[metric] = np.nan
 
     # timestamp -> time
     df["time"] = pd.to_datetime(df["timestamp"].astype(float).astype(int), unit="s")
@@ -683,15 +752,15 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
     data (pd.DataFrame): DataFrame with DatetimeIndex containing BRK API on-chain metrics.
                          Must include columns listed above for full metric calculation.
     """
-    data["RevAllTimeUSD"] = data["coinbase_usd_sum"].fillna(0).cumsum()
-    data["NVTAdj"] = data["market_cap"] / data["sent_usd"]
-    data["NVTAdj90"] = data["market_cap"] / data["sent_usd"].rolling(90).mean()
+    data["RevAllTimeUSD"] = data["coinbase_sum_24h_usd"].fillna(0).cumsum()
+    data["NVTAdj"] = data["market_cap"] / data["transfer_volume_sum_24h_usd"]
+    data["NVTAdj90"] = data["market_cap"] / data["transfer_volume_sum_24h_usd"].rolling(90).mean()
     data["SplyActPct1yr"] = (
-        100 - data["utxos_over_1y_old_supply_rel_to_circulating_supply"]
+        100 - data["utxos_over_1y_old_supply_to_circulating"]
     )
-    data["TxCnt"] = data[["tx_v1", "tx_v2", "tx_v3"]].sum(axis=1)
-    data["TxTfrValMeanUSD"] = data["sent_usd"]
-    data["TxTfrValMedUSD"] = data["sent_usd"]
+    # BRK now provides daily transaction count directly as a windowed series.
+    data["TxTfrValMeanUSD"] = data["transfer_volume_sum_24h_usd"]
+    data["TxTfrValMedUSD"] = data["transfer_volume_sum_24h_usd"]
 
     # Calculate the number of satoshis per dollar
     data["sat_per_dollar"] = 1 / (data["price_close"] / SATS_PER_BTC)
@@ -701,20 +770,20 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
     data["CapMVRVCur"] = data["mvrv_ratio"]
 
     # Calculate the realized price (the value at which each coin was last moved)
-    data["realised_price"] = data["realized_cap"] / data["supply_btc"]
+    data["realised_price"] = data["realized_cap"] / data["supply"]
 
     # Calculate the Net Unrealized Profit/Loss (NUPL)
     data["nupl"] = (data["market_cap"] - data["realized_cap"]) / data["market_cap"]
 
     # Calculate NVT price based on adjusted NVT ratio, with a rolling median to smooth data
     data["nvt_price"] = (
-        data["NVTAdj"].rolling(window=365 * 2).median() * data["sent_usd"]
-    ) / data["supply_btc"]
+        data["NVTAdj"].rolling(window=365 * 2).median() * data["transfer_volume_sum_24h_usd"]
+    ) / data["supply"]
 
     # Calculate adjusted NVT price using a 365-day rolling median for smoothing
     data["nvt_price_adj"] = (
-        data["NVTAdj90"].rolling(window=365).median() * data["sent_usd"]
-    ) / data["supply_btc"]
+        data["NVTAdj90"].rolling(window=365).median() * data["transfer_volume_sum_24h_usd"]
+    ) / data["supply"]
 
     # Calculate NVT price multiple (current price compared to NVT price)
     data["nvt_price_multiple"] = data["price_close"] / data["nvt_price"]
@@ -734,53 +803,56 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
 
     # Calculate Thermocap multiples and associated pricing metrics
     data["thermocap_multiple"] = data["market_cap"] / data["RevAllTimeUSD"]
-    data["thermocap_price"] = data["RevAllTimeUSD"] / data["supply_btc"]
-    data["thermocap_price_multiple_4"] = (4 * data["RevAllTimeUSD"]) / data["supply_btc"]
-    data["thermocap_price_multiple_8"] = (8 * data["RevAllTimeUSD"]) / data["supply_btc"]
-    data["thermocap_price_multiple_16"] = (16 * data["RevAllTimeUSD"]) / data["supply_btc"]
-    data["thermocap_price_multiple_32"] = (32 * data["RevAllTimeUSD"]) / data["supply_btc"]
+    data["thermocap_price"] = data["RevAllTimeUSD"] / data["supply"]
+    data["thermocap_price_multiple_4"] = (4 * data["RevAllTimeUSD"]) / data["supply"]
+    data["thermocap_price_multiple_8"] = (8 * data["RevAllTimeUSD"]) / data["supply"]
+    data["thermocap_price_multiple_16"] = (16 * data["RevAllTimeUSD"]) / data["supply"]
+    data["thermocap_price_multiple_32"] = (32 * data["RevAllTimeUSD"]) / data["supply"]
 
-    data["miner_revenue_1_Year"] = data["coinbase_usd_sum"].rolling(window=365).sum()
-    data["miner_revenue_4_Year"] = data["coinbase_usd_sum"].rolling(window=4 * 365).sum()
+    data["miner_revenue_1_Year"] = data["coinbase_sum_24h_usd"].rolling(window=365).sum()
+    data["miner_revenue_4_Year"] = data["coinbase_sum_24h_usd"].rolling(window=4 * 365).sum()
 
     data["ss_multiple_1"] = data["market_cap"] / data["miner_revenue_1_Year"]
-    data["ss_price_1"] = data["miner_revenue_1_Year"] / data["supply_btc"]
+    data["ss_price_1"] = data["miner_revenue_1_Year"] / data["supply"]
 
     data["ss_multiple_4"] = data["market_cap"] / data["miner_revenue_4_Year"]
-    data["ss_price_4"] = data["miner_revenue_4_Year"] / data["supply_btc"]
+    data["ss_price_4"] = data["miner_revenue_4_Year"] / data["supply"]
 
     # Calculate Realized Cap multiples for different factors (2x, 3x, 5x, 7x)
-    data["realizedcap_multiple_2"] = (2 * data["realized_cap"]) / data["supply_btc"]
-    data["realizedcap_multiple_3"] = (3 * data["realized_cap"]) / data["supply_btc"]
-    data["realizedcap_multiple_5"] = (5 * data["realized_cap"]) / data["supply_btc"]
-    data["realizedcap_multiple_7"] = (7 * data["realized_cap"]) / data["supply_btc"]
+    data["realizedcap_multiple_2"] = (2 * data["realized_cap"]) / data["supply"]
+    data["realizedcap_multiple_3"] = (3 * data["realized_cap"]) / data["supply"]
+    data["realizedcap_multiple_5"] = (5 * data["realized_cap"]) / data["supply"]
+    data["realizedcap_multiple_7"] = (7 * data["realized_cap"]) / data["supply"]
 
     # Calculate the percentage of supply held for more than 1 year
     data["supply_pct_1_year_plus"] = 100 - data["SplyActPct1yr"]
-    data["pct_supply_issued"] = data["supply_btc"] / 21000000
-    data["pct_fee_of_reward"] = (data["fee_btc_sum"] / data["coinbase_btc_sum"]) * 100
+    data["pct_supply_issued"] = data["supply"] / 21000000
+    data["pct_fee_of_reward"] = (data["fees_sum_24h"] / data["coinbase_sum_24h"]) * 100
 
     # Calculate illiquid and liquid supply based on the 1+ year held supply
-    data["illiquid_supply"] = (data["supply_pct_1_year_plus"] / 100) * data["supply_btc"]
-    data["liquid_supply"] = data["supply_btc"] - data["illiquid_supply"]
+    data["illiquid_supply"] = (data["supply_pct_1_year_plus"] / 100) * data["supply"]
+    data["liquid_supply"] = data["supply"] - data["illiquid_supply"]
 
-    data["tx_volume_yearly"] = data["sent_usd"].rolling(window=365).sum()
-    data["qtm_price"] = data["tx_volume_yearly"] / (data["supply_btc"] * data["usd_velocity"])
+    data["tx_volume_yearly"] = data["transfer_volume_sum_24h_usd"].rolling(window=365).sum()
+    data["qtm_price"] = data["tx_volume_yearly"] / (data["supply"] * data["velocity_usd"])
     data["qtm_multiple"] = data["price_close"] / data["qtm_price"]
     data["qtm_price_multiple_2"] = data["qtm_price"] * 2
     data["qtm_price_multiple_5"] = data["qtm_price"] * 5
     data["qtm_price_multiple_10"] = data["qtm_price"] * 10
 
     # Calculate daily active addresses from per-block averages
-    data["daily_active_addresses_sending"] = data["address_activity_sending_average"] * data["block_count"]
-    data["daily_active_addresses_receiving"] = data["address_activity_receiving_average"] * data["block_count"]
+    # Approximate daily active addresses using ~144 blocks/day (Bitcoin's 10-min target).
+    # The per-block averages from BRK × expected daily block count gives a reasonable estimate.
+    EXPECTED_DAILY_BLOCKS = 144
+    data["daily_active_addresses_sending"] = data["addr_activity_sending_average_24h"] * EXPECTED_DAILY_BLOCKS
+    data["daily_active_addresses_receiving"] = data["addr_activity_receiving_average_24h"] * EXPECTED_DAILY_BLOCKS
 
     # =========================================================================
     # Reserve Risk Pipeline (calculated from raw BDD, Price, Supply)
     # =========================================================================
 
     # Step 1: Adjusted BDD = BDD / Circulating Supply
-    data["adjusted_bdd"] = data["coindays_destroyed"] / data["supply_btc"]
+    data["adjusted_bdd"] = data["coindays_destroyed_sum_24h"] / data["supply"]
 
     # Step 2: Mean Adjusted BDD (binary indicator: above/below average)
     data["adjusted_bdd_mean"] = data["adjusted_bdd"].expanding().mean()
@@ -807,8 +879,8 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
     data["days_since_start"] = range(1, len(data) + 1)
     data["average_cap"] = data["cumulative_market_cap"] / data["days_since_start"]
     data["delta_cap"] = data["realized_cap"] - data["average_cap"]
-    data["average_cap_price"] = data["average_cap"] / data["supply_btc"]
-    data["delta_cap_price"] = data["delta_cap"] / data["supply_btc"]
+    data["average_cap_price"] = data["average_cap"] / data["supply"]
+    data["delta_cap_price"] = data["delta_cap"] / data["supply"]
 
     # =========================================================================
     # Bitcoin Volatility Metrics
@@ -824,8 +896,8 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
 
     data["supply_in_profit_btc"] = data["supply_in_profit"] / SATS_PER_BTC
     data["supply_in_loss_btc"] = data["supply_in_loss"] / SATS_PER_BTC
-    data["supply_in_profit_pct"] = (data["supply_in_profit_btc"] / data["supply_btc"]) * 100
-    data["supply_in_loss_pct"] = (data["supply_in_loss_btc"] / data["supply_btc"]) * 100
+    data["supply_in_profit_pct"] = (data["supply_in_profit_btc"] / data["supply"]) * 100
+    data["supply_in_loss_pct"] = (data["supply_in_loss_btc"] / data["supply"]) * 100
 
     print("Custom Metrics Created")
     return data
@@ -843,8 +915,8 @@ def calculate_moving_averages(data: pd.DataFrame, metrics: list) -> pd.DataFrame
     data (pd.DataFrame): DataFrame with DatetimeIndex containing the metrics to smooth.
                          Must include all column names specified in the metrics list.
     metrics (list): List of column names to calculate moving averages for. Typically includes:
-                    hash_rate, daily_active_addresses_sending, TxCnt, sent_usd, fee_usd_average,
-                    subsidy_btc_sum, coinbase_usd_sum, nvt_price, nvt_price_adj.
+                    hash_rate, daily_active_addresses_sending, tx_count_sum_24h, transfer_volume_sum_24h_usd, fees_average_24h_usd,
+                    subsidy_sum_24h, coinbase_sum_24h_usd, nvt_price, nvt_price_adj.
                     Defined in data_definitions.moving_avg_metrics.
     """
     moving_averages = {
@@ -970,13 +1042,13 @@ def calculate_btc_price_to_surpass_metal_categories(
     Returns:
     pd.DataFrame: DataFrame with added columns for BTC prices needed to surpass metal categories.
     """
-    # Ensure 'supply_btc' is forward filled to avoid NaN values
-    data["supply_btc"] = data["supply_btc"].ffill()
+    # Ensure 'supply' is forward filled to avoid NaN values
+    data["supply"] = data["supply"].ffill()
 
-    # Early return if 'supply_btc' for the latest row is zero or NaN to avoid division by zero
-    if data["supply_btc"].iloc[-1] == 0 or pd.isna(data["supply_btc"].iloc[-1]):
+    # Early return if 'supply' for the latest row is zero or NaN to avoid division by zero
+    if data["supply"].iloc[-1] == 0 or pd.isna(data["supply"].iloc[-1]):
         print(
-            "Warning: 'supply_btc' is zero or NaN for the latest row. Skipping calculations."
+            "Warning: 'supply' is zero or NaN for the latest row. Skipping calculations."
         )
         return data
 
@@ -985,7 +1057,7 @@ def calculate_btc_price_to_surpass_metal_categories(
     # Calculating BTC prices required to match or surpass gold market cap
     gold_marketcap_billion_usd = data["gold_marketcap_billion_usd"].iloc[-1]
     new_columns["gold_marketcap_btc_price"] = (
-        gold_marketcap_billion_usd / data["supply_btc"]
+        gold_marketcap_billion_usd / data["supply"]
     )
 
     # Iterating through gold supply breakdown to calculate BTC prices for specific categories
@@ -994,12 +1066,12 @@ def calculate_btc_price_to_surpass_metal_categories(
         percentage_of_market = row["Percentage Of Market"] / 100.0
         new_columns[f"gold_{category}_marketcap_btc_price"] = (
             gold_marketcap_billion_usd * percentage_of_market
-        ) / data["supply_btc"]
+        ) / data["supply"]
 
     # Silver market cap calculations
     silver_marketcap_billion_usd = data["silver_marketcap_billion_usd"].iloc[-1]
     new_columns["silver_marketcap_btc_price"] = (
-        silver_marketcap_billion_usd / data["supply_btc"]
+        silver_marketcap_billion_usd / data["supply"]
     )
 
     # Convert the dictionary to a DataFrame and concatenate it with the original DataFrame
@@ -1032,7 +1104,7 @@ def calculate_btc_price_to_surpass_fiat(
         fiat_supply_usd = fiat_supply_usd_trillion * 1e12
 
         # Compute the price of Bitcoin needed to surpass this country's fiat supply
-        fiat_marketcap[f"{country}_btc_price"] = fiat_supply_usd / data["supply_btc"]
+        fiat_marketcap[f"{country}_btc_price"] = fiat_supply_usd / data["supply"]
         fiat_marketcap[f"{country}_cap"] = fiat_supply_usd
 
     data = pd.concat([data, pd.DataFrame(fiat_marketcap)], axis=1)
@@ -1053,7 +1125,7 @@ def calculate_btc_price_for_stock_mkt_caps(
     pd.DataFrame: DataFrame with added columns for BTC prices needed to surpass stock market caps.
     """
     stock_marketcap_prices = {
-        f"{ticker}_mc_btc_price": data[f"{ticker}_MarketCap"] / data["supply_btc"]
+        f"{ticker}_mc_btc_price": data[f"{ticker}_MarketCap"] / data["supply"]
         for ticker in stock_tickers
     }
 
@@ -1081,7 +1153,7 @@ def calculate_stock_to_flow_metrics(data):
 
     Parameters:
     data (pd.DataFrame): DataFrame with DatetimeIndex containing:
-                         - supply_btc: Total Bitcoin supply (from BRK API)
+                         - supply: Total Bitcoin supply (from BRK API)
                          - price_close: Actual Bitcoin price (for multiple calculation)
     """
     # Initialize a dictionary to hold new columns
@@ -1093,7 +1165,7 @@ def calculate_stock_to_flow_metrics(data):
     power = 3.3
 
     # Calculate S2F using yearly supply difference to align with PlanB's original model
-    new_columns["SF"] = data["supply_btc"] / data["supply_btc"].diff(periods=365).fillna(0)
+    new_columns["SF"] = data["supply"] / data["supply"].diff(periods=365).fillna(0)
 
     # Applying the PlanB linear regression formula
     new_columns["SF_Predicted_Market_Value"] = (
@@ -1102,7 +1174,7 @@ def calculate_stock_to_flow_metrics(data):
 
     # Calculating the predicted market price using supply
     new_columns["SF_Predicted_Price"] = (
-        new_columns["SF_Predicted_Market_Value"] / data["supply_btc"]
+        new_columns["SF_Predicted_Market_Value"] / data["supply"]
     )
 
     # Apply a 365-day moving average to the predicted S2F price to smooth the curve
@@ -1305,7 +1377,7 @@ def electric_price_models(data):
         - hash_rate: Network hash rate in H/s
         - difficulty: Current mining difficulty
         - inflation_rate: Annual Bitcoin supply inflation rate (%)
-        - subsidy_btc_sum: Daily BTC issuance from block rewards
+        - subsidy_sum_24h: Daily BTC issuance from block rewards
         - block_reward: Current block reward in BTC (6.25 → 3.125 after halving)
         - lagged_efficiency_j_gh: Lagged miner efficiency in J/GH (prevents lookahead bias)
         - cm_efficiency_j_gh: CoinMetrics efficiency baseline in J/GH
@@ -1350,7 +1422,7 @@ def electric_price_models(data):
     total_electricity_cost = (
         data["daily_electricity_consumption_kwh"] * ELECTRICITY_COST * PUE
     )
-    bitcoin_electricity_price = total_electricity_cost / data["subsidy_btc_sum"]
+    bitcoin_electricity_price = total_electricity_cost / data["subsidy_sum_24h"]
     data["Bitcoin_Production_Cost"] = (
         bitcoin_electricity_price / ELEC_TO_TOTAL_COST_RATIO
     )
@@ -1431,10 +1503,9 @@ def calculate_rolling_cagr_for_all_columns(data, years):
 
     # Calculate CAGR using the formula: ((End Value / Start Value)^(1/years)) - 1
     # Division by zero or negative values will produce NaN/inf, which is mathematically correct
-    with pd.option_context("mode.use_inf_as_na", True):
-        cagr = ((data / start_value) ** (1 / years) - 1) * 100  # Convert to percentage
-        # Replace inf values with NaN for cleaner output
-        cagr = cagr.replace([np.inf, -np.inf], np.nan)
+    cagr = ((data / start_value) ** (1 / years) - 1) * 100  # Convert to percentage
+    # Replace inf values with NaN for cleaner output
+    cagr = cagr.replace([np.inf, -np.inf], np.nan)
 
     cagr.columns = [f"{col}_{years}_Year_CAGR" for col in cagr.columns]
 
