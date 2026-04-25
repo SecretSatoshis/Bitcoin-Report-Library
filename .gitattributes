@@ -1,0 +1,5 @@
+# Generated output files — always take the incoming version on conflict
+# CI is the sole producer of these files; local runs should not commit them.
+csv/*.csv    merge=ours
+csv/*.gz     merge=ours binary
+reports/*.md merge=ours
