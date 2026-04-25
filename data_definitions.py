@@ -159,6 +159,27 @@ gold_supply_breakdown = pd.DataFrame(
 # REPORT CONFIGURATION
 # =============================================================================
 
+# Columns for which CAGR is actually needed downstream.
+# Chart Library uses the _close price CAGRs; report_tables uses the valuation model CAGRs.
+# Limiting to these 13 columns instead of all 400+ cuts CAGR compute time by ~97%.
+cagr_columns = [
+    # Close prices — used in chart CAGR comparison and cagr_data.csv export
+    "price_close",
+    "SPY_close",
+    "QQQ_close",
+    "XLK_close",
+    "XLF_close",
+    "GLD_close",
+    "AGG_close",
+    "DX-Y.NYB_close",
+    "WGMI_close",
+    # Valuation models — used in EOY price model table (report_tables.create_eoy_model_table)
+    "realized_price",
+    "thermocap_price",
+    "200_day_ma_price_close",
+    "Lagged_Energy_Value",
+]
+
 # Metrics for which to calculate 7/30/365-day moving averages
 moving_avg_metrics = [
     "hash_rate",
@@ -321,7 +342,7 @@ metrics_template = {
     "Network Valuation": {
         "Market Cap": ("market_cap", "currency"),
         "Bitcoin Price": ("price_close", "currency"),
-        "Realised Price": ("realised_price", "currency"),
+        "Realized Price": ("realized_price", "currency"),
         "Thermocap Price": ("thermocap_price", "currency"),
     },
 }
@@ -362,9 +383,9 @@ BRK_METRICS = [
     "coinbase_sum_24h",
     "fees_average_24h_usd",
     "fees_average_24h",
-    "fee_rate_median",
+    "effective_fee_rate_median",
     "fee_dominance",
-    "utxos_over_1y_old_supply_to_circulating",
+    "utxos_over_1y_old_supply",
     "tx_count_sum_24h",
     "velocity_btc",
     "velocity_usd",
@@ -401,9 +422,8 @@ BRK_METRICS = [
     "addrs_over_1k_btc_addr_count",
     "addrs_over_10k_btc_addr_count",
     "addrs_over_100k_btc_addr_count",
-    # Address activity metrics
-    "addr_activity_sending_average_24h",
-    "addr_activity_receiving_average_24h",
+    # Address activity metrics (24h rolling average of unique active addresses)
+    "active_addrs_average_24h",
     # Legacy sats-based address counts (used by report tables)
     "addrs_under_1btc_addr_count",
     "addrs_under_10btc_addr_count",

@@ -31,6 +31,7 @@ The Weekly Bitcoin Recap is a newsletter-style report for readers who want a str
 
 | Section | Input Type | Local Source | Published Source |
 |---|---|---|---|
+| News Section | Web / User-provided text | User-provided Bitcoin news items, if supplied | `https://x.com/SecretSatoshis`, `https://bitcoinmagazine.com/articles`, `https://www.theblock.co/latest-crypto-news`, `https://www.nobsbitcoin.com/` |
 | Weekly Bitcoin Recap Summary | CSV | `csv/summary_table.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/summary_table.csv` |
 | Historical Performance | CSV | `csv/performance_table.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/performance_table.csv` |
 | Monthly Heat Map | CSV | `csv/monthly_heatmap_data.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/monthly_heatmap_data.csv` |
@@ -38,10 +39,10 @@ The Weekly Bitcoin Recap is a newsletter-style report for readers who want a str
 | Weekly BTC/USD OHLC Analysis | CSV | `csv/ohlc_data.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/ohlc_data.csv` |
 | Trading Range Analysis | CSV | `csv/1k_bucket_table.csv`, `csv/5k_bucket_table.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/1k_bucket_table.csv`, `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/5k_bucket_table.csv` |
 | ROI Profile | CSV | `csv/roi_table.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/roi_table.csv` |
-| Difficulty / Hash Rate / Network Security Snapshot | CSV | `csv/summary_table.csv`, `csv/master_metrics_data.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/summary_table.csv`, `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/master_metrics_data.csv` |
+| Difficulty / Hash Rate / Network Security Snapshot | CSV | `csv/summary_table.csv`, `csv/master_metrics_data.csv.gz` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/summary_table.csv`, `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/master_metrics_data.csv.gz` |
 | YTD Return Comparison | CSV | `csv/ytd_return_comparison.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/ytd_return_comparison.csv` |
-| Model Valuation | CSV | `csv/eoy_model_data.csv`, `csv/master_metrics_data.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/eoy_model_data.csv`, `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/master_metrics_data.csv` |
-| On-Chain Valuation | CSV | `csv/master_metrics_data.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/master_metrics_data.csv` |
+| Model Valuation | CSV | `csv/eoy_model_data.csv`, `csv/master_metrics_data.csv.gz` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/eoy_model_data.csv`, `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/master_metrics_data.csv.gz` |
+| On-Chain Valuation | CSV | `csv/master_metrics_data.csv.gz` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/master_metrics_data.csv.gz` |
 | Relative Valuation | CSV | `csv/relative_value_comparison.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/relative_value_comparison.csv` |
 
 ## Prompt Specs
@@ -49,22 +50,37 @@ The Weekly Bitcoin Recap is a newsletter-style report for readers who want a str
 ### 1. News Section
 
 ```text
-Generate the news section of the Weekly Bitcoin Recap using the user-provided Bitcoin news items.
+Generate the News Section using Bitcoin news from the 7-day report window.
 
-Write in a formal, institutional tone for investors and portfolio managers.
+Source priority:
+1. Secret Satoshis X feed: https://x.com/SecretSatoshis
+2. Bitcoin Magazine articles: https://bitcoinmagazine.com/articles
+3. The Block latest news: https://www.theblock.co/latest-crypto-news
+4. No BS Bitcoin: https://www.nobsbitcoin.com/
 
 Rules:
 - Stay Bitcoin-focused.
-- Do not invent facts beyond the provided news items.
-- Format each news item as a plain line with the source attribution in parentheses.
-- After the list, write a short "News Impact" paragraph that synthesizes the combined market relevance of the stories.
-- Focus on broad implications for Bitcoin adoption, market positioning, investor sentiment, and near-term narrative.
+- Use only stories published or posted within the report week.
+- If the user provides Bitcoin news items, use them as candidate inputs alongside the source list.
+- Check the Secret Satoshis X feed first. If X cannot be accessed reliably, continue with the other listed sources.
+- Prioritize Bitcoin-specific stories.
+- Include broader crypto, macro, regulatory, or market-structure stories only if they materially affect Bitcoin or the broader digital asset market.
+- Select one Top News Story Of The Week.
+- Then select 3 to 5 additional top news events, depending on story quality and relevance.
+- Do not pad the section with weak stories. If fewer than 5 additional stories are important, use 3 or 4.
+- Do not invent missing facts, dates, sources, or URLs.
+- Prefer source diversity when possible, but impact and relevance matter more than equal representation across sources.
+- After the story list, write a short "News Impact" paragraph that synthesizes the combined market relevance of the selected stories.
+- Focus on broad implications for Bitcoin adoption, market positioning, investor sentiment, and current market narrative.
 
 Return only:
 
 News Stories:
-[Story 1]. (Reported By: [Source])
-[Story 2]. (Reported By: [Source])
+Top News Story Of The Week:
+[Headline]. [1-2 sentence explanation of why it matters for Bitcoin.] (Reported By: [Source], [Date])
+
+Other Top News Events:
+[Headline]. [One concise sentence on market, adoption, policy, or infrastructure relevance.] (Reported By: [Source], [Date])
 ...
 
 News Impact:
@@ -108,6 +124,9 @@ Rules:
 - Use the current combined performance table.
 - Compare Bitcoin with the asset rows present in the file.
 - Focus on 7 Day Return, MTD Return, YTD Return, 90 Day Return, and 90 Day BTC Correlation where helpful.
+- Interpret all return columns as percentage-point values. For example, `-4.21` means `-4.21%`, not `-0.0421%`.
+- Use the `Category` column when present to group assets into Equity Market Indexes, Sectors, Macro Asset Classes, and Bitcoin Industry Performance.
+- If `Category` is absent, infer those groups from the asset names and keep the grouping explicit in the section.
 - Do not refer to assets or categories that are not in the current table.
 - If Bitcoin is not the top performer, identify the top performer from the actual table.
 
@@ -128,6 +147,7 @@ Write in a formal tone suitable for professional investors.
 
 Rules:
 - This is a monthly heat map, not a weekly heat map.
+- Interpret monthly heat map values as decimal returns. For example, `0.05` means `5.0%`, not `0.05%`; `-0.03` means `-3.0%`.
 - Use the most recent month-to-date value in the current year row.
 - Compare the current month against the historical average and median rows where relevant.
 - Explain the current month in context without overclaiming predictive power.
@@ -218,6 +238,7 @@ Generate the ROI Profile section using `roi_table.csv`.
 
 Rules:
 - Use the `Time Frame` column directly.
+- Interpret the ROI field as percentage points. Prefer `ROI (%)` when present; if the source still uses the legacy `ROI` column name, treat it the same way.
 - Group horizons explicitly as `short-term = 1 day, 3 day, 7 day, 30 day`, `medium-term = 90 day and 1 Year`, and `long-term = 2 Year, 4 Year, 5 Year, 10 Year`.
 - Highlight which entry periods are positive or negative.
 - Explain what the spread of outcomes says about Bitcoin's short-term volatility and long-term return profile.
@@ -237,11 +258,11 @@ It should include:
 ### 9. Difficulty / Hash Rate / Network Security Snapshot
 
 ```text
-Generate the Difficulty / Hash Rate / Network Security Snapshot using `summary_table.csv` and `master_metrics_data.csv`.
+Generate the Difficulty / Hash Rate / Network Security Snapshot using `summary_table.csv` and `master_metrics_data.csv.gz`.
 
 Rules:
 - Use the summary table as a labeled market-context table with `Metric`, `Value`, and `Category` columns.
-- Use `master_metrics_data.csv` for the latest difficulty, difficulty_adjustment, hash_rate, miner-relevant context, and any recent trend visible in the latest rows.
+- Use `master_metrics_data.csv.gz` for the latest difficulty, difficulty_adjustment, hash_rate, miner-relevant context, and any recent trend visible in the latest rows.
 - Frame the section as a current network-security snapshot, not as a dedicated difficulty-period report.
 - Connect network conditions to market structure and miner incentives where the available data supports that framing.
 - Do not imply interval-over-interval precision unless the source data directly supports it.
@@ -281,10 +302,12 @@ It should include:
 ### 11. Model Valuation
 
 ```text
-Generate the Model Valuation section using `eoy_model_data.csv` and `master_metrics_data.csv`.
+Generate the Model Valuation section using `eoy_model_data.csv` and `master_metrics_data.csv.gz`.
 
 Rules:
-- Use the latest available values for `price_close`, `realised_price`, `thermocap_price`, `200_day_ma_price_close`, and `Lagged_Energy_Value` when helpful.
+- Use the latest available values for `price_close`, `realized_price`, `thermocap_price`, `200_day_ma_price_close`, and `Lagged_Energy_Value` when helpful.
+- Prefer `eoy_model_data.csv` for model valuation fields. Use `master_metrics_data.csv.gz` only as fallback or supporting context when a needed field is absent from the model file.
+- Use `realized_price` as the canonical realized-price field name in new outputs and prompts.
 - Use model multiples such as `200_day_multiple`, `thermocap_multiple`, and `mvrv_ratio` if they support the valuation framing.
 - Focus on current model context rather than on any missing legacy valuation table.
 - Explain what each model contributes without pretending any single model is definitive.
@@ -303,10 +326,10 @@ It should include:
 ### 12. On-Chain Valuation
 
 ```text
-Generate the On-Chain Valuation section using `master_metrics_data.csv`.
+Generate the On-Chain Valuation section using `master_metrics_data.csv.gz`.
 
 Rules:
-- Use the latest available values for on-chain valuation fields such as `nvt_price`, `nvt_price_adj`, `realised_price`, `thermocap_price`, and relevant multiples.
+- Use the latest available values for on-chain valuation fields such as `nvt_price`, `nvt_price_adj`, `realized_price`, `thermocap_price`, and relevant multiples.
 - Explain what each metric measures before interpreting it.
 - Keep the analysis Bitcoin-only and data-grounded.
 - Do not refer to a missing standalone on-chain valuation CSV.
@@ -329,7 +352,7 @@ Generate the Relative Valuation section using `relative_value_comparison.csv`.
 
 Rules:
 - Use the assets listed in the current file.
-- Re-rank or restate assets only if required by the current data ordering.
+- Sort the table by parsed `Market Cap (USD)` before analyzing ranking. Use descending order for the compact parity table and for larger-target analysis; use the sorted order to identify assets Bitcoin has already surpassed or is approaching.
 - Explain which assets Bitcoin has already surpassed, which ones it is approaching, and which larger targets remain aspirational.
 - Use the current "Market Cap BTC Price" and "BTC % Move to Marketcap BTC Price" fields to frame parity analysis.
 - Do not introduce assets that are not in the CSV.

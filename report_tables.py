@@ -96,7 +96,7 @@ def calculate_roi_table(data, report_date, price_column="price_close"):
     price_column (str): The column name for Bitcoin price data.
 
     Returns:
-    pd.DataFrame: DataFrame containing Time Frame, ROI, Start Date, and BTC Price.
+    pd.DataFrame: DataFrame containing Time Frame, ROI (%), Start Date, and BTC Price.
     """
     if price_column not in data.columns:
         raise ValueError(
@@ -141,7 +141,7 @@ def calculate_roi_table(data, report_date, price_column="price_close"):
     roi_table = pd.DataFrame(
         {
             "Time Frame": periods.keys(),
-            "ROI": roi_data.values(),
+            "ROI (%)": roi_data.values(),
             "Start Date": start_dates.values(),
             "BTC Price": btc_prices.values(),
         }
@@ -329,7 +329,8 @@ def _build_performance_table(
     report_data: pd.DataFrame,
     report_date,
     correlation_results: dict,
-    asset_configs: list
+    asset_configs: list,
+    category: str,
 ) -> pd.DataFrame:
     """
     Generic performance table builder for any asset category.
@@ -353,6 +354,7 @@ def _build_performance_table(
         corr_col = ticker if ticker == "price_close" else f"{ticker}_close"
 
         metrics = {
+            "Category": category,
             "Asset": config["label"],
             "Price": report_data.loc[report_date, price_col],
             "7 Day Return": report_data.loc[report_date, f"{price_col}_7_change"],
@@ -387,7 +389,13 @@ def create_equity_performance_table(report_data, report_date, correlation_result
         {"name": "VTI", "label": "US Total Stock Market ETF - [VTI]", "ticker": "VTI"},
         {"name": "VXUS", "label": "International Stock ETF - [VXUS]", "ticker": "VXUS"},
     ]
-    return _build_performance_table(report_data, report_date, correlation_results, asset_configs)
+    return _build_performance_table(
+        report_data,
+        report_date,
+        correlation_results,
+        asset_configs,
+        "Equity Market Indexes",
+    )
 
 
 def create_sector_performance_table(report_data, report_date, correlation_results):
@@ -409,7 +417,13 @@ def create_sector_performance_table(report_data, report_date, correlation_result
         {"name": "XLE", "label": "Energy Sector ETF - [XLE]", "ticker": "XLE"},
         {"name": "XLRE", "label": "Real Estate Sector ETF - [XLRE]", "ticker": "XLRE"},
     ]
-    return _build_performance_table(report_data, report_date, correlation_results, asset_configs)
+    return _build_performance_table(
+        report_data,
+        report_date,
+        correlation_results,
+        asset_configs,
+        "Sectors",
+    )
 
 
 def create_macro_performance_table(
@@ -433,7 +447,13 @@ def create_macro_performance_table(
         {"name": "AGG", "label": "Aggregate Bond ETF - [AGG]", "ticker": "AGG"},
         {"name": "BCOM", "label": "Bloomberg Commodity Index - [BCOM]", "ticker": "^BCOM"},
     ]
-    return _build_performance_table(report_data, report_date, correlation_results, asset_configs)
+    return _build_performance_table(
+        report_data,
+        report_date,
+        correlation_results,
+        asset_configs,
+        "Macro Asset Classes",
+    )
 
 
 def create_bitcoin_performance_table(report_data, report_date, correlation_results):
@@ -455,7 +475,13 @@ def create_bitcoin_performance_table(report_data, report_date, correlation_resul
         {"name": "COIN", "label": "Coinbase - [COIN]", "ticker": "COIN"},
         {"name": "WGMI", "label": "Bitcoin Miners ETF - [WGMI]", "ticker": "WGMI"},
     ]
-    return _build_performance_table(report_data, report_date, correlation_results, asset_configs)
+    return _build_performance_table(
+        report_data,
+        report_date,
+        correlation_results,
+        asset_configs,
+        "Bitcoin Industry Performance",
+    )
 
 
 def create_full_performance_table(
@@ -656,7 +682,7 @@ def create_eoy_model_table(report_data, cagr_results):
 
     Parameters:
     report_data (pd.DataFrame): DataFrame with DatetimeIndex containing Bitcoin valuation metrics:
-                                price_close, realised_price, thermocap_price, 200_day_ma_price_close,
+                                price_close, realized_price, thermocap_price, 200_day_ma_price_close,
                                 Lagged_Energy_Value, mvrv_ratio, thermocap_multiple, 200_day_multiple,
                                 Energy_Value_Multiple.
     cagr_results (pd.DataFrame): DataFrame with DatetimeIndex containing 4-year CAGR calculations for
@@ -664,7 +690,7 @@ def create_eoy_model_table(report_data, cagr_results):
 
     Returns:
     pd.DataFrame: Combined DataFrame with columns:
-        - Current values: price_close, realised_price, thermocap_price, 200_day_ma_price_close,
+        - Current values: price_close, realized_price, thermocap_price, 200_day_ma_price_close,
                          Lagged_Energy_Value
         - Multiples: mvrv_ratio, thermocap_multiple, 200_day_multiple, Energy_Value_Multiple
         - Growth rates: *_4_Year_CAGR for each valuation model
@@ -673,7 +699,7 @@ def create_eoy_model_table(report_data, cagr_results):
     # Define the columns to extract from report_data
     columns_of_interest = [
         "price_close",
-        "realised_price",
+        "realized_price",
         "thermocap_price",
         "200_day_ma_price_close",
         "Lagged_Energy_Value",
@@ -686,7 +712,7 @@ def create_eoy_model_table(report_data, cagr_results):
     # Define the CAGR columns to extract from cagr_results
     cagr_columns = [
         "price_close_4_Year_CAGR",
-        "realised_price_4_Year_CAGR",
+        "realized_price_4_Year_CAGR",
         "thermocap_price_4_Year_CAGR",
         "200_day_ma_price_close_4_Year_CAGR",
         "Lagged_Energy_Value_4_Year_CAGR",
@@ -1010,5 +1036,16 @@ def create_asset_valuation_table(report_data):
         )
 
     valuation_df = pd.DataFrame(valuation_data)
+    valuation_df["_market_cap_sort"] = (
+        valuation_df["Market Cap (USD)"]
+        .replace({r"[\$,]": ""}, regex=True)
+        .replace("N/A", np.nan)
+        .astype(float)
+    )
+    valuation_df = (
+        valuation_df.sort_values("_market_cap_sort", ascending=False)
+        .drop(columns="_market_cap_sort")
+        .reset_index(drop=True)
+    )
 
     return valuation_df

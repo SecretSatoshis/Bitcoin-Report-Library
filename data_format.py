@@ -316,7 +316,11 @@ def get_crypto_data(ticker_list: list) -> pd.DataFrame:
 
 def get_price(tickers: dict, start_date: str) -> pd.DataFrame:
     """
-    Fetches historical price data for stocks and cryptocurrencies using yfinance.
+    Fetches historical close prices for all tickers using a single yf.download() batch call.
+
+    Batching all tickers into one request is significantly faster than fetching each ticker
+    individually. CoinGecko-sourced crypto tickers (ethereum, ripple, etc.) are excluded
+    because they are fetched separately by get_crypto_data().
 
     Parameters:
     tickers (dict): Dictionary with categories as keys and ticker lists as values.
@@ -325,7 +329,6 @@ def get_price(tickers: dict, start_date: str) -> pd.DataFrame:
     Returns:
     pd.DataFrame: DataFrame containing close prices for all tickers with 'time' column.
     """
-    data_frames = []
     end_date = datetime.today().strftime("%Y-%m-%d")
     excluded_crypto_tickers = {
         "ethereum",
@@ -335,46 +338,55 @@ def get_price(tickers: dict, start_date: str) -> pd.DataFrame:
         "tether",
     }
 
-    # Create a continuous daily index (timezone-naive)
+    # Build flat list of tickers, excluding those sourced from CoinGecko
+    fetch_tickers = [
+        ticker
+        for category, ticker_list in tickers.items()
+        for ticker in ticker_list
+        if not (category == "crypto" and ticker.lower() in excluded_crypto_tickers)
+    ]
+
+    if not fetch_tickers:
+        return pd.DataFrame(columns=["time"])
+
+    # Continuous daily index for reindexing (fills weekends/holidays via ffill)
     date_range = pd.date_range(start=start_date, end=end_date, freq="D")
 
-    for category, ticker_list in tickers.items():
-        for ticker in ticker_list:
-            if category == "crypto" and ticker.lower() in excluded_crypto_tickers:
-                continue
-            for attempt in range(3):
-                try:
-                    stock = yf.Ticker(ticker)
-                    hist = stock.history(start=start_date, end=end_date)
-                    if hist.empty:
-                        raise ValueError(f"No data returned for {ticker}.")
-                    stock_data = hist[["Close"]].rename(
-                        columns={"Close": f"{ticker}_close"}
-                    )
-                    # Strip timezone from index before reindexing
-                    stock_data.index = pd.to_datetime(stock_data.index).tz_localize(
-                        None
-                    )
-                    # Reindex to daily and forward-fill
-                    stock_data = stock_data.reindex(date_range).ffill()
-                    data_frames.append(stock_data)
-                    break
-                except Exception as e:
-                    if attempt < 2:
-                        print(f"Retrying {ticker}: {e}")
-                        time.sleep(2)
-                    else:
-                        print(f"Failed {ticker} in {category}: {e}")
+    # Single batch download — orders of magnitude faster than per-ticker loop
+    try:
+        raw = yf.download(
+            fetch_tickers,
+            start=start_date,
+            end=end_date,
+            auto_adjust=True,
+            progress=False,
+            group_by="ticker",
+        )
+    except Exception as e:
+        print(f"[yfinance] Batch download failed: {e}")
+        return pd.DataFrame(columns=["time"])
 
-    if data_frames:
-        data = pd.concat(data_frames, axis=1)
-        data.reset_index(inplace=True)
-        data.rename(columns={"index": "time"}, inplace=True)
-        data["time"] = pd.to_datetime(data["time"]).dt.tz_localize(
-            None
-        )  # Ensure timezone-naive
-    else:
-        data = pd.DataFrame(columns=["time"])
+    data_frames = []
+    for ticker in fetch_tickers:
+        try:
+            close_series = raw[ticker]["Close"]
+            if close_series.isna().all():
+                print(f"[yfinance] No data returned for {ticker} — skipping")
+                continue
+            col = close_series.rename(f"{ticker}_close").to_frame()
+            # Index is already tz-naive with auto_adjust=True; reindex to fill gaps
+            col = col.reindex(date_range).ffill()
+            data_frames.append(col)
+        except KeyError:
+            print(f"[yfinance] Could not extract {ticker} from batch result — skipping")
+
+    if not data_frames:
+        return pd.DataFrame(columns=["time"])
+
+    data = pd.concat(data_frames, axis=1)
+    data.reset_index(inplace=True)
+    data.rename(columns={"index": "time"}, inplace=True)
+    data["time"] = pd.to_datetime(data["time"]).dt.tz_localize(None)
     return data
 
 
@@ -697,10 +709,20 @@ def get_data(tickers: dict, start_date: str) -> pd.DataFrame:
     fear_greed_index = get_fear_and_greed_index()
     miner_data = get_miner_data()  # Now uses MINER_DATA_SHEET_URL from config
     bitcoin_dominance = get_bitcoin_dominance()
-    if not bitcoin_dominance.empty and "time" in bitcoin_dominance.columns:
-        bitcoin_dominance["time"] = pd.to_datetime(bitcoin_dominance["time"]).dt.normalize()
     btc_trade_volume_14d = get_btc_trade_volume_14d()
     crypto_data = get_crypto_data(tickers["crypto"])
+
+    if not bitcoin_dominance.empty and "time" in bitcoin_dominance.columns:
+        bitcoin_dominance["time"] = pd.to_datetime(bitcoin_dominance["time"]).dt.normalize()
+        if not coindata.empty and "time" in coindata.columns:
+            latest_data_date = pd.to_datetime(coindata["time"]).max().normalize()
+            dominance_value = bitcoin_dominance["bitcoin_dominance"].iloc[-1]
+            bitcoin_dominance = pd.DataFrame(
+                {
+                    "bitcoin_dominance": [dominance_value, dominance_value],
+                    "time": [latest_data_date - pd.Timedelta(days=1), latest_data_date],
+                }
+            ).drop_duplicates(subset=["time"], keep="last")
 
     datasets = [
         ("coindata", coindata),
@@ -755,9 +777,6 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
     data["RevAllTimeUSD"] = data["coinbase_sum_24h_usd"].fillna(0).cumsum()
     data["NVTAdj"] = data["market_cap"] / data["transfer_volume_sum_24h_usd"]
     data["NVTAdj90"] = data["market_cap"] / data["transfer_volume_sum_24h_usd"].rolling(90).mean()
-    data["SplyActPct1yr"] = (
-        100 - data["utxos_over_1y_old_supply_to_circulating"]
-    )
     # BRK now provides daily transaction count directly as a windowed series.
     data["TxTfrValMeanUSD"] = data["transfer_volume_sum_24h_usd"]
     data["TxTfrValMedUSD"] = data["transfer_volume_sum_24h_usd"]
@@ -769,8 +788,12 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
     data["mvrv_ratio"] = data["market_cap"] / data["realized_cap"]
     data["CapMVRVCur"] = data["mvrv_ratio"]
 
-    # Calculate the realized price (the value at which each coin was last moved)
-    data["realised_price"] = data["realized_cap"] / data["supply"]
+    # Calculate the realized price (the value at which each coin was last moved).
+    calculated_realized_price = data["realized_cap"] / data["supply"]
+    if "realized_price" in data.columns:
+        data["realized_price"] = data["realized_price"].fillna(calculated_realized_price)
+    else:
+        data["realized_price"] = calculated_realized_price
 
     # Calculate the Net Unrealized Profit/Loss (NUPL)
     data["nupl"] = (data["market_cap"] - data["realized_cap"]) / data["market_cap"]
@@ -825,7 +848,8 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
     data["realizedcap_multiple_7"] = (7 * data["realized_cap"]) / data["supply"]
 
     # Calculate the percentage of supply held for more than 1 year
-    data["supply_pct_1_year_plus"] = 100 - data["SplyActPct1yr"]
+    # BRK provides utxos_over_1y_old_supply in BTC; divide by circulating supply for percentage
+    data["supply_pct_1_year_plus"] = (data["utxos_over_1y_old_supply"] / data["supply"]) * 100
     data["pct_supply_issued"] = data["supply"] / 21000000
     data["pct_fee_of_reward"] = (data["fees_sum_24h"] / data["coinbase_sum_24h"]) * 100
 
@@ -833,19 +857,9 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
     data["illiquid_supply"] = (data["supply_pct_1_year_plus"] / 100) * data["supply"]
     data["liquid_supply"] = data["supply"] - data["illiquid_supply"]
 
-    data["tx_volume_yearly"] = data["transfer_volume_sum_24h_usd"].rolling(window=365).sum()
-    data["qtm_price"] = data["tx_volume_yearly"] / (data["supply"] * data["velocity_usd"])
-    data["qtm_multiple"] = data["price_close"] / data["qtm_price"]
-    data["qtm_price_multiple_2"] = data["qtm_price"] * 2
-    data["qtm_price_multiple_5"] = data["qtm_price"] * 5
-    data["qtm_price_multiple_10"] = data["qtm_price"] * 10
-
-    # Calculate daily active addresses from per-block averages
-    # Approximate daily active addresses using ~144 blocks/day (Bitcoin's 10-min target).
-    # The per-block averages from BRK × expected daily block count gives a reasonable estimate.
-    EXPECTED_DAILY_BLOCKS = 144
-    data["daily_active_addresses_sending"] = data["addr_activity_sending_average_24h"] * EXPECTED_DAILY_BLOCKS
-    data["daily_active_addresses_receiving"] = data["addr_activity_receiving_average_24h"] * EXPECTED_DAILY_BLOCKS
+    # BRK provides active_addrs_average_24h: rolling 24h average of unique active addresses.
+    # This is already a daily total — no block-count multiplication needed.
+    data["daily_active_addresses_sending"] = data["active_addrs_average_24h"]
 
     # =========================================================================
     # Reserve Risk Pipeline (calculated from raw BDD, Price, Supply)
@@ -1525,7 +1539,7 @@ def calculate_rolling_cagr_for_all_metrics(data):
 
     Parameters:
     data (pd.DataFrame): DataFrame with DatetimeIndex containing numeric metrics to calculate growth rates.
-                         Typically includes price_close, realised_price, thermocap_price, hash_rate, etc.
+                         Typically includes price_close, realized_price, thermocap_price, hash_rate, etc.
 
     Returns:
     pd.DataFrame: DataFrame with DatetimeIndex containing CAGR columns:
@@ -1676,10 +1690,10 @@ def calculate_time_changes(data, periods):
     Returns:
     pd.DataFrame: DataFrame containing the calculated percentage changes for each specified period.
     """
-    # Calculate percentage changes for each specified period and concatenate the results
+    # Return all fixed-window changes in percentage-point format, consistent with MTD/YTD.
     changes = pd.concat(
         [
-            (data.pct_change(periods=period)).add_suffix(f"_{period}_change")
+            (data.pct_change(periods=period) * 100).add_suffix(f"_{period}_change")
             for period in periods
         ],
         axis=1,

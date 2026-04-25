@@ -25,6 +25,7 @@ from data_definitions import (
     report_date,
     market_data_start_date,
     moving_avg_metrics,
+    cagr_columns,
     fiat_money_data_top10,
     gold_silver_supply,
     gold_supply_breakdown,
@@ -80,8 +81,10 @@ difficulty_period_changes = data_format.calculate_difficulty_period_change(
 ## Create 52 Week High Low Based On Report Timeframe
 weekly_high_low = data_format.calculate_52_week_high_low(report_data, report_date)
 
-## Create Growth Rate Data
-cagr_results = data_format.calculate_rolling_cagr_for_all_metrics(data)
+## Create Growth Rate Data — only compute CAGR for the 13 columns actually used downstream.
+## Filter to columns present in data (some valuation models may not exist on early dates).
+cagr_input_cols = [c for c in cagr_columns if c in data.columns]
+cagr_results = data_format.calculate_rolling_cagr_for_all_metrics(data[cagr_input_cols])
 
 ## Merge only the CAGR columns that Chart Library charts actually reference.
 ## Full CAGR data is exported separately as cagr_data.csv.
