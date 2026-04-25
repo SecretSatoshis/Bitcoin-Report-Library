@@ -58,38 +58,51 @@ The Weekly Bitcoin Recap is a newsletter-style report for readers who want a str
 ```text
 Generate the News Section using Bitcoin news from the 7-day report window.
 
-Source priority:
-1. Secret Satoshis X feed: https://x.com/SecretSatoshis
-2. Bitcoin Magazine articles: https://bitcoinmagazine.com/articles
-3. The Block latest news: https://www.theblock.co/latest-crypto-news
-4. No BS Bitcoin: https://www.nobsbitcoin.com/
-5. Major financial news outlets: Bloomberg, CNBC, The Wall Street Journal:
+Bitcoin-Native Sources:
+1. Bitcoin Magazine: https://bitcoinmagazine.com/.rss/full/
+2. CoinDesk: https://www.coindesk.com/arc/outboundfeeds/rss/
+
+Major Financial Outlets:
+3. Bloomberg Markets: https://feeds.bloomberg.com/markets/news.rss
+4. CNBC Top News: https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114
+5. CNBC Finance: https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664
+6. Financial Times Home: https://www.ft.com/rss/home
+7. Yahoo Finance: https://finance.yahoo.com/news/rssindex
 
 Rules:
 - Stay Bitcoin-focused.
+- For Major Financial Outlets, filter for Bitcoin/crypto/macro 
 - Use only stories published or posted within the report week.
 - Prioritize Bitcoin-specific stories.
 - Include broader crypto, macro, regulatory, or market-structure stories only if they materially affect Bitcoin or the broader digital asset market.
 - Select one Top News Story Of The Week.
-- Then select 3 to 5 additional top news events, depending on story quality and relevance.
-- Do not pad the section with weak stories. If fewer than 5 additional stories are important, use 3 or 4.
+- Then select 3 to 5 Bitcoin News stories
+- Then select 2 to 5 Market News stories: macro, regulatory, or financial-system stories that are materially Bitcoin-relevant.- Do not pad the section with weak stories.
 - Do not invent missing facts, dates, sources, or URLs.
 - Prefer source diversity when possible, but impact and relevance matter more than equal representation across sources.
 - After the story list, write a short "News Impact" paragraph that synthesizes the combined market relevance of the selected stories.
 - Focus on broad implications for Bitcoin adoption, market positioning, investor sentiment, and current market narrative without forecasting price impact.
 
+Format Rules:
+- Each story line is the headline only — no per-story explanation. Attribution in (Reported By: [Source], [Date]) format.
+- Context, "why it matters," and synthesis go in the News Impact paragraph.
+
 Return only:
 
 News Stories:
 Top News Story Of The Week:
-[Headline]. [1-2 sentence explanation of why it matters for Bitcoin.] (Reported By: [Source], [Date])
-
-Other Top News Events:
-[Headline]. [One concise sentence on market, adoption, policy, or infrastructure relevance.] (Reported By: [Source], [Date])
+[Headline]. (Reported By: [Source], [Date])
+Bitcoin News:
+[Headline]. (Reported By: [Source], [Date])
+[Headline]. (Reported By: [Source], [Date])
+[Headline]. (Reported By: [Source], [Date])
 ...
-
+Market News:
+[Headline]. (Reported By: [Source], [Date])
+[Headline]. (Reported By: [Source], [Date])
+...
 News Impact:
-[One concise synthesis paragraph]
+[One concise synthesis paragraph covering why the selected stories matter, the themes connecting them, and their combined relevance to Bitcoin adoption, positioning, sentiment, and current market narrative. No price forecasts.]
 ```
 
 ### 2. Weekly Bitcoin Recap Summary
