@@ -1,0 +1,36 @@
+{
+  "name": "bitcoin-report-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync:local": "node scripts/download-data.mjs --local",
+    "sync:remote": "node scripts/download-data.mjs",
+    "sources": "evidence sources",
+    "dev": "evidence dev",
+    "build": "evidence build",
+    "preview": "evidence preview"
+  },
+  "dependencies": {
+    "@evidence-dev/component-utilities": "^4.0.13",
+    "@evidence-dev/core-components": "^5.4.2",
+    "@evidence-dev/csv": "^1.0.16",
+    "@evidence-dev/evidence": "^40.1.8",
+    "@evidence-dev/tailwind": "^3.1.4",
+    "@sveltejs/vite-plugin-svelte": "^3.1.2",
+    "autoprefixer": "^10.5.0",
+    "debounce": "^1.2.1",
+    "echarts": "^6.0.0",
+    "echarts-stat": "^1.2.0",
+    "git-remote-origin-url": "^4.0.0",
+    "postcss": "^8.5.10",
+    "postcss-load-config": "^4.0.2",
+    "svelte": "^4.2.19",
+    "svelte-preprocess": "^5.1.3",
+    "svelte2tsx": "^0.7.4",
+    "tailwindcss": "^3.4.18",
+    "typescript": "^5.4.2",
+    "unist-util-visit": "^4.1.2",
+    "vite": "^5.4.21"
+  }
+}

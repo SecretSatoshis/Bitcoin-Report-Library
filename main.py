@@ -33,6 +33,7 @@ from data_definitions import (
     stats_start_date,
     correlation_data,
     metrics_template,
+    price_outlook_levels,
 )
 
 # Fetch the data
@@ -44,10 +45,9 @@ data = data.ffill()
 ## Kraken OHLC data
 start_timestamp = int(pd.Timestamp("2017-01-01").timestamp())
 ohlc_data = data_format.get_kraken_ohlc("XBTUSD", start_timestamp)
-
-## Get Bitcoin Difficulty Data from BRK API
-difficulty_report = data_format.check_difficulty_change(data)
-difficulty_report_df = pd.DataFrame([difficulty_report])
+ohlc_data.index = pd.to_datetime(ohlc_data.index)
+if ohlc_data.index.tz is not None:
+    ohlc_data.index = ohlc_data.index.tz_convert(None)
 
 # Calculate Custom Metrics
 data = data_format.calculate_custom_on_chain_metrics(data)
@@ -73,14 +73,6 @@ report_data = data_format.run_data_analysis(analysis_data, stats_start_date)
 ## Merge the change columns back with the full data
 report_data = pd.concat([data, report_data.drop(columns=analysis_columns)], axis=1)
 
-## Create Difficulty Period Change Data
-difficulty_period_changes = data_format.calculate_difficulty_period_change(
-    difficulty_report, report_data
-)
-
-## Create 52 Week High Low Based On Report Timeframe
-weekly_high_low = data_format.calculate_52_week_high_low(report_data, report_date)
-
 ## Create Growth Rate Data — only compute CAGR for the 13 columns actually used downstream.
 ## Filter to columns present in data (some valuation models may not exist on early dates).
 cagr_input_cols = [c for c in cagr_columns if c in data.columns]
@@ -103,12 +95,6 @@ available_cagr = [c for c in chart_cagr_columns if c in cagr_results.columns]
 report_data = report_data.merge(
     cagr_results[available_cagr], left_index=True, right_index=True, how="left"
 )
-
-## Filter Stat Data
-stat_data = data[correlation_data]
-
-## Create Sharpe Ratio Data
-sharpe_results = data_format.calculate_daily_sharpe_ratios(stat_data)
 
 ## Create Correlation Data (renamed to avoid variable collision)
 correlation_df = data[correlation_data]
@@ -137,14 +123,14 @@ fundamentals_table = report_tables.create_fundamentals_table(
     report_data, metrics_template
 )
 
-# Create OHLC Table
-ohlc_table = report_tables.calculate_ohlc(ohlc_data)
+# Create OHLC CSV
+report_tables.calculate_ohlc(ohlc_data)
 
 # Create MTD Return Comparison Table
-mtd_return_comp = report_tables.create_monthly_returns_table(report_data)
+mtd_return_comp = report_tables.create_monthly_returns_table(report_data, report_date)
 
 # Create YTD Return Comparison Table
-ytd_return_comp = report_tables.create_yearly_returns_table(report_data)
+ytd_return_comp = report_tables.create_yearly_returns_table(report_data, report_date)
 
 # Create Relative Valuation Table
 rv_table = report_tables.create_asset_valuation_table(data)
@@ -153,25 +139,6 @@ rv_table = report_tables.create_asset_valuation_table(data)
 summary_table = report_tables.create_summary_table(
     report_data, report_date
 )
-# Create the equity performance table
-equity_table = report_tables.create_equity_performance_table(
-    report_data, report_date, correlation_results
-)
-# Create sector performance table
-sector_table = report_tables.create_sector_performance_table(
-    report_data, report_date, correlation_results
-)
-
-# Create macro performance table
-macro_table = report_tables.create_macro_performance_table(
-    report_data, report_date, correlation_results
-)
-
-# Create bitcoin performance table
-bitcoin_table = report_tables.create_bitcoin_performance_table(
-    report_data, report_date, correlation_results
-)
-
 # Create the performance table
 performance_table = (
     report_tables.create_full_performance_table(
@@ -182,8 +149,8 @@ performance_table = (
 )
 
 
-# Create Heat Maps
-monthly_heatmap = report_tables.monthly_heatmap(data)
+# Create Heat Map CSV
+report_tables.monthly_heatmap(data)
 
 
 # CSV Exports
@@ -197,6 +164,116 @@ fundamentals_table.to_csv("csv/fundamentals_table.csv", index=False)
 
 ## Summary Table CSV
 summary_table.to_csv("csv/summary_table.csv", index=False)
+
+## Fixed Price Outlook CSV
+price_outlook_levels.to_csv("csv/price_outlook.csv", index=False)
+
+## MTD / YTD Historical Returns — indexed to current-period start price.
+## Each historical year's intra-period pattern is applied to the current year's
+## starting price, so every line begins at the same dollar value and diverges
+## based on each year's actual % change. Plus Median + Average across history.
+# Skip years before 2014 — early Bitcoin data is too thin / volatile for clean comparison
+INDEXED_RETURNS_MIN_YEAR = 2014
+
+
+def _build_indexed_returns(price_series, group_func, current_year):
+    """Builds wide DataFrame: x-axis = day index, columns = years + Median + Average."""
+    current_period = group_func(price_series, current_year)
+    if current_period.empty or pd.isna(current_period.iloc[0]):
+        return pd.DataFrame()
+    base_price = current_period.iloc[0]
+
+    out = {}
+    for year in sorted(price_series.index.year.unique()):
+        if year < INDEXED_RETURNS_MIN_YEAR:
+            continue
+        period = group_func(price_series, year)
+        if period.empty:
+            continue
+        first = period.iloc[0]
+        if pd.isna(first) or first <= 0:
+            continue
+        # Re-index to current year's starting dollar value, key by day-of-period
+        scaled = (period / first) * base_price
+        scaled.index = (
+            scaled.index.day if group_func is _slice_current_month
+            else scaled.index.dayofyear
+        )
+        out[str(year)] = scaled
+
+    df_out = pd.DataFrame(out).sort_index()
+    historical = [c for c in df_out.columns if int(c) < current_year]
+    if historical:
+        df_out["Median"] = df_out[historical].median(axis=1)
+        df_out["Average"] = df_out[historical].mean(axis=1)
+    return df_out
+
+
+def _slice_current_month(series, year):
+    latest_month = report_data.index.max().month
+    return series[(series.index.year == year) & (series.index.month == latest_month)]
+
+
+def _slice_full_year(series, year):
+    return series[series.index.year == year]
+
+
+_current_year = report_data.index.max().year
+_price = report_data["price_close"].dropna()
+
+mtd_history = _build_indexed_returns(_price, _slice_current_month, _current_year)
+mtd_history.index.name = "day"
+mtd_history.to_csv("csv/mtd_returns_history.csv")
+
+ytd_history = _build_indexed_returns(_price, _slice_full_year, _current_year)
+ytd_history.index.name = "day_of_year"
+ytd_history.to_csv("csv/ytd_returns_history.csv")
+
+
+## On-chain Price Models CSV - daily canonical BTC price + model values through report date
+ONCHAIN_PRICE_MODEL_COLS = {
+    "price_close": "BTC Price",
+    "Hayes_Network_Price_Per_BTC": "Electricity Cost",
+    "sth_realized_price": "STH Realized Price",
+    "lth_realized_price": "LTH Realized Price",
+    "realized_price": "Realized Price",
+}
+onchain_subset = (
+    report_data.loc[:report_date, list(ONCHAIN_PRICE_MODEL_COLS.keys())]
+    .dropna(subset=["price_close"])
+)
+onchain_subset["3x Realized Price"] = onchain_subset["realized_price"] * 3
+onchain_subset = onchain_subset.rename(columns=ONCHAIN_PRICE_MODEL_COLS)
+onchain_subset.index.name = "date"
+onchain_subset.to_csv("csv/onchain_price_models.csv")
+
+
+## Summary History CSV - last 30 days of headline metrics for dashboard sparklines & deltas
+HEADLINE_METRICS = {
+    "Bitcoin Price USD": "price_close",
+    "Bitcoin Marketcap": "market_cap",
+    "Sats Per Dollar": "sat_per_dollar",
+    "Bitcoin Supply": "supply",
+    "Bitcoin Miner Revenue": "coinbase_sum_24h_usd",
+    "Bitcoin Transaction Volume": "transfer_volume_sum_24h_usd",
+    "Bitcoin Dominance": "bitcoin_dominance",
+    "Bitcoin Fear & Greed Index": "fear_greed_value",
+}
+last_30 = report_data.loc[:report_date].tail(30)
+history_rows = []
+for label, col in HEADLINE_METRICS.items():
+    if col in last_30.columns:
+        for date_idx, val in last_30[col].dropna().items():
+            history_rows.append({
+                "Metric": label,
+                "date": (
+                    date_idx.strftime("%Y-%m-%d")
+                    if hasattr(date_idx, "strftime")
+                    else str(date_idx)
+                ),
+                "Value": val,
+            })
+pd.DataFrame(history_rows).to_csv("csv/summary_history.csv", index=False)
 
 ## Performance Table CSV
 performance_table.to_csv("csv/performance_table.csv", index=False)

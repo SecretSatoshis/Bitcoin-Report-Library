@@ -1,0 +1,10 @@
+label,price,type,color
+Bull Case,160000,case,#16a34a
+Base Case,120000,case,#eab308
+Bear Case,70000,case,#dc2626
+"Resistance $126,219 - 2025 ATH",126219,resistance,#9ca3af
+"Resistance $108,287 - 2024 ATH",108287,resistance,#9ca3af
+"Resistance $100,000 - Psychological Level",100000,resistance,#9ca3af
+"Resistance $80,600 - Nov 2025 Low",80600,resistance,#9ca3af
+"Support $73,757 - 2024 Prior ATH",73757,support,#9ca3af
+"Support $60,132 - 2026 Low",60132,support,#9ca3af

@@ -19,7 +19,7 @@ Output Format:
 """
 
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import timedelta
 import numpy as np
 from pandas.tseries.offsets import MonthEnd
 import calendar
@@ -119,23 +119,38 @@ def calculate_roi_table(data, report_date, price_column="price_close"):
         "10 Year": 3650,
     }
 
-    today = pd.to_datetime(report_date).normalize()
+    data = data.sort_index()
+    report_date = pd.to_datetime(report_date).normalize()
+    available_dates = data.index[data.index <= report_date]
+    if len(available_dates) == 0:
+        raise ValueError("No data available on or before the report date.")
+    current_date = available_dates.max()
+    current_price = data.loc[current_date, price_column]
 
     # Pre-compute the 'Start Date' and 'BTC Price' for each period
     start_dates = {
-        period: today - pd.Timedelta(days=days) for period, days in periods.items()
-    }
-    btc_prices = {
-        period: data.loc[start_dates[period], price_column]
-        if start_dates[period] in data.index
-        else None
-        for period in periods
-    }
-
-    roi_data = {
-        period: data[price_column].pct_change(days).iloc[-1] * 100
+        period: current_date - pd.Timedelta(days=days)
         for period, days in periods.items()
     }
+
+    btc_prices = {}
+    roi_data = {}
+    for period, start_date in start_dates.items():
+        prior_dates = data.index[data.index <= start_date]
+        if len(prior_dates) == 0:
+            btc_prices[period] = None
+            roi_data[period] = np.nan
+            continue
+
+        actual_start_date = prior_dates.max()
+        start_price = data.loc[actual_start_date, price_column]
+        btc_prices[period] = start_price
+        roi_data[period] = (
+            ((current_price / start_price) - 1) * 100
+            if pd.notna(start_price) and start_price != 0
+            else np.nan
+        )
+        start_dates[period] = actual_start_date
 
     # Combine the ROI, Start Dates, and BTC Prices into a DataFrame
     roi_table = pd.DataFrame(
@@ -149,27 +164,54 @@ def calculate_roi_table(data, report_date, price_column="price_close"):
     return roi_table
 
 
+def _format_fundamental_value(value, format_type):
+    """Format fundamentals table values for report-ready CSV output."""
+    if pd.isna(value):
+        return ""
+
+    if format_type == "currency":
+        return f"${value:,.0f}"
+    if format_type == "hashrate_ehs":
+        return f"{value / 1e18:,.2f} EH/s"
+    if format_type == "difficulty_t":
+        return f"{value / 1e12:,.2f}T"
+    if format_type == "percent_ratio":
+        return f"{value * 100:.2f}%"
+    if format_type in {"percent", "percent_point"}:
+        return f"{value:.2f}%"
+    if format_type == "number2":
+        return f"{value:,.2f}"
+    if format_type == "number":
+        return f"{value:,.0f}"
+
+    return str(value)
+
+
 def create_fundamentals_table(df, metrics_template):
     """
-    Generates a fundamentals metrics table with Monday - Sunday columns.
+    Generates a fundamentals metrics table with current/prior values, week-over-week
+    change, daily Monday–Sunday breakdown, and 52-week range for each metric.
 
-    This function creates a weekly breakdown of Bitcoin network fundamentals organized by
-    section headers (Network Performance, Network Security, Network Economics, Network Valuation).
-    Each metric shows the 7-day average, week-over-week change, and daily values for the current week.
+    Each metric is grouped by section (Network Performance, Network Security, etc.).
+    Pre-formatted strings are used for value columns (since metrics have varied
+    format types — number, currency, percent), while the 7 Day Avg % Change is kept
+    numeric so the dashboard can color-code it as a delta.
 
     Parameters:
-    df (pd.DataFrame): DataFrame with DatetimeIndex containing all columns specified in metrics_template.
-                       Must have at least 14 days of data for week-over-week calculations.
-    metrics_template (dict): Nested dictionary structure from data_definitions.py with format:
-                             {section_name: {metric_label: (column_name, format_type)}}
-                             Example: {"Network Performance": {"Hash Rate": ("hash_rate", "number")}}
+    df (pd.DataFrame): DataFrame with DatetimeIndex containing all columns specified
+                       in metrics_template. Must have at least 14 days of data.
+    metrics_template (dict): {section_name: {metric_label: (column_name, format_type)}}
 
     Returns:
-    pd.DataFrame: Table with columns:
-        - Metric: Section headers and metric names
-        - 7 Day Avg: Mean value for the past 7 days
-        - 7 Day Avg % Change: Week-over-week percentage change
-        - Monday through Sunday: Individual daily values for current week
+    pd.DataFrame: Columns:
+        - Section: Group label (Network Performance, etc.)
+        - Metric: Display name
+        - Current Value: Latest formatted value
+        - 7 Days Ago: Value 7 days back
+        - 7 Day Avg % Change: Week-over-week change as decimal (e.g. 0.0683 = 6.83%)
+        - Monday..Sunday: Daily values for the current week
+        - 52W Low: Min over last 365 days
+        - 52W High: Max over last 365 days
     """
     table_data = []
 
@@ -178,53 +220,86 @@ def create_fundamentals_table(df, metrics_template):
     weekly_index = pd.date_range(start=start_of_week.normalize(), periods=7, freq="D")
 
     for section, metrics in metrics_template.items():
-        table_data.append(
-            {
-                "Metric": section,
-                "7 Day Avg": None,
-                "7 Day Avg % Change": None,
-                "Monday": None,
-                "Tuesday": None,
-                "Wednesday": None,
-                "Thursday": None,
-                "Friday": None,
-                "Saturday": None,
-                "Sunday": None,
-            }
-        )
+        for metric_display_name, (column_name, format_type) in metrics.items():
+            series = df[column_name].dropna()
+            if len(series) == 0:
+                continue
 
-        for metric_display_name, (column_name, _) in metrics.items():
-            week_avg = df[column_name].tail(7).mean()
-            prev_week_avg = df[column_name].tail(14).head(7).mean()
+            current = series.iloc[-1]
+            seven_days_ago = series.iloc[-8] if len(series) >= 8 else np.nan
+
+            week_avg = series.tail(7).mean()
+            prev_week_avg = series.tail(14).head(7).mean()
             pct_change = (
-                ((week_avg - prev_week_avg) / prev_week_avg) * 100
-                if prev_week_avg != 0
+                ((week_avg - prev_week_avg) / prev_week_avg)
+                if prev_week_avg and not np.isnan(prev_week_avg)
                 else np.nan
             )
+
+            year_window = series.tail(365)
+            low_52w = year_window.min()
+            high_52w = year_window.max()
 
             weekly_values = df[column_name].reindex(weekly_index).tolist()
 
             table_data.append(
                 {
+                    "Section": section,
                     "Metric": metric_display_name,
-                    "7 Day Avg": week_avg,
+                    "Current Value": _format_fundamental_value(current, format_type),
+                    "7 Days Ago": _format_fundamental_value(seven_days_ago, format_type),
                     "7 Day Avg % Change": pct_change,
-                    "Monday": weekly_values[0],
-                    "Tuesday": weekly_values[1],
-                    "Wednesday": weekly_values[2],
-                    "Thursday": weekly_values[3],
-                    "Friday": weekly_values[4],
-                    "Saturday": weekly_values[5],
-                    "Sunday": weekly_values[6],
+                    "Monday": _format_fundamental_value(weekly_values[0], format_type),
+                    "Tuesday": _format_fundamental_value(weekly_values[1], format_type),
+                    "Wednesday": _format_fundamental_value(weekly_values[2], format_type),
+                    "Thursday": _format_fundamental_value(weekly_values[3], format_type),
+                    "Friday": _format_fundamental_value(weekly_values[4], format_type),
+                    "Saturday": _format_fundamental_value(weekly_values[5], format_type),
+                    "Sunday": _format_fundamental_value(weekly_values[6], format_type),
+                    "52W Low": _format_fundamental_value(low_52w, format_type),
+                    "52W High": _format_fundamental_value(high_52w, format_type),
                 }
             )
 
-    table_df = pd.DataFrame(table_data)
-
-    return table_df
+    return pd.DataFrame(table_data)
 
 
 ## Summary and Performance Tables
+
+
+def _row_asof(df, report_date):
+    report_date = pd.to_datetime(report_date).normalize()
+    df = df.sort_index()
+    available_dates = df.index[df.index <= report_date]
+    if len(available_dates) == 0:
+        raise ValueError("No data available on or before the report date.")
+    return df.loc[available_dates.max()]
+
+
+def _classify_fear_greed(value):
+    if pd.isna(value):
+        return ""
+    if value <= 24:
+        return "Extreme Fear"
+    if value <= 44:
+        return "Fear"
+    if value <= 54:
+        return "Neutral"
+    if value <= 74:
+        return "Greed"
+    return "Extreme Greed"
+
+
+def _classify_bitcoin_valuation(mvrv_ratio):
+    if pd.isna(mvrv_ratio):
+        return ""
+    if mvrv_ratio < 1:
+        return "Undervalued"
+    if mvrv_ratio < 2:
+        return "Fair Value"
+    if mvrv_ratio < 3:
+        return "Overvalued"
+    return "Extremely Overvalued"
 
 
 def create_summary_table(report_data, report_date):
@@ -239,19 +314,23 @@ def create_summary_table(report_data, report_date):
     - pd.DataFrame: DataFrame containing a summary of Bitcoin metrics for the specified report date.
     """
 
+    latest = _row_asof(report_data, report_date)
+
     # Extract key metrics from report_data
-    price_usd = report_data.loc[report_date, "price_close"]
-    market_cap = report_data.loc[report_date, "market_cap"]
+    price_usd = latest["price_close"]
+    market_cap = latest["market_cap"]
     sats_per_dollar = SATS_PER_BTC / price_usd
 
-    bitcoin_supply = report_data.loc[report_date, "supply"]
-    miner_revenue_30d = report_data.loc[report_date, "30_day_ma_coinbase_sum_24h_usd"]
-    tx_volume_30d = report_data.loc[report_date, "30_day_ma_transfer_volume_sum_24h_usd"]
-    btc_dominance = report_data.loc[report_date, "bitcoin_dominance"]
+    bitcoin_supply = latest["supply"]
+    miner_revenue_30d = latest["30_day_ma_coinbase_sum_24h_usd"]
+    tx_volume_30d = latest["30_day_ma_transfer_volume_sum_24h_usd"]
+    btc_dominance = latest["bitcoin_dominance"]
 
-    # Placeholder for additional derived metrics
-    fear_greed = "Neutral"
-    bitcoin_valuation = "Fair Value"
+    fear_greed_value = latest.get("fear_greed_value", np.nan)
+    fear_greed = latest.get("fear_greed_classification", "")
+    if pd.isna(fear_greed) or not fear_greed:
+        fear_greed = _classify_fear_greed(fear_greed_value)
+    bitcoin_valuation = _classify_bitcoin_valuation(latest.get("mvrv_ratio", np.nan))
 
     # Define categories for organization
     categorized_data = {
@@ -267,6 +346,7 @@ def create_summary_table(report_data, report_date):
         },
         "Investor Sentiment": {
             "Bitcoin Dominance": btc_dominance,
+            "Bitcoin Fear & Greed Index": fear_greed_value,
             "Bitcoin Market Sentiment": fear_greed,
             "Bitcoin Valuation": bitcoin_valuation,
         },
@@ -282,47 +362,6 @@ def create_summary_table(report_data, report_date):
     weekly_summary_df = pd.DataFrame(summary_rows)
 
     return weekly_summary_df
-
-
-def format_value(value, format_type):
-    """
-    Helper function to format a value based on a specified type.
-
-    Parameters:
-    - value: The value to format. Can be an integer, float, or date object, depending on format_type.
-    - format_type (str): The format type to apply to the value. Accepted values are:
-        - "percentage": Formats the value as a percentage with two decimal places.
-        - "integer": Formats the value as an integer with thousand separators.
-        - "float": Formats the value as a float with thousand separators and no decimal places.
-        - "currency": Formats the value as currency (e.g., $100,000) with thousand separators.
-        - "date": Formats the value as a date in the format "YYYY-MM-DD".
-        - Defaults to string formatting if the format_type is unrecognized.
-
-    Returns:
-    - str: The formatted value as a string.
-    """
-
-    # Format the value based on the specified format_type
-    if format_type == "percentage":
-        return f"{value:.2f}%"  # Format as a percentage with 2 decimal places
-
-    elif format_type == "integer":
-        return f"{int(value):,}"  # Format as an integer with thousand separators
-
-    elif format_type == "float":
-        return (
-            f"{value:,.0f}"  # Format as a float with thousand separators, no decimals
-        )
-
-    elif format_type == "currency":
-        return f"${value:,.0f}"  # Format as currency with thousand separators
-
-    elif format_type == "date":
-        return value.strftime("%Y-%m-%d")  # Format date as YYYY-MM-DD
-
-    else:
-        # Default: return as a string if format_type is unrecognized
-        return str(value)
 
 
 def _build_performance_table(
@@ -347,11 +386,19 @@ def _build_performance_table(
     """
     performance_metrics = []
 
+    # 52-week window for high/low calculations
+    year_ago = pd.Timestamp(report_date) - pd.Timedelta(days=365)
+
     for config in asset_configs:
         ticker = config["ticker"]
         # Handle special case for Bitcoin price_close column
         price_col = ticker if ticker == "price_close" else f"{ticker}_close"
         corr_col = ticker if ticker == "price_close" else f"{ticker}_close"
+
+        # Compute 52-week high/low from the last 365 days of close prices
+        window = report_data.loc[year_ago:report_date, price_col].dropna()
+        high_52w = window.max() if len(window) else None
+        low_52w = window.min() if len(window) else None
 
         metrics = {
             "Category": category,
@@ -361,6 +408,8 @@ def _build_performance_table(
             "MTD Return": report_data.loc[report_date, f"{price_col}_MTD_change"],
             "YTD Return": report_data.loc[report_date, f"{price_col}_YTD_change"],
             "90 Day Return": report_data.loc[report_date, f"{price_col}_90_change"],
+            "52 Week High": high_52w,
+            "52 Week Low": low_52w,
             "90 Day BTC Correlation": correlation_results["price_close_90_days"].loc[
                 "price_close", corr_col
             ] if ticker != "price_close" else 1,  # BTC correlation with itself is 1
@@ -738,7 +787,7 @@ def create_eoy_model_table(report_data, cagr_results):
     return full_data
 
 
-def create_monthly_returns_table(selected_metrics):
+def create_monthly_returns_table(selected_metrics, report_date=None):
     """
     Generates a month-to-date (MTD) return comparison table indexed to the current month.
 
@@ -760,7 +809,11 @@ def create_monthly_returns_table(selected_metrics):
         - Report Date Return (%): Return from month start to current date
         Final rows include current year data and median historical projection.
     """
-    today = datetime.today().date()
+    today = (
+        pd.to_datetime(report_date).date()
+        if report_date is not None
+        else pd.to_datetime(selected_metrics.index.max()).date()
+    )
     current_year = today.year
     current_month = today.month
     current_day = today.day
@@ -841,7 +894,7 @@ def create_monthly_returns_table(selected_metrics):
     return df_filtered
 
 
-def create_yearly_returns_table(selected_metrics):
+def create_yearly_returns_table(selected_metrics, report_date=None):
     """
     Generates a year-to-date (YTD) return comparison table indexed to the current day of year.
 
@@ -862,7 +915,11 @@ def create_yearly_returns_table(selected_metrics):
         - Report Date Return (%): Return from January 1st to current day of year
         Final rows include current year data and median historical projection.
     """
-    today = datetime.today().date()
+    today = (
+        pd.to_datetime(report_date).date()
+        if report_date is not None
+        else pd.to_datetime(selected_metrics.index.max()).date()
+    )
     current_year = today.year
     current_day_of_year = today.timetuple().tm_yday
 
@@ -965,40 +1022,42 @@ def create_asset_valuation_table(report_data):
     """
     assets = [
         {"name": "Bitcoin", "data": "price_close", "marketcap": "market_cap"},
+        # Fiat money (M0)
         {
-            "name": "Total Silver Market",
-            "data": "silver_marketcap_btc_price",
-            "marketcap": "silver_marketcap_billion_usd",
+            "name": "Switzerland M0",
+            "data": "Switzerland_btc_price",
+            "marketcap": "Switzerland_cap",
         },
         {
             "name": "UK M0",
             "data": "United_Kingdom_btc_price",
             "marketcap": "United_Kingdom_cap",
         },
-        {"name": "Meta", "data": "META_mc_btc_price", "marketcap": "META_MarketCap"},
-        {"name": "Amazon", "data": "AMZN_mc_btc_price", "marketcap": "AMZN_MarketCap"},
-        {
-            "name": "Gold Country Holdings",
-            "data": "gold_official_country_holdings_marketcap_btc_price",
-            "marketcap": "gold_marketcap_official_country_holdings_billion_usd",
-        },
-        {"name": "NVIDIA", "data": "NVDA_mc_btc_price", "marketcap": "NVDA_MarketCap"},
-        {
-            "name": "Gold Private Investment",
-            "data": "gold_private_investment_marketcap_btc_price",
-            "marketcap": "gold_marketcap_private_investment_billion_usd",
-        },
-        {"name": "Apple", "data": "AAPL_mc_btc_price", "marketcap": "AAPL_MarketCap"},
         {
             "name": "US M0",
             "data": "United_States_btc_price",
             "marketcap": "United_States_cap",
+        },
+        # Precious metals
+        {
+            "name": "Total Silver Market",
+            "data": "silver_marketcap_btc_price",
+            "marketcap": "silver_marketcap_billion_usd",
         },
         {
             "name": "Total Gold Market",
             "data": "gold_marketcap_btc_price",
             "marketcap": "gold_marketcap_billion_usd",
         },
+        # Mega-cap stocks
+        {"name": "Apple", "data": "AAPL_mc_btc_price", "marketcap": "AAPL_MarketCap"},
+        {"name": "Amazon", "data": "AMZN_mc_btc_price", "marketcap": "AMZN_MarketCap"},
+        {"name": "Meta", "data": "META_mc_btc_price", "marketcap": "META_MarketCap"},
+        {"name": "NVIDIA", "data": "NVDA_mc_btc_price", "marketcap": "NVDA_MarketCap"},
+        {"name": "Tesla", "data": "TSLA_mc_btc_price", "marketcap": "TSLA_MarketCap"},
+        # Financials
+        {"name": "JPMorgan", "data": "JPM_mc_btc_price", "marketcap": "JPM_MarketCap"},
+        {"name": "Visa", "data": "V_mc_btc_price", "marketcap": "V_MarketCap"},
     ]
 
     # Get the latest values (last row)

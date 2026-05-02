@@ -154,6 +154,51 @@ gold_supply_breakdown = pd.DataFrame(
     }
 )
 
+# Fixed price outlook levels used by the dashboard and weekly report.
+price_outlook_levels = pd.DataFrame(
+    [
+        {"label": "Bull Case", "price": 160000, "type": "case", "color": "#16a34a"},
+        {"label": "Base Case", "price": 120000, "type": "case", "color": "#eab308"},
+        {"label": "Bear Case", "price": 70000, "type": "case", "color": "#dc2626"},
+        {
+            "label": "Resistance $126,219 - 2025 ATH",
+            "price": 126219,
+            "type": "resistance",
+            "color": "#9ca3af",
+        },
+        {
+            "label": "Resistance $108,287 - 2024 ATH",
+            "price": 108287,
+            "type": "resistance",
+            "color": "#9ca3af",
+        },
+        {
+            "label": "Resistance $100,000 - Psychological Level",
+            "price": 100000,
+            "type": "resistance",
+            "color": "#9ca3af",
+        },
+        {
+            "label": "Resistance $80,600 - Nov 2025 Low",
+            "price": 80600,
+            "type": "resistance",
+            "color": "#9ca3af",
+        },
+        {
+            "label": "Support $73,757 - 2024 Prior ATH",
+            "price": 73757,
+            "type": "support",
+            "color": "#9ca3af",
+        },
+        {
+            "label": "Support $60,132 - 2026 Low",
+            "price": 60132,
+            "type": "support",
+            "color": "#9ca3af",
+        },
+    ]
+)
+
 
 # =============================================================================
 # REPORT CONFIGURATION
@@ -186,8 +231,6 @@ moving_avg_metrics = [
     "daily_active_addresses_sending",
     "tx_count_sum_24h",
     "transfer_volume_sum_24h_usd",
-    "TxTfrValMeanUSD",
-    "TxTfrValMedUSD",
     "fees_average_24h_usd",
     "fees_average_24h",
     "subsidy_sum_24h",
@@ -204,7 +247,6 @@ analysis_columns = [
     "hash_rate",
     "tx_count_sum_24h",
     "transfer_volume_sum_24h_usd",
-    "7_day_ma_TxTfrValMeanUSD",
     "daily_active_addresses_sending",
     "addrs_over_10k_sats_addr_count",
     "addrs_over_1btc_addr_count",
@@ -321,22 +363,22 @@ metrics_template = {
         "Total Address Count": ("addrs_over_1sat_addr_count", "number"),
         "Address Count > $10": ("addrs_over_10k_sats_addr_count", "number"),
         "Active Addresses": ("daily_active_addresses_sending", "number"),
-        "Supply Held 1+ Year %": ("supply_pct_1_year_plus", "percent"),
+        "Supply Held 1+ Year %": ("supply_pct_1_year_plus", "percent_point"),
         "Transaction Count": ("tx_count_sum_24h", "number"),
         "Transaction Volume": ("transfer_volume_sum_24h_usd", "currency"),
         "Transaction Fee USD": ("fees_sum_24h_usd", "currency"),
     },
     "Network Security": {
-        "Hash Rate": ("hash_rate", "number"),
-        "Network Difficulty": ("difficulty", "number"),
+        "Hash Rate": ("hash_rate", "hashrate_ehs"),
+        "Network Difficulty": ("difficulty", "difficulty_t"),
         "Miner Revenue": ("coinbase_sum_24h_usd", "currency"),
-        "Fee % Of Reward": ("pct_fee_of_reward", "percent"),
+        "Fee % Of Reward": ("pct_fee_of_reward", "percent_point"),
     },
     "Network Economics": {
         "Bitcoin Supply": ("supply", "number"),
-        "% Supply Issued": ("pct_supply_issued", "percent"),
+        "% Supply Issued": ("pct_supply_issued", "percent_ratio"),
         "Bitcoin Mined Per Day": ("subsidy_sum_24h", "number"),
-        "Annual Inflation Rate": ("inflation_rate", "percent"),
+        "Annual Inflation Rate": ("inflation_rate", "percent_point"),
         "Velocity": ("velocity_usd", "number2"),
     },
     "Network Valuation": {

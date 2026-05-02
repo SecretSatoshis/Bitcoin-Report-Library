@@ -62,16 +62,18 @@ def get_fear_and_greed_index() -> pd.DataFrame:
         data = response.json()
         # Convert the data into a pandas DataFrame
         df = pd.DataFrame(data["data"])
-        # Convert 'timestamp' from unix to datetime format
         df["time"] = pd.to_datetime(df["timestamp"].astype(int), unit="s")
-        # Select the required columns
-        df = df[["value", "value_classification", "time"]]
+        df["fear_greed_value"] = pd.to_numeric(df["value"], errors="coerce")
+        df["fear_greed_classification"] = df["value_classification"]
+        df = df[["fear_greed_value", "fear_greed_classification", "time"]]
         return df
 
     except (requests.exceptions.RequestException, KeyError) as e:
         # If an error occurs, return an empty DataFrame and print the error
         print(f"Failed to fetch Fear and Greed Index data. Reason: {e}")
-        return pd.DataFrame(columns=["value", "value_classification", "time"])
+        return pd.DataFrame(
+            columns=["fear_greed_value", "fear_greed_classification", "time"]
+        )
 
 
 def get_bitcoin_dominance() -> pd.DataFrame:
@@ -409,7 +411,6 @@ def get_marketcap(tickers: dict, start_date: str) -> pd.DataFrame:
         stock = yf.Ticker(ticker)
         try:
             # Fetch historical data from Yahoo Finance
-            hist = stock.history(start=start_date, end=end_date)
             market_cap = stock.info.get("marketCap", None)
             if market_cap is not None:
                 # Create a DataFrame for the market cap data
@@ -440,31 +441,86 @@ def get_marketcap(tickers: dict, start_date: str) -> pd.DataFrame:
 
 def get_miner_data(google_sheet_url: str = "") -> pd.DataFrame:
     """
-    Fetches miner data from a Google Sheets URL and returns it as a pandas DataFrame.
+    Fetch Coin Metrics monthly Bitcoin network efficiency data from Google Sheets.
+
+    The Google Sheet is expected to contain monthly observations with:
+        - time: Month timestamp
+        - cm_efficiency_j_gh: Coin Metrics estimated Bitcoin network efficiency in J/GH
+
+    If the sheet instead contains `efficiency_j_th`, this function converts it to
+    `cm_efficiency_j_gh` by dividing by 1,000.
+
+    The monthly series is forward-filled to daily frequency so it can be merged
+    with daily BRK/on-chain data.
 
     Parameters:
-    google_sheet_url (str): The Google Sheets URL to extract data from.
+    google_sheet_url (str): Google Sheets URL to extract data from.
                             Defaults to MINER_DATA_SHEET_URL from config.
-                            Must be a valid Google Sheets sharing URL.
 
     Returns:
-    pd.DataFrame: DataFrame containing the miner data with 'time' column.
-                  Returns empty DataFrame with 'time' column on error.
+    pd.DataFrame: Daily DataFrame with columns `time` and `cm_efficiency_j_gh`.
+                  Returns an empty DataFrame with those columns on error.
     """
     if not google_sheet_url:
         google_sheet_url = MINER_DATA_SHEET_URL
 
     try:
-        # Convert Google Sheets sharing URL to CSV export URL
+        # Convert Google Sheets sharing URL to CSV export URL.
         csv_export_url = google_sheet_url.replace("/edit?usp=sharing", "/export?format=csv")
+        csv_export_url = csv_export_url.split("#")[0]
+        if "/edit?" in csv_export_url:
+            csv_export_url = csv_export_url.split("/edit?")[0] + "/export?format=csv"
+
         df = pd.read_csv(csv_export_url)
-        # Parse datetime and drop rows with invalid dates
+        df.columns = [str(col).strip() for col in df.columns]
+
+        if "time" not in df.columns:
+            raise ValueError("Miner efficiency sheet must contain a `time` column")
+
         df["time"] = pd.to_datetime(df["time"], errors="coerce")
-        df = df.dropna(subset=["time"])
+        df = df.dropna(subset=["time"]).sort_values("time")
+
+        if "cm_efficiency_j_gh" not in df.columns:
+            if "efficiency_j_th" not in df.columns:
+                raise ValueError(
+                    "Miner efficiency sheet must contain either `cm_efficiency_j_gh` or `efficiency_j_th`"
+                )
+            df["cm_efficiency_j_gh"] = pd.to_numeric(
+                df["efficiency_j_th"], errors="coerce"
+            ) / 1000
+        else:
+            df["cm_efficiency_j_gh"] = pd.to_numeric(
+                df["cm_efficiency_j_gh"], errors="coerce"
+            )
+
+        df = df.dropna(subset=["cm_efficiency_j_gh"])
+        df = df[["time", "cm_efficiency_j_gh"]]
+        df = df.drop_duplicates(subset=["time"], keep="last")
+
+        # Monthly Coin Metrics efficiency is used as the best available estimate
+        # for each day until the next monthly observation is available.
+        df = df.set_index("time").resample("D").ffill().reset_index()
+
         return df
     except Exception as e:
-        print(f"Failed to fetch miner data from Google Sheets: {e}")
-        return pd.DataFrame(columns=["time"])
+        print(f"Failed to fetch Coin Metrics network efficiency data from Google Sheets: {e}")
+        return pd.DataFrame(columns=["time", "cm_efficiency_j_gh"])
+
+
+def _bitcoin_block_subsidy_from_time(time_index) -> pd.Series:
+    """
+    Infer Bitcoin's protocol block subsidy in BTC per block from the date.
+
+    Returns:
+    pd.Series: Block subsidy in BTC per block, indexed like `time_index`.
+    """
+    dates = pd.to_datetime(time_index)
+    reward = pd.Series(3.125, index=dates)
+    reward.loc[dates < pd.Timestamp("2024-04-20")] = 6.25
+    reward.loc[dates < pd.Timestamp("2020-05-11")] = 12.5
+    reward.loc[dates < pd.Timestamp("2016-07-09")] = 25.0
+    reward.loc[dates < pd.Timestamp("2012-11-28")] = 50.0
+    return pd.Series(reward.values, index=time_index)
 
 
 def _brk_error_code(response: requests.Response) -> Optional[str]:
@@ -595,8 +651,8 @@ def get_brk_onchain(
     # Query from the requested start date instead of genesis to reduce BRK request weight.
     query_start = start_date or from_
 
-    # Conservative initial chunk size; resilient fetcher will split again if needed.
-    chunk_size = 2
+    # Start with reasonably sized chunks; resilient fetcher splits again if needed.
+    chunk_size = 8
     non_ts = [m for m in metric_list if m != "timestamp"]
     chunks = [
         ["timestamp"] + non_ts[i : i + chunk_size]
@@ -690,7 +746,7 @@ def get_data(tickers: dict, start_date: str) -> pd.DataFrame:
     2. Yahoo Finance: Stock/ETF/commodity/forex prices via yfinance library
     3. Yahoo Finance: Market capitalizations for public companies
     4. Alternative.me: Fear & Greed Index sentiment indicator
-    5. Google Sheets: Bitcoin miner efficiency data (J/TH)
+    5. Google Sheets: Monthly Coin Metrics Bitcoin network efficiency data, forward-filled daily (J/GH)
     6. CoinGecko: Bitcoin dominance percentage
     7. CoinGecko: 14-day Bitcoin trade volume
     8. CoinGecko: Altcoin prices (ETH, XRP, DOGE, BNB, USDT)
@@ -707,7 +763,7 @@ def get_data(tickers: dict, start_date: str) -> pd.DataFrame:
     prices = get_price(tickers, start_date)
     marketcaps = get_marketcap(tickers, start_date)
     fear_greed_index = get_fear_and_greed_index()
-    miner_data = get_miner_data()  # Now uses MINER_DATA_SHEET_URL from config
+    miner_data = get_miner_data()  # Monthly Coin Metrics network efficiency, forward-filled daily
     bitcoin_dominance = get_bitcoin_dominance()
     btc_trade_volume_14d = get_btc_trade_volume_14d()
     crypto_data = get_crypto_data(tickers["crypto"])
@@ -756,6 +812,10 @@ def get_data(tickers: dict, start_date: str) -> pd.DataFrame:
     if data.index.duplicated().any():
         data = data[~data.index.duplicated()]
 
+    # Hayes needs per-block subsidy in BTC/block. Infer it from Bitcoin's
+    # deterministic halving schedule rather than external data.
+    data["block_reward"] = _bitcoin_block_subsidy_from_time(data.index)
+
     return data
 
 
@@ -777,9 +837,6 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
     data["RevAllTimeUSD"] = data["coinbase_sum_24h_usd"].fillna(0).cumsum()
     data["NVTAdj"] = data["market_cap"] / data["transfer_volume_sum_24h_usd"]
     data["NVTAdj90"] = data["market_cap"] / data["transfer_volume_sum_24h_usd"].rolling(90).mean()
-    # BRK now provides daily transaction count directly as a windowed series.
-    data["TxTfrValMeanUSD"] = data["transfer_volume_sum_24h_usd"]
-    data["TxTfrValMedUSD"] = data["transfer_volume_sum_24h_usd"]
 
     # Calculate the number of satoshis per dollar
     data["sat_per_dollar"] = 1 / (data["price_close"] / SATS_PER_BTC)
@@ -908,8 +965,16 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
     # Supply in Profit/Loss Percentages
     # =========================================================================
 
-    data["supply_in_profit_btc"] = data["supply_in_profit"] / SATS_PER_BTC
-    data["supply_in_loss_btc"] = data["supply_in_loss"] / SATS_PER_BTC
+    data["supply_in_profit_btc"] = np.where(
+        data["supply_in_profit"] > data["supply"] * 10,
+        data["supply_in_profit"] / SATS_PER_BTC,
+        data["supply_in_profit"],
+    )
+    data["supply_in_loss_btc"] = np.where(
+        data["supply_in_loss"] > data["supply"] * 10,
+        data["supply_in_loss"] / SATS_PER_BTC,
+        data["supply_in_loss"],
+    )
     data["supply_in_profit_pct"] = (data["supply_in_profit_btc"] / data["supply"]) * 100
     data["supply_in_loss_pct"] = (data["supply_in_loss_btc"] / data["supply"]) * 100
 
@@ -1205,287 +1270,108 @@ def calculate_stock_to_flow_metrics(data):
     return data
 
 
-def calculate_hayes_production_cost(
-    electricity_cost, miner_efficiency_j_gh, network_hashrate_th_s
-):
-    """
-    Calculate the daily electricity consumption cost for Bitcoin mining using the Hayes model.
-
-    Parameters:
-    electricity_cost (float): Cost of electricity per kWh.
-    miner_efficiency_j_gh (float): Miner efficiency in Joules per GH.
-    network_hashrate_th_s (float): Network hashrate in TH/s.
-
-    Returns:
-    float: Daily electricity consumption cost in USD.
-    """
-    # Calculate the daily energy consumption cost based on the electricity cost, miner efficiency, and network hashrate.
-    e_day = electricity_cost * 24 * miner_efficiency_j_gh * network_hashrate_th_s
-    return e_day
-
-
-def calculate_hayes_network_price_per_btc(
-    electricity_cost_per_kwh,
-    miner_efficiency_j_gh,
-    total_network_hashrate_hs,
-    block_reward,
-    mining_difficulty,
-):
-    """
-    Calculate the network price per BTC using the Hayes model, based on electricity cost and network parameters.
-
-    Parameters:
-    electricity_cost_per_kwh (float): Cost of electricity per kWh.
-    miner_efficiency_j_gh (float): Miner efficiency in Joules per GH.
-    total_network_hashrate_hs (float): Total network hashrate in H/s.
-    block_reward (float): Reward for mining a block in BTC.
-    mining_difficulty (float): Current mining difficulty.
-
-    Returns:
-    float: Network price per BTC in USD.
-    """
-    # Define constants for conversion and time calculations.
-    SECONDS_PER_HOUR = 3600
-    HOURS_PER_DAY = 24
-    SHA_256_CONSTANT = 2**32  # Constant for SHA-256 hashing calculations.
-
-    # Calculate the total number of hashes performed by the network per day.
-    THETA = HOURS_PER_DAY * SHA_256_CONSTANT / SECONDS_PER_HOUR
-
-    # Convert network hashrate from H/s to TH/s for consistent units.
-    total_network_hashrate_th_s = total_network_hashrate_hs / 1e12
-
-    # Calculate the expected number of BTC mined per day across the entire network.
-    btc_per_day_network_expected = (
-        THETA * (block_reward * total_network_hashrate_th_s) / mining_difficulty
-    )
-
-    # Calculate the daily electricity cost for the entire network.
-    e_day_network = calculate_hayes_production_cost(
-        electricity_cost_per_kwh, miner_efficiency_j_gh, total_network_hashrate_th_s
-    )
-
-    # Calculate the network price per BTC by dividing the energy cost by the expected BTC mined per day.
-    price_per_btc_network_objective = (
-        e_day_network / btc_per_day_network_expected
-        if btc_per_day_network_expected != 0
-        else None
-    )
-    return price_per_btc_network_objective
-
-
-def calculate_energy_value(
-    network_hashrate_hs, miner_efficiency_j_gh, annual_growth_rate_percent
-):
-    """
-    Calculate the energy value of the network, representing the value of energy input into mining operations.
-
-    Parameters:
-    network_hashrate_hs (float): Network hashrate in H/s.
-    miner_efficiency_j_gh (float): Miner efficiency in Joules per GH.
-    annual_growth_rate_percent (float): Annual growth rate percentage of Bitcoin supply.
-
-    Returns:
-    float: Energy value in BTC.
-    """
-    # Constants for the energy value calculation.
-    FIAT_FACTOR = 2.0e-15  # Conversion factor from energy input to USD.
-    SECONDS_PER_YEAR = (
-        365.25 * 24 * 60 * 60
-    )  # Total seconds in a year, accounting for leap years.
-
-    # Convert network hashrate from H/s to TH/s for consistent units.
-    network_hashrate_th_s = network_hashrate_hs
-
-    # Calculate the supply growth rate per second.
-    supply_growth_rate_s = annual_growth_rate_percent / 100 / SECONDS_PER_YEAR
-
-    # Convert miner efficiency from J/GH to W/TH for calculation consistency.
-    miner_efficiency_w_th = miner_efficiency_j_gh * 1000
-
-    # Calculate the total energy input in Watts.
-    energy_input_watts = network_hashrate_th_s * miner_efficiency_w_th
-
-    # Calculate the energy value in BTC based on energy input and growth rate.
-    energy_value_btc = (energy_input_watts / supply_growth_rate_s) * FIAT_FACTOR
-    return energy_value_btc
-
-
-def calculate_daily_electricity_consumption_kwh_from_hashrate(
-    network_hashrate_th_s, efficiency_j_gh
-):
-    """
-    Calculate the daily electricity consumption in kWh for mining operations based on hashrate and miner efficiency.
-
-    Parameters:
-    network_hashrate_th_s (float): Network hashrate in TH/s.
-    efficiency_j_gh (float): Miner efficiency in Joules per GH.
-
-    Returns:
-    float: Daily electricity consumption in kWh.
-    """
-    # Convert miner efficiency from J/GH to J/TH (1 TH = 1000 GH).
-    efficiency_j_th = efficiency_j_gh * 1000
-
-    # Calculate total energy consumption in Joules for one day (24 hours).
-    total_energy_consumption_joules = (
-        network_hashrate_th_s * efficiency_j_th * 3600 * 24
-    )
-
-    # Convert energy consumption from Joules to kWh (1 kWh = 3.6 million Joules).
-    daily_electricity_consumption_kwh = total_energy_consumption_joules / (1000 * 3600)
-
-    return daily_electricity_consumption_kwh
-
-
-def calculate_bitcoin_production_cost(
-    daily_electricity_consumption_kwh,
-    electricity_cost_per_kwh,
-    PUE,
-    coinbase_issuance,
-    elec_to_total_cost_ratio,
-):
-    """
-    Calculate the total production cost of Bitcoin based on electricity consumption and other factors.
-
-    Parameters:
-    daily_electricity_consumption_kwh (float): Daily electricity consumption in kWh.
-    electricity_cost_per_kwh (float): Cost of electricity per kWh.
-    PUE (float): Power Usage Effectiveness, accounting for energy overhead.
-    coinbase_issuance (float): Daily issuance of Bitcoin from mining (in BTC).
-    elec_to_total_cost_ratio (float): Ratio of electricity cost to the total production cost.
-
-    Returns:
-    float: Total production cost of Bitcoin in USD.
-    """
-    # Calculate the total electricity cost including overhead, represented by PUE.
-    total_electricity_cost = (
-        daily_electricity_consumption_kwh * electricity_cost_per_kwh * PUE
-    )
-
-    # Calculate the cost per Bitcoin mined based on the coinbase issuance.
-    bitcoin_electricity_price = total_electricity_cost / coinbase_issuance
-
-    # Adjust the production cost by considering the electricity to total cost ratio.
-    return bitcoin_electricity_price / elec_to_total_cost_ratio
-
-
 def electric_price_models(data):
     """
-    Calculate electricity-based Bitcoin valuation models (production cost, Hayes, energy value).
+    Calculate electricity-based Bitcoin valuation models.
 
-    This function computes multiple price models based on mining economics and energy consumption.
-    These models provide fundamental price floors and ceilings based on the cost and energy required
-    to produce Bitcoin. All calculations use vectorized pandas operations for performance.
+    BRK inputs:
+        - hash_rate
+        - difficulty
+        - inflation_rate
+        - subsidy_sum_24h
+        - price_close
 
-    Models Calculated:
-    1. Production Cost Model: Total cost to mine 1 BTC including electricity, overhead (PUE), and
-       non-electricity costs. Assumes $0.05/kWh, 1.1 PUE, electricity = 60% of total costs.
-    2. Hayes Network Price: Charles Edwards' model using SHA-256 hash calculations and expected
-       daily BTC production based on difficulty and hash rate.
-    3. Energy Value: Capriole Fund's model valuing Bitcoin by energy input (Watts) divided by
-       supply growth rate, representing stored energy in the network.
-    4. Energy Value Multiple: Ratio of actual price to energy value (>1 = premium, <1 = discount).
+    Google Sheet input:
+        - cm_efficiency_j_gh: Coin Metrics Labs monthly estimated Bitcoin network
+          efficiency in J/GH, forward-filled daily.
 
-    Required Input Columns (from BRK API + miner data):
-        - hash_rate: Network hash rate in H/s
-        - difficulty: Current mining difficulty
-        - inflation_rate: Annual Bitcoin supply inflation rate (%)
-        - subsidy_sum_24h: Daily BTC issuance from block rewards
-        - block_reward: Current block reward in BTC (6.25 → 3.125 after halving)
-        - lagged_efficiency_j_gh: Lagged miner efficiency in J/GH (prevents lookahead bias)
-        - cm_efficiency_j_gh: CoinMetrics efficiency baseline in J/GH
+    Internally derived:
+        - block_reward from Bitcoin halving dates
 
-    Parameters:
-    data (pd.DataFrame): DataFrame with DatetimeIndex containing mining metrics and miner efficiency.
-                         Must include columns listed above. Hash rate in H/s from BRK API.
-
-    Returns:
-    pd.DataFrame: Original data with added electricity model columns:
-        - daily_electricity_consumption_kwh: Network's daily electricity usage in kWh
-        - Bitcoin_Production_Cost: Total cost to produce 1 BTC (USD)
-        - Electricity_Cost: Electricity-only portion of production cost (USD)
-        - Hayes_Network_Price_Per_BTC: Hayes model price based on mining economics (USD)
-        - Lagged_Energy_Value: Energy value model using lagged miner efficiency (USD)
-        - Energy_Value_Multiple: Price / Energy Value ratio
-        - CM_Energy_Value: Energy value using CoinMetrics efficiency baseline (USD)
-
-    Constants Used (from data_definitions.py):
-        - ELECTRICITY_COST = 0.05 (USD per kWh)
-        - PUE = 1.1 (Power Usage Effectiveness for datacenter overhead)
-        - ELEC_TO_TOTAL_COST_RATIO = 0.6 (Electricity as 60% of total mining cost)
+    Model outputs:
+        - daily_electricity_consumption_kwh: Daily network electricity consumption.
+        - Electricity_Cost: Capriole electricity-only production cost per BTC.
+        - Bitcoin_Production_Cost: Capriole all-in production cost per BTC.
+        - Hayes_Network_Price_Per_BTC: Hayes cost-of-production price per BTC.
+        - Energy_Value: Capriole / Charles Edwards Energy Value in USD.
+        - Energy_Value_Multiple: price_close / Energy_Value.
+        - Lagged_Energy_Value and CM_Energy_Value: Backward-compatible aliases for Energy_Value.
     """
-    # Constants from configuration
-    FIAT_FACTOR = 2.0e-15  # Conversion factor from energy to USD.
-    SECONDS_PER_YEAR = 365.25 * 24 * 60 * 60  # Total seconds in a year.
-    SECONDS_PER_HOUR = 3600
-    HOURS_PER_DAY = 24
+    FIAT_FACTOR = 2.0e-15
+    SECONDS_PER_YEAR = 365.25 * 24 * 60 * 60
+    SECONDS_PER_DAY = 24 * 60 * 60
     SHA_256_CONSTANT = 2**32
 
-    # Convert hash_rate from H/s (BRK API) to TH/s for calculations
     hash_rate_th_s = data["hash_rate"] / 1e12
 
-    # VECTORIZED: Calculate daily electricity consumption in kWh
-    # (network_hashrate_th_s * efficiency_j_th * 3600 * 24) / (1000 * 3600)
-    efficiency_j_th = data["lagged_efficiency_j_gh"] * 1000  # J/GH to J/TH
-    data["daily_electricity_consumption_kwh"] = (
-        hash_rate_th_s * efficiency_j_th * 3600 * 24 / (1000 * 3600)
-    )
+    # Main efficiency input: Coin Metrics monthly network efficiency in J/GH,
+    # forward-filled daily from the Google Sheet.
+    efficiency_j_gh = data["cm_efficiency_j_gh"]
 
-    # VECTORIZED: Calculate Bitcoin production cost
+    # Hayes uses deterministic protocol subsidy inferred from halving dates.
+    data["block_reward"] = _bitcoin_block_subsidy_from_time(data.index)
+
+    data["daily_electricity_consumption_kwh"] = hash_rate_th_s * efficiency_j_gh * 24
+
     total_electricity_cost = (
         data["daily_electricity_consumption_kwh"] * ELECTRICITY_COST * PUE
     )
-    bitcoin_electricity_price = total_electricity_cost / data["subsidy_sum_24h"]
+
+    bitcoin_electricity_price = np.where(
+        data["subsidy_sum_24h"] > 0,
+        total_electricity_cost / data["subsidy_sum_24h"],
+        np.nan,
+    )
+
+    data["Electricity_Cost"] = bitcoin_electricity_price
     data["Bitcoin_Production_Cost"] = (
         bitcoin_electricity_price / ELEC_TO_TOTAL_COST_RATIO
     )
-    data["Electricity_Cost"] = (
-        data["Bitcoin_Production_Cost"] * ELEC_TO_TOTAL_COST_RATIO
-    )
 
-    # VECTORIZED: Calculate Hayes Network Price Per BTC
-    THETA = HOURS_PER_DAY * SHA_256_CONSTANT / SECONDS_PER_HOUR
     btc_per_day_network_expected = (
-        THETA * (data["block_reward"] * hash_rate_th_s) / data["difficulty"]
-    )
-    e_day_network = (
-        ELECTRICITY_COST
-        * 24
-        * data["lagged_efficiency_j_gh"]
-        * hash_rate_th_s
-    )
-    data["Hayes_Network_Price_Per_BTC"] = np.where(
-        btc_per_day_network_expected != 0,
-        e_day_network / btc_per_day_network_expected,
-        None,
+        data["hash_rate"]
+        * SECONDS_PER_DAY
+        * data["block_reward"]
+        / (data["difficulty"] * SHA_256_CONSTANT)
     )
 
-    # VECTORIZED: Calculate Lagged Energy Value
+    e_day_network = ELECTRICITY_COST * 24 * efficiency_j_gh * hash_rate_th_s
+
+    data["Hayes_Network_Price_Per_BTC"] = np.where(
+        btc_per_day_network_expected > 0,
+        e_day_network / btc_per_day_network_expected,
+        np.nan,
+    )
+
+    data["Hayes_Network_Price_Multiple"] = np.where(
+
+        data["Hayes_Network_Price_Per_BTC"] != 0,
+
+        data["price_close"] / data["Hayes_Network_Price_Per_BTC"],
+
+        np.nan,
+
+    )
+
     supply_growth_rate_s = data["inflation_rate"] / 100 / SECONDS_PER_YEAR
-    miner_efficiency_w_th = data["lagged_efficiency_j_gh"] * 1000
+    miner_efficiency_w_th = efficiency_j_gh * 1000
     energy_input_watts = hash_rate_th_s * miner_efficiency_w_th
-    data["Lagged_Energy_Value"] = np.where(
+
+    data["Energy_Value"] = np.where(
         supply_growth_rate_s != 0,
         (energy_input_watts / supply_growth_rate_s) * FIAT_FACTOR,
-        0,
+        np.nan,
     )
 
-    # VECTORIZED: Calculate Energy Value Multiple
     data["Energy_Value_Multiple"] = np.where(
-        data["Lagged_Energy_Value"] != 0,
-        data["price_close"] / data["Lagged_Energy_Value"],
-        None,
+        data["Energy_Value"] != 0,
+        data["price_close"] / data["Energy_Value"],
+        np.nan,
     )
 
-    # VECTORIZED: Calculate CM Energy Value
-    miner_efficiency_w_th_cm = data["cm_efficiency_j_gh"] * 1000
-    energy_input_watts_cm = hash_rate_th_s * miner_efficiency_w_th_cm
-    data["CM_Energy_Value"] = np.where(
-        supply_growth_rate_s != 0,
-        (energy_input_watts_cm / supply_growth_rate_s) * FIAT_FACTOR,
-        0,
-    )
+    # Backward compatibility for existing chart/table references.
+    data["Lagged_Energy_Value"] = data["Energy_Value"]
+    data["CM_Energy_Value"] = data["Energy_Value"]
 
     return data
 
@@ -1954,8 +1840,8 @@ def calculate_daily_sharpe_ratios(data):
     sharpe_ratios = {}
 
     for column in data.columns:
-        # Skip the risk-free rate column in calculations
-        if column == "^TNX_close":
+        # Skip rate columns in calculations
+        if column in {"^IRX_close", "^TNX_close"}:
             continue
 
         # Determine if asset is TradFi or crypto based on column naming convention
@@ -2167,13 +2053,13 @@ def create_btc_correlation_data(report_date, tickers, correlations_data):
     correlations = calculate_rolling_correlations(
         filtered_data, periods=[7, 30, 90, 365]
     )
-    closest_date = (
-        filtered_data.index[
-            filtered_data.index.get_indexer([report_date], method="nearest")[0]
-        ]
-        if report_date not in filtered_data.index
-        else report_date
-    )
+    if report_date in filtered_data.index:
+        closest_date = report_date
+    else:
+        prior_dates = filtered_data.index[filtered_data.index <= report_date]
+        closest_date = (
+            prior_dates.max() if len(prior_dates) else filtered_data.index.min()
+        )
 
     btc_correlations = {}
     for period in [7, 30, 90, 365]:

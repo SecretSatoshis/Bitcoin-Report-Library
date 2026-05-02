@@ -1,0 +1,6 @@
+node_modules/
+.evidence/
+.svelte-kit/
+build/
+sources/bitcoin_report_library/*.csv
+!sources/bitcoin_report_library/connection.yaml

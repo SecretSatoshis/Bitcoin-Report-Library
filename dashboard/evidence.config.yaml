@@ -1,0 +1,65 @@
+appearance:
+  default: dark
+  switcher: true
+
+plugins:
+  components:
+    "@evidence-dev/core-components": {}
+  datasources:
+    "@evidence-dev/csv": {}
+
+theme:
+  colors:
+    # Brand
+    primary: "#F7931A"           # Bitcoin orange
+    accent: "#F7931A"
+    # Backgrounds (cypherpunk dark)
+    base-100:
+      light: "#fafafa"
+      dark: "#08080c"
+    base-200:
+      light: "#f4f4f5"
+      dark: "#0b0b12"
+    base-300:
+      light: "#ececef"
+      dark: "#0e0e16"
+    # Text
+    base-heading:
+      light: "#08080c"
+      dark: "#ffffff"
+    base-content:
+      light: "#1c1c2e"
+      dark: "#e4e4ef"
+    base-content-muted:
+      light: "#6e6e8a"
+      dark: "#6e6e8a"
+    # Semantic
+    positive:
+      light: "#16a34a"
+      dark: "#00FF88"            # cypherpunk green
+    negative:
+      light: "#dc2626"
+      dark: "#FF3B30"            # cypherpunk red
+    info:
+      light: "#0ea5e9"
+      dark: "#2962FF"            # cypherpunk blue
+    warning:
+      light: "#f59e0b"
+      dark: "#FFD700"            # cypherpunk yellow
+
+  colorPalettes:
+    # Default chart line palette — Bitcoin orange first, then complementary tones
+    default:
+      - "#F7931A"
+      - "#00e5a0"
+      - "#7149C6"
+      - "#0079FF"
+      - "#FF0060"
+      - "#22A699"
+
+  colorScales:
+    # Diverging scale for returns / heatmaps (red → neutral → green)
+    returns:
+      - "#dc2626"
+      - "#ffffff"
+      - "#16a34a"
