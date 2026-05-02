@@ -2,7 +2,7 @@
 
 Bitcoin market and on-chain analytics pipeline powering the Secret Satoshis research stack. The system delivers deterministic, reproducible datasets optimized for downstream modeling, reporting, and visualization.
 
-**This is the single data source for the entire Secret Satoshis analytics stack.** All data fetching, metric calculation, and feature engineering happens here. Downstream projects (e.g., [Bitcoin-Chart-Library](https://github.com/SecretSatoshis/Bitcoin-Chart-Library)) consume the CSV output directly — no API calls or duplicated logic.
+**This is the single data source for the entire Secret Satoshis analytics stack.** All data fetching, metric calculation, and feature engineering happens here. Downstream projects ([Bitcoin-Chart-Library](https://github.com/SecretSatoshis/Bitcoin-Chart-Library) for static charts, the bundled `dashboard/` for the live Evidence.dev dashboard at [dashboard.secretsatoshis.com](https://dashboard.secretsatoshis.com)) consume the CSV output directly — no API calls or duplicated logic.
 
 ## Features
 
@@ -23,8 +23,10 @@ Bitcoin-Report-Library/
 ├── data_format.py       # Data access and feature engineering
 ├── report_tables.py     # Table generation and formatting
 ├── data_definitions.py  # Configuration and constants
-├── csv/                 # Output directory (consumed by Chart Library)
+├── csv/                 # Output directory (consumed by Chart Library + dashboard)
 ├── reports/             # Report prompt reference
+├── dashboard/           # Evidence.dev live dashboard (deployed to Cloudflare Pages)
+├── .github/workflows/   # main.yml: daily data refresh; dashboard.yml: dashboard deploy
 └── requirements.txt     # Python dependencies
 ```
 
@@ -50,8 +52,9 @@ report_tables.py  ──►  Generates formatted report tables
     ▼
 csv/  ──►  All outputs exported as CSV
     │
-    ▼
-Bitcoin-Chart-Library  ──►  Reads CSVs, generates charts
+    ├─►  Bitcoin-Chart-Library     (static charts)
+    └─►  dashboard/  ──►  Evidence.dev  ──►  Cloudflare Pages
+                                              dashboard.secretsatoshis.com
 ```
 
 ## Installation
@@ -147,6 +150,11 @@ The master metrics dataset is exported as gzipped CSV (`.csv.gz`) to keep the fi
 | `1k_bucket_table.csv` | Price distribution in $1,000 buckets with current bucket markers |
 | `monthly_heatmap_data.csv` | Monthly returns heatmap data |
 | `ohlc_data.csv` | OHLC price data |
+| `summary_history.csv` | Last 30 days of headline metrics for dashboard sparklines + 30d deltas |
+| `onchain_price_models.csv` | Daily on-chain valuation models (Realized, STH/LTH Realized, Electricity Cost, 3× Realized) joined to BTC price |
+| `mtd_returns_history.csv` | Indexed MTD returns by year (current month vs. historical years) |
+| `ytd_returns_history.csv` | Indexed YTD returns by year (current year vs. historical years) |
+| `price_outlook.csv` | Hand-maintained Bear/Base/Bull cases + support/resistance levels for the dashboard's Bitcoin Price chart annotations |
 
 ### Chart-Ready Datasets
 
@@ -164,6 +172,14 @@ These CSV files are pre-computed for downstream visualization by [Bitcoin-Chart-
 | File | Description |
 |------|-------------|
 | `brk_onchain_raw.csv` | Raw BRK API on-chain data before transformations |
+
+## Dashboard
+
+The `dashboard/` subfolder is an [Evidence.dev](https://evidence.dev) BI-as-code dashboard that consumes the same CSV outputs as Chart Library and renders them as an interactive web report.
+
+- **Live URL:** [dashboard.secretsatoshis.com](https://dashboard.secretsatoshis.com)
+- **Local dev:** see [`dashboard/README.md`](dashboard/README.md) — `cd dashboard && npm install && npm run sync:local && npm run sources && npm run dev`
+- **Deploy:** automated via `.github/workflows/dashboard.yml` (Cloudflare Pages). Builds on every push affecting `dashboard/` or `csv/`, and chains off the daily `main.yml` data refresh via `workflow_run`.
 
 ## Dependencies
 

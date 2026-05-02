@@ -39,12 +39,33 @@ Use `npm run sync:remote` to pull published CSVs from GitHub Pages instead of lo
 The sync script intentionally uses only the CSVs required by the dashboard:
 
 - `summary_table.csv`
+- `summary_history.csv`
+- `fundamentals_table.csv`
 - `performance_table.csv`
 - `monthly_heatmap_data.csv`
 - `relative_value_comparison.csv`
 - `ohlc_data.csv`
+- `1k_bucket_table.csv`
+- `5k_bucket_table.csv`
+- `roi_table.csv`
+- `onchain_price_models.csv`
+- `mtd_returns_history.csv`
+- `ytd_returns_history.csv`
+- `price_outlook.csv`
 
 Wide files such as `master_metrics_data.csv.gz` and `cagr_data.csv` are intentionally excluded because they can slow or hang Evidence CSV type inference.
+
+## Production Deploy
+
+The dashboard is deployed to Cloudflare Pages at [dashboard.secretsatoshis.com](https://dashboard.secretsatoshis.com).
+
+Build & deploy is fully automated via [`.github/workflows/dashboard.yml`](../.github/workflows/dashboard.yml) at the repo root. The workflow runs:
+
+1. After the daily `Update Bitcoin Reports` workflow succeeds (`workflow_run` trigger) — fresh-data deploy.
+2. On any push to `main` that touches `dashboard/` or `csv/`.
+3. Manually via the Actions tab.
+
+Each run does `npm ci → sync:remote → sources → build`, then pushes the built static site to Cloudflare via `cloudflare/wrangler-action`. Required GitHub secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
 
 ## Key Files
 
@@ -53,3 +74,4 @@ Wide files such as `master_metrics_data.csv.gz` and `cagr_data.csv` are intentio
 - `sources/bitcoin_report_library/connection.yaml` — CSV datasource config
 - `scripts/download-data.mjs` — local/remote CSV sync script
 - `evidence.config.yaml` — Evidence plugins, theme, and color config
+- `app.css` — custom brand styling (cypherpunk dark theme, JetBrains Mono + Syne)
