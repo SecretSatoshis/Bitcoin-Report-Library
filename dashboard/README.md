@@ -2,6 +2,8 @@
 
 An Evidence.dev dashboard for the Secret Satoshis Weekly Bitcoin Recap data outputs.
 
+**Live:** [dashboard.secretsatoshis.com](https://dashboard.secretsatoshis.com)
+
 The dashboard can read CSVs from local report outputs or from the published GitHub Pages CSV endpoint:
 
 - Local outputs: `../csv/`
@@ -57,15 +59,9 @@ Wide files such as `master_metrics_data.csv.gz` and `cagr_data.csv` are intentio
 
 ## Production Deploy
 
-The dashboard is deployed to Cloudflare Pages at [dashboard.secretsatoshis.com](https://dashboard.secretsatoshis.com).
+The dashboard is published at [dashboard.secretsatoshis.com](https://dashboard.secretsatoshis.com) and rebuilds automatically on every push to `main` that touches `dashboard/` or `csv/`. The daily data-refresh workflow commits fresh CSVs at 16:00 UTC, which triggers a same-day dashboard rebuild.
 
-Build & deploy is fully automated via [`.github/workflows/dashboard.yml`](../.github/workflows/dashboard.yml) at the repo root. The workflow runs:
-
-1. After the daily `Update Bitcoin Reports` workflow succeeds (`workflow_run` trigger) — fresh-data deploy.
-2. On any push to `main` that touches `dashboard/` or `csv/`.
-3. Manually via the Actions tab.
-
-Each run does `npm ci → sync:remote → sources → build`, then pushes the built static site to Cloudflare via `cloudflare/wrangler-action`. Required GitHub secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
+The build pipeline is `npm ci → sync:remote → sources → build`, with the static `build/` folder served behind a CDN.
 
 ## Key Files
 

@@ -2,7 +2,7 @@
 
 Bitcoin market and on-chain analytics pipeline powering the Secret Satoshis research stack. The system delivers deterministic, reproducible datasets optimized for downstream modeling, reporting, and visualization.
 
-**This is the single data source for the entire Secret Satoshis analytics stack.** All data fetching, metric calculation, and feature engineering happens here. Downstream projects ([Bitcoin-Chart-Library](https://github.com/SecretSatoshis/Bitcoin-Chart-Library) for static charts, the bundled `dashboard/` for the live Evidence.dev dashboard at [dashboard.secretsatoshis.com](https://dashboard.secretsatoshis.com)) consume the CSV output directly — no API calls or duplicated logic.
+**This is the single data source for the entire Secret Satoshis analytics stack.** All data fetching, metric calculation, and feature engineering happens here. Downstream projects ([Bitcoin-Chart-Library](https://github.com/SecretSatoshis/Bitcoin-Chart-Library) for static charts, the bundled `dashboard/` for the live web dashboard at [dashboard.secretsatoshis.com](https://dashboard.secretsatoshis.com)) consume the CSV output directly — no API calls or duplicated logic.
 
 ## Features
 
@@ -25,8 +25,8 @@ Bitcoin-Report-Library/
 ├── data_definitions.py  # Configuration and constants
 ├── csv/                 # Output directory (consumed by Chart Library + dashboard)
 ├── reports/             # Report prompt reference
-├── dashboard/           # Evidence.dev live dashboard (deployed to Cloudflare Pages)
-├── .github/workflows/   # main.yml: daily data refresh; dashboard.yml: dashboard deploy
+├── dashboard/           # Live web dashboard (Evidence.dev)
+├── .github/workflows/   # Daily data refresh
 └── requirements.txt     # Python dependencies
 ```
 
@@ -179,7 +179,6 @@ The `dashboard/` subfolder is an [Evidence.dev](https://evidence.dev) BI-as-code
 
 - **Live URL:** [dashboard.secretsatoshis.com](https://dashboard.secretsatoshis.com)
 - **Local dev:** see [`dashboard/README.md`](dashboard/README.md) — `cd dashboard && npm install && npm run sync:local && npm run sources && npm run dev`
-- **Deploy:** automated via `.github/workflows/dashboard.yml` (Cloudflare Pages). Builds on every push affecting `dashboard/` or `csv/`, and chains off the daily `main.yml` data refresh via `workflow_run`.
 
 ## Dependencies
 
