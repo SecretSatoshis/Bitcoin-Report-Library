@@ -66,10 +66,9 @@ Bitcoin-Native Sources:
 
 Major Financial Outlets:
 5. Bloomberg Markets: https://feeds.bloomberg.com/markets/news.rss
-6. CNBC Top News: https://www.cnbc.com/id/100003114/device/rss/rss.html
-7. CNBC Markets: https://www.cnbc.com/id/15839069/device/rss/rss.html
-8. Financial Times Home: https://www.ft.com/rss/home
-9. MarketWatch Top Stories: https://www.marketwatch.com/rss/topstories
+6. Financial Times Home: https://www.ft.com/rss/home
+7. MarketWatch Top Stories: https://www.marketwatch.com/rss/topstories
+8. Investing.com News: https://www.investing.com/rss/news.rss
 
 Rules:
 - Stay Bitcoin-focused.
