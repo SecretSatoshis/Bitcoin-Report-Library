@@ -14,34 +14,27 @@ The Weekly Bitcoin Recap is a newsletter-style report for readers who want a str
 1. News Section
 2. Weekly Bitcoin Recap Summary
 3. Historical Performance
-4. Monthly Heat Map
-5. MTD Return Comparison
-6. Weekly BTC/USD OHLC Analysis
-7. Trading Range Analysis
-8. ROI Profile
-9. YTD Return Comparison
-10. Relative Valuation
-11. Conclusion
+4. Bitcoin Price Analysis
+5. Bitcoin Price Outlook
+6. Relative Valuation
+7. Conclusion
 
 ## Data Inputs
 
 | Section | Input Type | Local Source | Published Source |
 |---|---|---|---|
-| News Section | RSS | NA | See "Prompt Specs → 1. News Section" for the canonical RSS feed list |
+| News Section | Web | NA | `https://bitcoinmagazine.com/.rss/full/`, `https://www.coindesk.com/arc/outboundfeeds/rss/`, `https://feeds.bloomberg.com/markets/news.rss`, `https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114`, `https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664`, `https://www.ft.com/rss/home`, `https://finance.yahoo.com/news/rssindex` |
 | Weekly Bitcoin Recap Summary | CSV | `csv/summary_table.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/summary_table.csv` |
 | Historical Performance | CSV | `csv/performance_table.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/performance_table.csv` |
-| Monthly Heat Map | CSV | `csv/monthly_heatmap_data.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/monthly_heatmap_data.csv` |
-| MTD Return Comparison | CSV | `csv/mtd_return_comparison.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/mtd_return_comparison.csv` |
-| Weekly BTC/USD OHLC Analysis | CSV | `csv/ohlc_data.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/ohlc_data.csv` |
-| Trading Range Analysis | CSV | `csv/1k_bucket_table.csv`, `csv/5k_bucket_table.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/1k_bucket_table.csv`, `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/5k_bucket_table.csv` |
-| ROI Profile | CSV | `csv/roi_table.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/roi_table.csv` |
-| YTD Return Comparison | CSV | `csv/ytd_return_comparison.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/ytd_return_comparison.csv` |
+| Bitcoin Price Analysis | CSV | `csv/ohlc_data.csv`, `csv/1k_bucket_table.csv`, `csv/5k_bucket_table.csv`, `csv/onchain_price_models.csv`, `csv/price_outlook.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/ohlc_data.csv`, `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/1k_bucket_table.csv`, `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/5k_bucket_table.csv`, `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/onchain_price_models.csv`, `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/price_outlook.csv` |
+| Bitcoin Price Outlook | CSV | `csv/monthly_heatmap_data.csv`, `csv/mtd_return_comparison.csv`, `csv/ytd_return_comparison.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/monthly_heatmap_data.csv`, `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/mtd_return_comparison.csv`, `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/ytd_return_comparison.csv` |
 | Relative Valuation | CSV | `csv/relative_value_comparison.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/relative_value_comparison.csv` |
 
 ## Global Execution Rules
 
 - Use one derived report date from the latest available mapped report data.
 - For each data-backed section, use the latest row or value at or before the report date.
+- When a section maps multiple CSV inputs, use all mapped files named for that section and keep each table's role distinct.
 - Do not use future-dated rows or incomplete periods unless the user explicitly provides a future report date.
 - Use only mapped inputs for each section. If a mapped input is missing or inconsistent, state the gap instead of substituting unrelated data.
 - Format BTC prices to the nearest dollar unless a section needs more precision.
@@ -62,23 +55,19 @@ Bitcoin-Native Sources:
 1. Bitcoin Magazine: https://bitcoinmagazine.com/.rss/full/
 2. CoinDesk: https://www.coindesk.com/arc/outboundfeeds/rss/
 3. The Block: https://www.theblock.co/rss.xml
-4. NoBSBitcoin: https://www.nobsbitcoin.com/feed/
 
 Major Financial Outlets:
-5. Bloomberg Markets: https://feeds.bloomberg.com/markets/news.rss
-6. Financial Times Home: https://www.ft.com/rss/home
-7. MarketWatch Top Stories: https://www.marketwatch.com/rss/topstories
-8. Investing.com News: https://www.investing.com/rss/news.rss
+4. Bloomberg Markets: https://feeds.bloomberg.com/markets/news.rss
+5. Financial Times Home: https://www.ft.com/rss/home
 
 Rules:
-- Stay Bitcoin-focused.
-- For Major Financial Outlets, filter for Bitcoin/crypto/macro 
+- For Major Financial Outlets, filter for Bitcoin/crypto/macro
 - Use only stories published or posted within the report week.
-- Prioritize Bitcoin-specific stories.
 - Include broader crypto, macro, regulatory, or market-structure stories only if they materially affect Bitcoin or the broader digital asset market.
 - Select one Top News Story Of The Week.
 - Then select 3 to 5 Bitcoin News stories
-- Then select 2 to 5 Market News stories: macro, regulatory, or financial-system stories that are materially Bitcoin-relevant.- Do not pad the section with weak stories.
+- Then select 2 to 5 Market News stories: macro, regulatory, or financial-system stories that are materially Bitcoin-relevant.
+- Do not pad the section with weak stories.
 - Do not invent missing facts, dates, sources, or URLs.
 - Prefer source diversity when possible, but impact and relevance matter more than equal representation across sources.
 - After the story list, write a short "News Impact" paragraph that synthesizes the combined market relevance of the selected stories.
@@ -103,7 +92,7 @@ Market News:
 [Headline]. (Reported By: [Source], [Date])
 ...
 News Impact:
-[One concise synthesis paragraph covering why the selected stories matter, the themes connecting them, and their combined relevance to Bitcoin adoption, positioning, sentiment, and current market narrative. No price forecasts.]
+[One concise synthesis two to three sentences covering why the selected stories matter, the themes connecting them, and their combined relevance to Bitcoin adoption, positioning, sentiment, and current market narrative. No price forecasts.]
 ```
 
 ### 2. Weekly Bitcoin Recap Summary
@@ -111,32 +100,30 @@ News Impact:
 ```text
 Generate the Weekly Bitcoin Recap Summary using `summary_table.csv`.
 
-Write in a formal tone suitable for professional investors.
-
 Rules:
 - Use only values present in the summary table.
 - Read `summary_table.csv` as a labeled table with `Metric`, `Value`, and `Category` columns.
-- Do not introduce fields that are not available.
+- Use the `Category` column to group metrics into Market Data, On-chain Data, and Investor Sentiment.
 - Format summary values using the global formatting rules.
+- Keep this section as a concise current-state snapshot; do not introduce technical levels, news events, or performance comparisons from other sections.
+- If a metric is missing, omit it rather than inventing a substitute.
 
-Return a section titled:
+Return the section using this repeatable scaffold. Replace every bracketed field with the mapped data or a concise data-backed interpretation.
 
 Current State Of The Bitcoin Market
 
-It should include:
-- Market Activity
-- On-Chain Activity
-- Market Sentiment and Valuation
+Bitcoin is trading at [Bitcoin Price USD], with a market capitalization of [Bitcoin Marketcap]. At the current price, one dollar buys approximately [Sats Per Dollar] sats.
 
-The narrative should explain the current market state using the summary table data only.
+Current Bitcoin supply is [Bitcoin Supply], with miners generating [Bitcoin Miner Revenue] in revenue and the network facilitating [Bitcoin Transaction Volume] in transaction volume.
+
+At its current market capitalization, Bitcoin holds [Bitcoin Dominance] of the total crypto market. Current market sentiment is [Bitcoin Market Sentiment], while the valuation reading is [Bitcoin Valuation].
+
 ```
 
 ### 3. Historical Performance
 
 ```text
 Generate the Historical Performance section using `performance_table.csv`.
-
-Write in a formal tone suitable for hedge fund managers and research-oriented investors.
 
 Rules:
 - Use the current combined performance table.
@@ -145,182 +132,116 @@ Rules:
 - Use MTD Return, YTD Return, 90 Day Return, and 90 Day BTC Correlation as secondary context where helpful.
 - Interpret all return columns as percentage-point values. For example, `-4.21` means `-4.21%`, not `-0.0421%`.
 - Use the `Category` column to group assets into Equity Market Indexes, Sectors, Macro Asset Classes, and Bitcoin Industry Performance.
-- If `Category` is absent, infer those groups from the asset names and keep the grouping explicit in the section.
 - Format `90 Day BTC Correlation` as a coefficient from `-1.00` to `1.00`, not as a percentage.
 - Do not refer to assets or categories that are not in the current table.
-- If Bitcoin is not the top performer by 7 Day Return, identify the top performer from the actual table.
+- Keep the section focused on relative weekly performance and only use longer-period returns or correlation when they add useful context.
 
-Return a section that covers:
-- Equity Market Indexes
-- Sector and Equity Benchmarking
-- Macro Asset Class Performance
-- Bitcoin Industry Performance
-- Summary
+Return the section using this repeatable scaffold. Replace every bracketed field with the mapped data or a concise data-backed interpretation.
+
+Historical Performance
+
+Bitcoin Performance Snapshot
+Bitcoin returned [Bitcoin 7 Day Return] over the past week, compared with [Bitcoin MTD Return] month-to-date, [Bitcoin YTD Return] year-to-date, and [Bitcoin 90 Day Return] over the past 90 days.
+
+[One sentence explaining whether Bitcoin's weekly move shows strength, weakness, or stabilization relative to its own month-to-date, year-to-date, and 90-day performance.]
+
+Equity Market Indexes
+Among equity indexes, [Top Equity Index] led the group with a [Top Equity Index 7 Day Return] weekly return, while [Lagging Equity Index] was the weakest at [Lagging Equity Index 7 Day Return]. 
+
+[One to two sentences explaining whether Bitcoin outperformed or lagged broad equity benchmarks and whether equity correlation suggests risk-on/risk-off alignment.]
+
+Sector Performance
+Among sectors, [Top Sector] led with a [Top Sector 7 Day Return] weekly return, while [Lagging Sector] lagged at [Lagging Sector 7 Day Return].
+
+[One sentence explaining whether Bitcoin's weekly performance was closer to higher-beta sectors, defensive sectors, or broad market behavior.]
+
+Macro Asset Classes
+Across macro assets, [Top Macro Asset] returned [Top Macro Asset 7 Day Return], while [Lagging Macro Asset] returned [Lagging Macro Asset 7 Day Return]. Bitcoin's 90-day correlation to key macro assets ranged from [Lowest Macro BTC Correlation] to [Highest Macro BTC Correlation].
+
+[One to two sentences explaining how Bitcoin performed relative to dollar, gold, bond, or commodity proxies available in the table.]
+
+Bitcoin Industry Performance
+Within Bitcoin-related equities and industry proxies, [Top Bitcoin Industry Asset] returned [Top Bitcoin Industry Asset 7 Day Return], while [Lagging Bitcoin Industry Asset] returned [Lagging Bitcoin Industry Asset 7 Day Return].
+
+[One to two sentences explaining whether Bitcoin-related equities confirmed, amplified, or diverged from Bitcoin's weekly move.]
+
+Cross-Asset Summary
+[One to two sentence synthesis explaining where Bitcoin stood in the broader cross-asset performance table this week. Mention the top overall weekly performer if it was not Bitcoin, and keep the analysis tied to the assets and categories present in `performance_table.csv`.]
 ```
 
-### 4. Monthly Heat Map
+### 4. Bitcoin Price Analysis
 
 ```text
-Generate the Monthly Heat Map section using `monthly_heatmap_data.csv`.
-
-Write in a formal tone suitable for professional investors.
+Generate the Bitcoin Price Analysis section using `ohlc_data.csv`, `1k_bucket_table.csv`, `5k_bucket_table.csv`, `onchain_price_models.csv`, and `price_outlook.csv`.
 
 Rules:
-- This is a monthly heat map, not a weekly heat map.
-- Interpret monthly heat map values as decimal returns. For example, `0.05` means `5.0%`, not `0.05%`; `-0.03` means `-3.0%`.
-- Use the latest nonblank monthly value in the current year row as the current month-to-date value.
-- Treat `Average` as the full historical average row.
-- Treat `Median` as the historical median row.
-- Treat `4-Year Average` as optional recent-cycle context.
-- Compare the current month against the historical average and median rows where relevant.
-- Explain the current month in context without overclaiming predictive power.
-- Avoid predictive language. Frame this section as monthly context, not a forecast.
+- Use the latest completed weekly OHLC row from `ohlc_data.csv`; treat `Time` as the week-start timestamp and calculate weekly return and range from the row.
+- Use the current 1K and 5K ranges from the bucket tables as background context for the current price zone, not as the main subject.
+- Use `price_outlook.csv` for explicit support, resistance, and bull/base/bear scenario anchors.
+- Use the latest on-chain model row at or before the report date for relevant model context, but include only the models that improve the analysis.
+- Keep the section analytical and conditional: do not invent levels, do not force every input into the prose, and do not frame scenario anchors as forecasts.
 
-Return a section titled:
+Return the section using this repeatable scaffold. Replace every bracketed field with the mapped data or a concise data-backed interpretation.
 
-Bitcoin Monthly Heatmap Overview and Analysis
+Bitcoin Price Analysis
 
-It should include:
-- Report Date
-- Time Context
-- Monthly Heatmap Insights
-- Current Data Interpretation
-- Market Context for the Month
+[Week Start Date] to [Week End Date]: Bitcoin opened at [Open], traded between [Low] and [High], and closed at [Close]. The weekly return was [Weekly Return %], with a weekly trading range of [Weekly Range $] ([Weekly Range %]).
+
+[One sentence interpreting the weekly candle: close versus open, high/low behavior, whether the week showed upside follow-through, downside pressure, consolidation, or range-bound trading.]
+
+Bitcoin is currently trading around [Current Price], placing it in the [Current 1K Bucket] short-term range and the broader [Current 5K Bucket] range.
+
+[One to two sentences using the 1K and 5K bucket counts as background context for how familiar or notable the current price zone has been historically. Do not quote both bucket counts unless they materially improve the analysis. Do not describe bucket counts as volume, liquidity, probability, or forecast odds.]
+
+Nearest support levels below current price are [Nearest Support 1], [Nearest Support 2], and [Nearest Support 3 if available]. Nearest resistance levels above current price are [Nearest Resistance 1], [Nearest Resistance 2], and [Nearest Resistance 3 if available].
+
+[One to two sentences explaining how these levels frame the current setup. Use explicit support/resistance rows from `price_outlook.csv`; do not invent levels.]
+
+Relevant on-chain model levels are [Relevant On-Chain Model 1], [Relevant On-Chain Model 2 if useful], and [Relevant On-Chain Model 3 if useful].
+
+[One to two sentences explaining what the relevant on-chain models say about current price. Use `Electricity Cost` and `Realized Price` for deep value/support context, `STH Realized Price` for newer-entrant cost basis, and `3x Realized Price` for upper-range valuation context. Do not force every model into the response if it is not close to price or otherwise relevant.]
+
+[Two to three sentence synthesis summarizing weekly price action, trading-range context, support/resistance, relevant on-chain level context, and where current price stands relative to the year-end bull/base/bear scenario anchors from `price_outlook.csv`. Integrate [Bull Case Price], [Base Case Price], and [Bear Case Price] naturally into the outlook instead of listing them. Explain what would need to change for price to move toward the bull case, what conditions would keep the base case intact, and what breakdown would make the bear case more relevant. Keep this as a coherent review and conditional outlook.]
 ```
 
-### 5. MTD Return Comparison
+### 5. Bitcoin Price Outlook
 
 ```text
-Generate the Month-to-Date Return Comparison section using `mtd_return_comparison.csv`.
+Generate the Bitcoin Price Outlook section using `monthly_heatmap_data.csv`, `mtd_return_comparison.csv`, and `ytd_return_comparison.csv`.
 
 Rules:
-- Use the numeric current-year row and the Median Projection row.
-- Treat `Return (%)` and `Report Date Return (%)` as percentage-point values.
-- Use the current-year row `Report Date Return (%)` as the current MTD return.
-- Use the Median Projection row `Report Date Return (%)` as the median path as of the report date.
-- Use the Median Projection row `Return (%)` and `End Price ($)` as the historical median end-of-month scenario.
-- Calculate variance versus median as current-year `Report Date Return (%)` minus Median Projection `Report Date Return (%)`.
-- Keep the language data-driven.
-- Do not assume additional rows exist beyond the current year and Median Projection rows.
-- Describe the median path as a historical benchmark, not a forecast.
+- Use `monthly_heatmap_data.csv` for historical monthly return context; interpret monthly heatmap values as decimal returns.
+- Use the latest nonblank current-month value in the current year row, then compare it with the same month's `Average`, `Median`, and `4-Year Average` rows.
+- Use `mtd_return_comparison.csv` to compare the current month-to-date path with historical median and average paths when available, including implied month-end benchmarks.
+- Use `ytd_return_comparison.csv` to compare the current year-to-date path with historical median and average paths when available, including implied year-end benchmarks.
+- Treat `Return (%)` and `Report Date Return (%)` in the MTD/YTD comparison files as percentage-point values.
+- Frame median, average, and historical path values as context and scenario benchmarks, not forecasts.
+- Keep the section focused on seasonal/historical return context, monthly trajectory, and longer-term yearly tracking.
 
-Return a section titled:
+Return the section using this repeatable scaffold. Replace every bracketed field with the mapped data or a concise data-backed interpretation.
 
-Bitcoin Month-to-Date Return Comparison
+Bitcoin Price Outlook
 
-It should explain:
-- current MTD return
-- report-date median projection
-- variance versus median
-- what the deviation suggests about current monthly positioning
+Historical Monthly Return Analysis
+Bitcoin's current [Current Month] return is [Current Month Return], compared with a historical average of [Current Month Average Return], a historical median of [Current Month Median Return], and a 4-year average of [Current Month 4-Year Average Return] for the same month.
+
+[One to two sentences explaining how the current month is tracking versus its historical monthly return profile. Focus on whether performance is above, below, or near historical average/median/4-year context, and what that says about current seasonality without forecasting.]
+
+Month-to-Date Path
+Bitcoin is currently [Current MTD Return] month-to-date, compared with the historical median path of [Median MTD Report Date Return] and, if available, the historical average path of [Average MTD Report Date Return] at this point in the month. The historical median full-month path would imply a month-end return of [Median Full-Month Return] and a month-end price benchmark of [Median Month-End Price].
+
+[One to two sentences explaining whether Bitcoin is running ahead of, behind, or near the historical month-to-date path. Tie the current return to what historical median and average paths imply for month-end performance, while keeping the analysis conditional.]
+
+Year-to-Date Path
+Bitcoin is currently [Current YTD Return] year-to-date, compared with the historical median year-to-date path of [Median YTD Report Date Return] and, if available, the historical average path of [Average YTD Report Date Return] at this point in the year. The historical median full-year path would imply a year-end return of [Median Full-Year Return] and a year-end price benchmark of [Median Year-End Price].
+
+[One to two sentences explaining how Bitcoin is tracking on a longer-term trajectory versus historical yearly paths. Discuss whether current performance is ahead of, behind, or near the median/average path and what that means for the broader yearly outlook.]
+
+Outlook Summary
+[Two to three sentence synthesis connecting monthly seasonality, the current month-to-date path, and the year-to-date trajectory. Explain whether near-term monthly performance is reinforcing or diverging from the longer-term yearly path. Keep the tone analytical and scenario-based, not predictive.]
 ```
 
-### 6. Weekly BTC/USD OHLC Analysis
-
-```text
-Generate the Weekly BTC/USD analysis using `ohlc_data.csv`.
-
-Rules:
-- Use the most recent completed weekly OHLC row.
-- Treat `Time` as the week-start timestamp.
-- Use the latest OHLC row only if the report date is after that week has closed; otherwise use the prior completed weekly row.
-- Base the analysis on the tabular open, high, low, and close values.
-- Calculate weekly return as `(Close - Open) / Open`.
-- Calculate weekly range as `High - Low`; optionally express range percentage as `(High - Low) / Open`.
-- Describe weekly range, directional bias, and the relationship between open and close.
-
-Return a section that includes:
-- Reporting Period
-- Open, High, Low, Close
-- Price Action Overview
-- Market Sentiment and Trend Analysis
-- Key Support and Resistance Levels
-- Potential Bullish, Base, and Bearish Scenarios
-```
-
-### 7. Trading Range Analysis
-
-```text
-Generate the Trading Range Analysis section using `1k_bucket_table.csv` and `5k_bucket_table.csv`.
-
-Rules:
-- Use the row where `Is Current Bucket = True` in each bucket table to identify the active price zone.
-- Require exactly one `Is Current Bucket = True` row in each bucket table. 
-- Use `Current Price` as the spot-price anchor for the section.
-- Cross-check `Current Price` across the 1k and 5k bucket tables. 
-- Treat `Count` as historical price observations in that range, not trading volume or liquidity.
-- Use the 1k and 5k bucket counts to describe how historically active the current area has been.
-- Compare current bucket activity against adjacent buckets and relevant higher-price buckets rather than letting early low-price buckets dominate the interpretation.
-- Frame the analysis around historical trading concentration, not prediction.
-- If both bucket tables imply different levels of granularity, use the 1k bucket for precise placement and the 5k bucket for broader context.
-
-Return a section titled:
-
-Trading Range Analysis
-
-It should explain:
-- the current price zone
-- how active that zone has been historically
-- how the narrower and broader bucket views compare
-- what the current range implies about market positioning
-```
-
-### 8. ROI Profile
-
-```text
-Generate the ROI Profile section using `roi_table.csv`.
-
-Rules:
-- Use the `Time Frame` column directly.
-- Interpret the ROI field as percentage points. Prefer `ROI (%)` when present; if the source still uses the legacy `ROI` column name, treat it the same way.
-- Do not multiply ROI values by 100.
-- Treat `Start Date` as the historical entry date for the holding period.
-- Treat `BTC Price` as the historical entry price for that row.
-- Group horizons explicitly as `short-term = 1 day, 3 day, 7 day, 30 day`, `medium-term = 90 day and 1 Year`, and `long-term = 2 Year, 4 Year, 5 Year, 10 Year`.
-- Highlight which entry periods are positive or negative.
-- Explain what the spread of outcomes says about Bitcoin's short-term volatility and long-term return profile.
-- Keep the language data-driven and avoid overstating precision.
-- Describe historical entry outcomes and holding-period sensitivity, not investment advice.
-
-Return a section titled:
-
-Bitcoin ROI Profile
-
-It should include:
-- short-term entry outcomes
-- medium-term entry outcomes
-- long-term entry outcomes
-- what the distribution says about risk and reward across holding periods
-```
-
-### 9. YTD Return Comparison
-
-```text
-Generate the Year-to-Date Return Comparison section using `ytd_return_comparison.csv`.
-
-Rules:
-- Use the numeric current-year row and the Median Projection row.
-- Treat `Return (%)` and `Report Date Return (%)` as percentage-point values.
-- Use the current-year row `Report Date Return (%)` as the current YTD return.
-- Use the Median Projection row `Report Date Return (%)` as the median path as of the report date.
-- Use the Median Projection row `Return (%)` and `End Price ($)` as the historical median full-year scenario.
-- Calculate variance versus median as current-year `Report Date Return (%)` minus Median Projection `Report Date Return (%)`.
-- Treat the current-year row `End Price ($)` as the latest/current price.
-- Treat the Median Projection row `End Price ($)` as the median-path year-end scenario price.
-- Use the median projection to discuss context, not certainty.
-- Keep the output concise and analytical.
-
-Return a section titled:
-
-Bitcoin Year-to-Date Return Comparison
-
-It should include:
-- YTD Performance Snapshot
-- Year End Price Scenario Analysis
-- Observations and Outlook
-```
-
-### 10. Relative Valuation
+### 6. Relative Valuation
 
 ```text
 Generate the Relative Valuation section using `relative_value_comparison.csv`.
@@ -339,18 +260,28 @@ Rules:
 - Frame parity prices as valuation benchmarks, not forecasts, targets, or recommendations.
 - Do not introduce assets that are not in the CSV.
 
-Return a section titled:
+Return the section using this repeatable scaffold. Replace every bracketed field with the mapped data or a concise data-backed interpretation.
 
 Bitcoin Relative Valuation Analysis
 
-It should include:
-- a compact parity table
-- surpassed assets
-- approaching valuation levels
-- aspirational targets
+Bitcoin's current valuation is [Bitcoin Market Cap], which corresponds to a BTC price of [Bitcoin Market Cap BTC Price]. In the relative valuation table, Bitcoin sits between [Nearest Larger Asset] at [Nearest Larger Asset Market Cap] and [Nearest Smaller Asset] at [Nearest Smaller Asset Market Cap].
+
+[One sentences explaining where Bitcoin currently ranks in the table and what that says about its scale versus the listed assets and monetary benchmarks.]
+
+Bitcoin has already surpassed [Surpassed Asset 1], [Surpassed Asset 2], and [Surpassed Asset 3 if available] by market capitalization.
+
+[One sentences explaining the significance of the surpassed assets. Use negative `BTC % Move to Marketcap BTC Price` values as evidence that Bitcoin is already above those parity levels.]
+
+The nearest larger valuation benchmarks are [Approaching Asset 1], [Approaching Asset 2], and [Approaching Asset 3 if available]. Reaching those parity levels would imply BTC prices of [Approaching Asset 1 BTC Price], [Approaching Asset 2 BTC Price], and [Approaching Asset 3 BTC Price], requiring moves of [Approaching Asset 1 BTC Move], [Approaching Asset 2 BTC Move], and [Approaching Asset 3 BTC Move].
+
+[One to two sentences explaining which larger benchmarks are closest and how far Bitcoin is from those parity levels. Frame them as valuation comparisons, not targets.]
+
+Relative Valuation Summary
+[One to two sentence synthesis explaining what Bitcoin has already overtaken, what it is closest to approaching, and which larger benchmarks remain distant. Keep the analysis comparative and valuation-based, not predictive.]
+
 ```
 
-### 11. Conclusion
+### 7. Conclusion
 
 ```text
 Write the conclusion for the Weekly Bitcoin Recap using the completed report sections below.
@@ -365,12 +296,8 @@ Sections to synthesize:
 - News Section
 - Weekly Bitcoin Recap Summary
 - Historical Performance
-- Monthly Heat Map
-- MTD Return Comparison
-- Weekly BTC/USD OHLC Analysis
-- Trading Range Analysis
-- ROI Profile
-- YTD Return Comparison
+- Bitcoin Price Analysis
+- Bitcoin Price Outlook
 - Relative Valuation
 
 Return one concise conclusion paragraph.
