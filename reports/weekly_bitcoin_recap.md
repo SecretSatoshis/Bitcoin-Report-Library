@@ -27,7 +27,7 @@ The Weekly Bitcoin Recap is a newsletter-style report for readers who want a str
 
 | Section | Input Type | Local Source | Published Source |
 |---|---|---|---|
-| News Section | Web | NA | `https://x.com/SecretSatoshis`, `https://bitcoinmagazine.com/articles`, `https://www.theblock.co/latest-crypto-news`, `https://www.nobsbitcoin.com/` |
+| News Section | RSS | NA | See "Prompt Specs → 1. News Section" for the canonical RSS feed list |
 | Weekly Bitcoin Recap Summary | CSV | `csv/summary_table.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/summary_table.csv` |
 | Historical Performance | CSV | `csv/performance_table.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/performance_table.csv` |
 | Monthly Heat Map | CSV | `csv/monthly_heatmap_data.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/monthly_heatmap_data.csv` |
@@ -61,13 +61,15 @@ Generate the News Section using Bitcoin news from the 7-day report window.
 Bitcoin-Native Sources:
 1. Bitcoin Magazine: https://bitcoinmagazine.com/.rss/full/
 2. CoinDesk: https://www.coindesk.com/arc/outboundfeeds/rss/
+3. The Block: https://www.theblock.co/rss.xml
+4. NoBSBitcoin: https://www.nobsbitcoin.com/feed/
 
 Major Financial Outlets:
-3. Bloomberg Markets: https://feeds.bloomberg.com/markets/news.rss
-4. CNBC Top News: https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114
-5. CNBC Finance: https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664
-6. Financial Times Home: https://www.ft.com/rss/home
-7. Yahoo Finance: https://finance.yahoo.com/news/rssindex
+5. Bloomberg Markets: https://feeds.bloomberg.com/markets/news.rss
+6. CNBC Top News: https://www.cnbc.com/id/100003114/device/rss/rss.html
+7. CNBC Markets: https://www.cnbc.com/id/15839069/device/rss/rss.html
+8. Financial Times Home: https://www.ft.com/rss/home
+9. MarketWatch Top Stories: https://www.marketwatch.com/rss/topstories
 
 Rules:
 - Stay Bitcoin-focused.
