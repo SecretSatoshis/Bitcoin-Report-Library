@@ -11,19 +11,24 @@ The Weekly Bitcoin Recap is a newsletter-style report for readers who want a str
 
 ## Section Order
 
-1. News Section
-2. Weekly Bitcoin Recap Summary
-3. Historical Performance
-4. Bitcoin Price Analysis
-5. Bitcoin Price Outlook
-6. Relative Valuation
-7. Conclusion
+Final report (display order):
+
+1. Executive Summary
+2. News Section
+3. Weekly Bitcoin Recap Summary
+4. Historical Performance
+5. Bitcoin Price Analysis
+6. Bitcoin Price Outlook
+7. Relative Valuation
+8. Conclusion
+
+Generation order differs: the Executive Summary is **written last**, after every other section is complete, then **placed at the top** during assembly. It frames the report by synthesizing the finished body, so it cannot be drafted before the body exists.
 
 ## Data Inputs
 
 | Section | Input Type | Local Source | Published Source |
 |---|---|---|---|
-| News Section | Web | NA | `https://bitcoinmagazine.com/.rss/full/`, `https://www.coindesk.com/arc/outboundfeeds/rss/`, `https://feeds.bloomberg.com/markets/news.rss`, `https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114`, `https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664`, `https://www.ft.com/rss/home`, `https://finance.yahoo.com/news/rssindex` |
+| News Section | RSS | NA | See "Prompt Specs → 1. News Section" for the canonical RSS feed list |
 | Weekly Bitcoin Recap Summary | CSV | `csv/summary_table.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/summary_table.csv` |
 | Historical Performance | CSV | `csv/performance_table.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/performance_table.csv` |
 | Bitcoin Price Analysis | CSV | `csv/ohlc_data.csv`, `csv/1k_bucket_table.csv`, `csv/5k_bucket_table.csv`, `csv/onchain_price_models.csv`, `csv/price_outlook.csv` | `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/ohlc_data.csv`, `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/1k_bucket_table.csv`, `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/5k_bucket_table.csv`, `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/onchain_price_models.csv`, `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/price_outlook.csv` |
@@ -53,12 +58,11 @@ Generate the News Section using Bitcoin news from the 7-day report window.
 
 Bitcoin-Native Sources:
 1. Bitcoin Magazine: https://bitcoinmagazine.com/.rss/full/
-2. CoinDesk: https://www.coindesk.com/arc/outboundfeeds/rss/
-3. The Block: https://www.theblock.co/rss.xml
+2. The Block: https://www.theblock.co/rss.xml
 
 Major Financial Outlets:
-4. Bloomberg Markets: https://feeds.bloomberg.com/markets/news.rss
-5. Financial Times Home: https://www.ft.com/rss/home
+3. Bloomberg Markets: https://feeds.bloomberg.com/markets/news.rss
+4. Financial Times Home: https://www.ft.com/rss/home
 
 Rules:
 - For Major Financial Outlets, filter for Bitcoin/crypto/macro
@@ -92,7 +96,7 @@ Market News:
 [Headline]. (Reported By: [Source], [Date])
 ...
 News Impact:
-[One concise synthesis two to three sentences covering why the selected stories matter, the themes connecting them, and their combined relevance to Bitcoin adoption, positioning, sentiment, and current market narrative. No price forecasts.]
+[One concise synthesis one to two sentences covering why the selected stories matter, the themes connecting them, and their combined relevance to Bitcoin adoption, positioning, sentiment, and current market narrative. No price forecasts.]
 ```
 
 ### 2. Weekly Bitcoin Recap Summary
@@ -148,7 +152,7 @@ Bitcoin returned [Bitcoin 7 Day Return] over the past week, compared with [Bitco
 Equity Market Indexes
 Among equity indexes, [Top Equity Index] led the group with a [Top Equity Index 7 Day Return] weekly return, while [Lagging Equity Index] was the weakest at [Lagging Equity Index 7 Day Return]. 
 
-[One to two sentences explaining whether Bitcoin outperformed or lagged broad equity benchmarks and whether equity correlation suggests risk-on/risk-off alignment.]
+[One sentence explaining whether Bitcoin outperformed or lagged broad equity benchmarks and whether suggests risk-on/risk-off alignment.]
 
 Sector Performance
 Among sectors, [Top Sector] led with a [Top Sector 7 Day Return] weekly return, while [Lagging Sector] lagged at [Lagging Sector 7 Day Return].
@@ -156,17 +160,17 @@ Among sectors, [Top Sector] led with a [Top Sector 7 Day Return] weekly return, 
 [One sentence explaining whether Bitcoin's weekly performance was closer to higher-beta sectors, defensive sectors, or broad market behavior.]
 
 Macro Asset Classes
-Across macro assets, [Top Macro Asset] returned [Top Macro Asset 7 Day Return], while [Lagging Macro Asset] returned [Lagging Macro Asset 7 Day Return]. Bitcoin's 90-day correlation to key macro assets ranged from [Lowest Macro BTC Correlation] to [Highest Macro BTC Correlation].
+Across macro assets, [Top Macro Asset] returned [Top Macro Asset 7 Day Return], while [Lagging Macro Asset] returned [Lagging Macro Asset 7 Day Return].
 
-[One to two sentences explaining how Bitcoin performed relative to dollar, gold, bond, or commodity proxies available in the table.]
+[One sentence explaining how Bitcoin performed relative to dollar, gold, bond, or commodity proxies available in the table.]
 
 Bitcoin Industry Performance
 Within Bitcoin-related equities and industry proxies, [Top Bitcoin Industry Asset] returned [Top Bitcoin Industry Asset 7 Day Return], while [Lagging Bitcoin Industry Asset] returned [Lagging Bitcoin Industry Asset 7 Day Return].
 
-[One to two sentences explaining whether Bitcoin-related equities confirmed, amplified, or diverged from Bitcoin's weekly move.]
+[One sentence explaining whether Bitcoin-related equities confirmed, amplified, or diverged from Bitcoin's weekly move.]
 
 Cross-Asset Summary
-[One to two sentence synthesis explaining where Bitcoin stood in the broader cross-asset performance table this week. Mention the top overall weekly performer if it was not Bitcoin, and keep the analysis tied to the assets and categories present in `performance_table.csv`.]
+[One sentence synthesis explaining where Bitcoin stood in the broader cross-asset performance table this week. Mention the top overall weekly performer if it was not Bitcoin, and keep the analysis tied to the assets and categories present in `performance_table.csv`.]
 ```
 
 ### 4. Bitcoin Price Analysis
@@ -191,17 +195,17 @@ Bitcoin Price Analysis
 
 Bitcoin is currently trading around [Current Price], placing it in the [Current 1K Bucket] short-term range and the broader [Current 5K Bucket] range.
 
-[One to two sentences using the 1K and 5K bucket counts as background context for how familiar or notable the current price zone has been historically. Do not quote both bucket counts unless they materially improve the analysis. Do not describe bucket counts as volume, liquidity, probability, or forecast odds.]
+[One sentence using the 1K and 5K bucket counts as background context for how familiar or notable the current price zone has been historically. Do not quote both bucket counts unless they materially improve the analysis. Do not describe bucket counts as volume, liquidity, probability, or forecast odds.]
 
-Nearest support levels below current price are [Nearest Support 1], [Nearest Support 2], and [Nearest Support 3 if available]. Nearest resistance levels above current price are [Nearest Resistance 1], [Nearest Resistance 2], and [Nearest Resistance 3 if available].
+Nearest support levels below current price are [Nearest Support 1], [Nearest Support 2]. Nearest resistance levels above current price are [Nearest Resistance 1], [Nearest Resistance 2].
 
-[One to two sentences explaining how these levels frame the current setup. Use explicit support/resistance rows from `price_outlook.csv`; do not invent levels.]
+[One sentence explaining how these levels frame the current setup. Use explicit support/resistance rows from `price_outlook.csv`; do not invent levels.]
 
-Relevant on-chain model levels are [Relevant On-Chain Model 1], [Relevant On-Chain Model 2 if useful], and [Relevant On-Chain Model 3 if useful].
+Relevant on-chain model levels are [Relevant On-Chain Model 1], [Relevant On-Chain Model 2 if useful].
 
-[One to two sentences explaining what the relevant on-chain models say about current price. Use `Electricity Cost` and `Realized Price` for deep value/support context, `STH Realized Price` for newer-entrant cost basis, and `3x Realized Price` for upper-range valuation context. Do not force every model into the response if it is not close to price or otherwise relevant.]
+[One sentence explaining what the relevant on-chain models say about current price. Use `Electricity Cost` and `Realized Price` for deep value/support context, `STH Realized Price` for newer-entrant cost basis, and `3x Realized Price` for upper-range valuation context. Do not force every model into the response if it is not close to price or otherwise relevant.]
 
-[Two to three sentence synthesis summarizing weekly price action, trading-range context, support/resistance, relevant on-chain level context, and where current price stands relative to the year-end bull/base/bear scenario anchors from `price_outlook.csv`. Integrate [Bull Case Price], [Base Case Price], and [Bear Case Price] naturally into the outlook instead of listing them. Explain what would need to change for price to move toward the bull case, what conditions would keep the base case intact, and what breakdown would make the bear case more relevant. Keep this as a coherent review and conditional outlook.]
+[One sentence synthesis summarizing weekly price action, trading-range context, support/resistance, relevant on-chain level context, and where current price stands relative to the year-end bull/base/bear scenario anchors from `price_outlook.csv`. Integrate [Bull Case Price], [Base Case Price], and [Bear Case Price] naturally into the outlook instead of listing them. Keep this as a coherent review and conditional outlook.]
 ```
 
 ### 5. Bitcoin Price Outlook
@@ -225,20 +229,20 @@ Bitcoin Price Outlook
 Historical Monthly Return Analysis
 Bitcoin's current [Current Month] return is [Current Month Return], compared with a historical average of [Current Month Average Return], a historical median of [Current Month Median Return], and a 4-year average of [Current Month 4-Year Average Return] for the same month.
 
-[One to two sentences explaining how the current month is tracking versus its historical monthly return profile. Focus on whether performance is above, below, or near historical average/median/4-year context, and what that says about current seasonality without forecasting.]
+[One sentence explaining how the current month is tracking versus its historical monthly return profile. Focus on whether performance is above, below, or near historical average/median/4-year context, and what that says about current seasonality without forecasting.]
 
 Month-to-Date Path
 Bitcoin is currently [Current MTD Return] month-to-date, compared with the historical median path of [Median MTD Report Date Return] and, if available, the historical average path of [Average MTD Report Date Return] at this point in the month. The historical median full-month path would imply a month-end return of [Median Full-Month Return] and a month-end price benchmark of [Median Month-End Price].
 
-[One to two sentences explaining whether Bitcoin is running ahead of, behind, or near the historical month-to-date path. Tie the current return to what historical median and average paths imply for month-end performance, while keeping the analysis conditional.]
+[One sentence explaining whether Bitcoin is running ahead of, behind, or near the historical month-to-date path. Tie the current return to what historical median and average paths imply for month-end performance, while keeping the analysis conditional.]
 
 Year-to-Date Path
 Bitcoin is currently [Current YTD Return] year-to-date, compared with the historical median year-to-date path of [Median YTD Report Date Return] and, if available, the historical average path of [Average YTD Report Date Return] at this point in the year. The historical median full-year path would imply a year-end return of [Median Full-Year Return] and a year-end price benchmark of [Median Year-End Price].
 
-[One to two sentences explaining how Bitcoin is tracking on a longer-term trajectory versus historical yearly paths. Discuss whether current performance is ahead of, behind, or near the median/average path and what that means for the broader yearly outlook.]
+[One sentence explaining how Bitcoin is tracking on a longer-term trajectory versus historical yearly paths. Discuss whether current performance is ahead of, behind, or near the median/average path and what that means for the broader yearly outlook.]
 
 Outlook Summary
-[Two to three sentence synthesis connecting monthly seasonality, the current month-to-date path, and the year-to-date trajectory. Explain whether near-term monthly performance is reinforcing or diverging from the longer-term yearly path. Keep the tone analytical and scenario-based, not predictive.]
+[One sentence synthesis connecting monthly seasonality, the current month-to-date path, and the year-to-date trajectory. Explain whether near-term monthly performance is reinforcing or diverging from the longer-term yearly path.]
 ```
 
 ### 6. Relative Valuation
@@ -268,16 +272,14 @@ Bitcoin's current valuation is [Bitcoin Market Cap], which corresponds to a BTC 
 
 [One sentences explaining where Bitcoin currently ranks in the table and what that says about its scale versus the listed assets and monetary benchmarks.]
 
-Bitcoin has already surpassed [Surpassed Asset 1], [Surpassed Asset 2], and [Surpassed Asset 3 if available] by market capitalization.
+Bitcoin has already surpassed [Surpassed Asset 1], [Surpassed Asset 2] by market capitalization.
 
 [One sentences explaining the significance of the surpassed assets. Use negative `BTC % Move to Marketcap BTC Price` values as evidence that Bitcoin is already above those parity levels.]
 
-The nearest larger valuation benchmarks are [Approaching Asset 1], [Approaching Asset 2], and [Approaching Asset 3 if available]. Reaching those parity levels would imply BTC prices of [Approaching Asset 1 BTC Price], [Approaching Asset 2 BTC Price], and [Approaching Asset 3 BTC Price], requiring moves of [Approaching Asset 1 BTC Move], [Approaching Asset 2 BTC Move], and [Approaching Asset 3 BTC Move].
-
-[One to two sentences explaining which larger benchmarks are closest and how far Bitcoin is from those parity levels. Frame them as valuation comparisons, not targets.]
+The nearest larger valuation benchmarks are [Approaching Asset 1], [Approaching Asset 2]. Reaching those parity levels would imply BTC prices of [Approaching Asset 1 BTC Price], [Approaching Asset 2 BTC Price] requiring moves of [Approaching Asset 1 BTC Move], [Approaching Asset 2 BTC Move].
 
 Relative Valuation Summary
-[One to two sentence synthesis explaining what Bitcoin has already overtaken, what it is closest to approaching, and which larger benchmarks remain distant. Keep the analysis comparative and valuation-based, not predictive.]
+[One sentence synthesis explaining what Bitcoin has already overtaken, what it is closest to approaching, and which larger benchmarks remain distant. Keep the analysis comparative and valuation-based, not predictive.]
 
 ```
 
@@ -303,10 +305,32 @@ Sections to synthesize:
 Return one concise conclusion paragraph.
 ```
 
+### 8. Executive Summary
+
+```text
+Write the Executive Summary for the Weekly Bitcoin Recap using the fully completed report.
+
+Generate this section LAST, after every other section is written. The Executive Summary is then placed at the TOP of the final report (above the News Section) during assembly.
+
+Purpose:
+- Frame the entire report at an executive, high-level overview.
+- Give the reader the single most important takeaway about the week before they read any details.
+
+Rules:
+- Length: 1 to 2 sentences. No more.
+- Synthesize the highest-signal finding across price action, news, on-chain context, performance, and valuation.
+- Use only facts already established in the completed report. Do not introduce new data, sources, or interpretations.
+- No headlines, no quotes, no bullets, no hedging filler.
+- No price forecasts. Conditional framing is acceptable when grounded in the body of the report.
+- Direct, neutral, professional tone.
+
+Return only the 1 to 2 sentence summary.
+```
+
 ## Final Assembly Notes
 
-- Start with the News Section.
-- Follow the section order above.
+- Generate sections in the prompt-spec order (1 through 8). The Executive Summary (#8) is intentionally written last because it synthesizes the finished body.
+- After all sections are written, **assemble in display order**: Executive Summary first, then News Section, then the rest in numbered order.
 - Keep headings stable from week to week.
 - Before finalizing, check that the report date is consistent across sections.
 - Check that each section uses only its mapped inputs.
