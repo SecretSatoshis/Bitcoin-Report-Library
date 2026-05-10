@@ -11,9 +11,8 @@ Bitcoin market and on-chain analytics pipeline powering the Secret Satoshis rese
 - **Valuation Models**: Stock-to-Flow, Thermocap, NVT, MVRV, Reserve Risk, energy-based pricing models, and relative valuation metrics
 - **Performance Tracking**: Rolling returns (7d, 90d, MTD, YTD, YOY), correlation analysis, Sharpe ratios, and CAGR calculations
 - **Cycle Analysis**: ATH drawdown tracking, halving epoch comparisons, and market cycle low indexing
-- **Report Generation**: Pre-built tables for weekly recaps, fundamentals summaries, ROI comparisons, and monthly heatmaps
+- **Report Tables**: Pre-built tables for fundamentals summaries, ROI comparisons, monthly heatmaps, and performance comparisons
 - **Chart-Ready Exports**: Pre-computed datasets for downstream visualization (drawdowns, cycle lows, halving eras, CAGR)
-- **Report Specs**: Agent-facing markdown reference for the Secret Satoshis Weekly Bitcoin Recap and its current CSV inputs
 
 ## Architecture
 
@@ -24,7 +23,6 @@ Bitcoin-Report-Library/
 ├── report_tables.py     # Table generation and formatting
 ├── data_definitions.py  # Configuration and constants
 ├── csv/                 # Output directory (consumed by Chart Library + dashboard)
-├── reports/             # Report prompt reference
 ├── dashboard/           # Live web dashboard (Evidence.dev)
 ├── .github/workflows/   # Daily data refresh
 └── requirements.txt     # Python dependencies
@@ -36,7 +34,6 @@ Bitcoin-Report-Library/
 | `data_format.py` | Fetches raw data from APIs, normalizes timestamps, engineers features, calculates derived metrics, computes cycle analysis (drawdowns, halvings, cycle lows) |
 | `report_tables.py` | Builds tabular outputs: fundamentals, ROI, performance comparisons, valuations, heatmaps, OHLC |
 | `data_definitions.py` | Central configuration: tickers, API settings, reference data, metric templates, constants |
-| `reports/` | Markdown report reference for the Weekly Bitcoin Recap and its current CSV inputs |
 
 ### Data Flow
 
@@ -118,13 +115,6 @@ All configuration is centralized in `data_definitions.py`:
 - **API Settings**: BRK metrics list (~90 on-chain metrics), endpoint URLs, timeout values
 - **Model Parameters**: Electricity costs, trading days, unit conversions
 - **Report Settings**: Analysis columns, correlation data columns, metrics templates
-
-## Report Specs
-
-The `reports/` folder stores the documentation reference for the canonical Secret Satoshis weekly report format that sits on top of the CSV pipeline.
-
-
-This file is not executable code. It is a reference document for agents and maintainers who need to understand which current Report Library datasets support each recap section.
 
 ## Outputs
 
