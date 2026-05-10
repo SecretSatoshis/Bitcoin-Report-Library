@@ -10,7 +10,7 @@ Key Responsibilities:
     - Performance Tables: Multi-asset return comparisons across equities, sectors, macro, and Bitcoin
     - ROI Analysis: Historical return calculations for multiple time periods
     - Price Distribution: Trading day counts by price bucket ranges
-    - Temporal Analysis: Monthly/yearly return comparisons, OHLC resampling, heatmaps
+    - Temporal Analysis: Monthly/yearly return comparisons, OHLC exports, heatmaps
     - Valuation Models: Relative value comparisons and end-of-year projections
 
 Output Format:
@@ -684,15 +684,15 @@ def monthly_heatmap(data, export_csv=True):
 
 def calculate_ohlc(ohlc_data, output_file="csv/ohlc_data.csv"):
     """
-    Resamples daily OHLC data to weekly intervals and saves full history to CSV.
+    Saves BRK weekly OHLC data to CSV.
 
-    This function converts daily Bitcoin price data into weekly candlestick data by taking
-    the first open, highest high, lowest low, and last close for each week. Weeks are
-    defined as Sunday-Saturday periods. NaN rows are dropped before export.
+    BRK week1 rows are week-start labels and include the latest available current-week
+    candle. This keeps the report's price action aligned with the latest available
+    BRK price fields at generation time.
 
     Parameters:
     ohlc_data (pd.DataFrame): DataFrame with DatetimeIndex and columns: 'Open', 'High', 'Low', 'Close'.
-                              Index must be datetime-compatible for resampling.
+                              Index must be datetime-compatible for export.
     output_file (str): Path for CSV export. Default: "csv/ohlc_data.csv"
 
     Returns:
@@ -701,23 +701,20 @@ def calculate_ohlc(ohlc_data, output_file="csv/ohlc_data.csv"):
         - High: Highest price during the week
         - Low: Lowest price during the week
         - Close: Last close price of the week
-        Index is weekly period end dates (Sundays).
+        Index is BRK week-start date labels.
     """
-    # Ensure the index is a datetime index for resampling
+    # Ensure the index is a datetime index before export.
     ohlc_data.index = pd.to_datetime(ohlc_data.index)
-
-    # Resample daily data to get weekly OHLC values
-    resampled_ohlc = ohlc_data.resample("W").agg(
-        {"Open": "first", "High": "max", "Low": "min", "Close": "last"}
+    weekly_ohlc = (
+        ohlc_data[["Open", "High", "Low", "Close"]]
+        .sort_index()
+        .dropna()
     )
 
-    # Drop any rows with NaN values (incomplete weeks)
-    resampled_ohlc = resampled_ohlc.dropna()
+    # Export full history to CSV.
+    weekly_ohlc.to_csv(output_file)
 
-    # Export full history to CSV
-    resampled_ohlc.to_csv(output_file)
-
-    return resampled_ohlc
+    return weekly_ohlc
 
 
 def create_eoy_model_table(report_data, cagr_results):

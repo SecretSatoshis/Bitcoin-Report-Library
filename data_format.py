@@ -9,7 +9,7 @@ Data Sources:
     - BRK (Bitview): On-chain metrics, difficulty, supply data
     - Yahoo Finance: Equities, ETFs, indices, commodities, forex
     - CoinGecko: Altcoin prices, market caps, dominance
-    - Kraken: Bitcoin OHLC price data
+    - BRK: Bitcoin OHLC price data
     - Alternative.me: Fear & Greed Index
     - Google Sheets: Miner efficiency data
 """
@@ -106,103 +106,47 @@ def get_bitcoin_dominance() -> pd.DataFrame:
         return pd.DataFrame(columns=["bitcoin_dominance", "time"])
 
 
-def get_kraken_ohlc(pair: str, since: int) -> pd.DataFrame:
+def get_brk_ohlc(index: str = "week1", start: str = "2017-01-01") -> pd.DataFrame:
     """
-    Fetches historical OHLC data from the Kraken API with retry logic.
+    Fetch historical Bitcoin OHLC data from BRK.
 
     Parameters:
-    pair (str): The Kraken asset pair (e.g., 'BTCUSD').
-    since (int): Timestamp from which to fetch data.
+    index (str): BRK index to fetch, such as "week1" or "day1".
+    start (str): Start date for the series query.
 
     Returns:
-    pd.DataFrame: DataFrame with OHLC data resampled to weekly intervals.
+    pd.DataFrame: DataFrame indexed by BRK date labels with Open, High, Low, Close columns.
     """
-    url = "https://api.kraken.com/0/public/OHLC"
-    interval = 1440  # Daily interval
-    data_frames = []  # Use a list to collect data chunks for a single concat outside the loop
-    max_retries = 3
-    retry_delay = 5
+    base_url = "https://bitview.space/api/series"
+    params = {"start": start}
 
-    while True:
-        retries = 0
-        success = False
+    try:
+        date_response = requests.get(
+            f"{base_url}/date/{index}", params=params, timeout=API_TIMEOUT
+        )
+        date_response.raise_for_status()
 
-        while not success and retries < max_retries:
-            try:
-                params = {"pair": pair, "interval": interval, "since": since}
-                response = requests.get(url, params=params, timeout=API_TIMEOUT)
-                response.raise_for_status()
+        ohlc_response = requests.get(
+            f"{base_url}/price_ohlc/{index}", params=params, timeout=API_TIMEOUT
+        )
+        ohlc_response.raise_for_status()
 
-                data = response.json()
-                if data.get("error"):
-                    print(f"Error in Kraken data: {data['error']}")
-                    return pd.DataFrame(columns=["Open", "High", "Low", "Close", "VWAP", "Volume", "Count"])
+        dates = date_response.json()["data"]
+        ohlc_rows = ohlc_response.json()["data"]
 
-                ohlc_data = data["result"][list(data["result"].keys())[0]]
-                since = data["result"]["last"]
+        if len(dates) != len(ohlc_rows):
+            raise ValueError(
+                f"BRK date/OHLC length mismatch: {len(dates)} dates vs {len(ohlc_rows)} rows"
+            )
 
-                temp_df = pd.DataFrame(
-                    ohlc_data,
-                    columns=[
-                        "Time",
-                        "Open",
-                        "High",
-                        "Low",
-                        "Close",
-                        "VWAP",
-                        "Volume",
-                        "Count",
-                    ],
-                )
-                temp_df["Time"] = pd.to_datetime(temp_df["Time"], unit="s", utc=True)
-                data_frames.append(temp_df)
+        df = pd.DataFrame(ohlc_rows, columns=["Open", "High", "Low", "Close"])
+        df["Time"] = pd.to_datetime(dates)
+        df.set_index("Time", inplace=True)
+        return df.astype(float).sort_index()
 
-                success = True
-
-                if len(ohlc_data) < 720:
-                    # No more data to fetch
-                    break
-
-                time.sleep(1)
-
-            except requests.RequestException as e:
-                retries += 1
-                if retries < max_retries:
-                    print(f"Error fetching Kraken OHLC data (attempt {retries}/{max_retries}): {e}")
-                    time.sleep(retry_delay)
-                    retry_delay *= 2  # Exponential backoff
-                else:
-                    print(f"Failed to fetch Kraken OHLC data after {max_retries} retries: {e}")
-                    break
-
-        if not success:
-            # Failed after all retries, stop trying
-            break
-
-        # Break out of outer loop if we got all data
-        if success and len(ohlc_data) < 720:
-            break
-
-    if not data_frames:
-        return pd.DataFrame(columns=["Open", "High", "Low", "Close", "VWAP", "Volume", "Count"])
-
-    df = pd.concat(data_frames)
-    df.set_index("Time", inplace=True)
-    float_cols = ["Open", "High", "Low", "Close", "VWAP", "Volume"]
-    df[float_cols] = df[float_cols].astype(float)
-    df = df.resample("W-SUN").agg(
-        {
-            "Open": "first",
-            "High": "max",
-            "Low": "min",
-            "Close": "last",
-            "VWAP": "mean",
-            "Volume": "sum",
-            "Count": "sum",
-        }
-    )
-
-    return df
+    except (requests.RequestException, KeyError, ValueError) as e:
+        print(f"Failed to fetch BRK OHLC data: {e}")
+        return pd.DataFrame(columns=["Open", "High", "Low", "Close"])
 
 
 def get_btc_trade_volume_14d() -> pd.DataFrame:

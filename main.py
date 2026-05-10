@@ -42,9 +42,8 @@ data = data_format.get_data(tickers, market_data_start_date)
 ## Forward fill the data for all columns
 data = data.ffill()
 
-## Kraken OHLC data
-start_timestamp = int(pd.Timestamp("2017-01-01").timestamp())
-ohlc_data = data_format.get_kraken_ohlc("XBTUSD", start_timestamp)
+## BRK OHLC data
+ohlc_data = data_format.get_brk_ohlc(index="week1", start="2017-01-01")
 ohlc_data.index = pd.to_datetime(ohlc_data.index)
 if ohlc_data.index.tz is not None:
     ohlc_data.index = ohlc_data.index.tz_convert(None)

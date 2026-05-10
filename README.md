@@ -38,7 +38,7 @@ Bitcoin-Report-Library/
 ### Data Flow
 
 ```
-APIs (BRK, yfinance, CoinGecko, Kraken)
+APIs (BRK, yfinance, CoinGecko)
     │
     ▼
 data_format.py  ──►  Fetches & calculates all metrics
@@ -85,7 +85,7 @@ python main.py
 The pipeline executes in sequence:
 1. Fetches on-chain data from BRK API (~90 metrics)
 2. Retrieves market data from Yahoo Finance and CoinGecko
-3. Pulls OHLC data from Kraken
+3. Pulls weekly OHLC data from BRK
 4. Calculates derived metrics and valuation models (Reserve Risk, MVRV, NVT, volatility, etc.)
 5. Runs performance analysis (7d, 90d, MTD, YTD, YOY changes)
 6. Computes rolling CAGR for all metrics
@@ -102,7 +102,6 @@ The pipeline executes in sequence:
 | **BRK (Bitview) API** | On-chain metrics, difficulty, supply data | `bitview.space/api` |
 | **Yahoo Finance** | Equities, ETFs, indices, commodities, forex | `yfinance` library |
 | **CoinGecko** | Altcoin prices, market caps, BTC dominance | Public API |
-| **Kraken** | Bitcoin OHLC price data | Public API |
 | **Alternative.me** | Fear & Greed Index | Public API |
 | **Google Sheets** | Miner efficiency data | CSV export |
 
@@ -138,7 +137,7 @@ The master metrics dataset is exported as gzipped CSV (`.csv.gz`) to keep the fi
 | `5k_bucket_table.csv` | Price distribution in $5,000 buckets with current bucket markers |
 | `1k_bucket_table.csv` | Price distribution in $1,000 buckets with current bucket markers |
 | `monthly_heatmap_data.csv` | Monthly returns heatmap data |
-| `ohlc_data.csv` | OHLC price data |
+| `ohlc_data.csv` | BRK weekly OHLC price data using week-start labels |
 | `summary_history.csv` | Last 30 days of headline metrics for dashboard sparklines + 30d deltas |
 | `onchain_price_models.csv` | Daily on-chain valuation models (Realized, STH/LTH Realized, Electricity Cost, 3× Realized) joined to BTC price |
 | `mtd_returns_history.csv` | Indexed MTD returns by year (current month vs. historical years) |
