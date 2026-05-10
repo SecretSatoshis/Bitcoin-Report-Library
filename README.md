@@ -2,7 +2,7 @@
 
 Bitcoin market and on-chain analytics pipeline powering the Secret Satoshis research stack. The system delivers deterministic, reproducible datasets optimized for downstream modeling, reporting, and visualization.
 
-**This is the single data source for the entire Secret Satoshis analytics stack.** All data fetching, metric calculation, and feature engineering happens here. Downstream projects ([Bitcoin-Chart-Library](https://github.com/SecretSatoshis/Bitcoin-Chart-Library) for static charts, the bundled `dashboard/` for the live web dashboard at [dashboard.secretsatoshis.com](https://dashboard.secretsatoshis.com)) consume the CSV output directly — no API calls or duplicated logic.
+**This is the single data source for the entire Secret Satoshis analytics stack.** All data fetching, metric calculation, and feature engineering happens here. Downstream projects ([Bitcoin-Chart-Library](https://github.com/SecretSatoshis/Bitcoin-Chart-Library) for interactive HTML charts, the bundled `dashboard/` for the live web dashboard at [dashboard.secretsatoshis.com](https://dashboard.secretsatoshis.com)) consume the CSV output directly — no API calls or duplicated logic.
 
 ## Features
 
@@ -52,7 +52,7 @@ report_tables.py  ──►  Generates formatted report tables
     ▼
 csv/  ──►  All outputs exported as CSV
     │
-    ├─►  Bitcoin-Chart-Library     (static charts)
+    ├─►  Bitcoin-Chart-Library     (interactive HTML charts)
     └─►  dashboard/  ──►  Evidence.dev  ──►  Cloudflare Pages
                                               dashboard.secretsatoshis.com
 ```
@@ -123,7 +123,6 @@ All configuration is centralized in `data_definitions.py`:
 
 The `reports/` folder stores the documentation reference for the canonical Secret Satoshis weekly report format that sits on top of the CSV pipeline.
 
-- `reports/weekly_bitcoin_recap.md` documents the Weekly Bitcoin Recap structure and prompts
 
 This file is not executable code. It is a reference document for agents and maintainers who need to understand which current Report Library datasets support each recap section.
 

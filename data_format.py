@@ -2099,7 +2099,8 @@ def compute_drawdowns(data: pd.DataFrame) -> pd.DataFrame:
         ("Drawdown Cycle 1", "2011-06-08", "2013-02-28"),
         ("Drawdown Cycle 2", "2013-11-29", "2017-03-03"),
         ("Drawdown Cycle 3", "2017-12-17", "2020-12-16"),
-        ("Drawdown Cycle 4", "2021-11-10", pd.to_datetime("today").strftime("%Y-%m-%d")),
+        ("Drawdown Cycle 4", "2021-11-10", "2024-03-04"),
+        ("Drawdown Cycle 5", "2025-10-06", pd.to_datetime("today").strftime("%Y-%m-%d")),
     ]
 
     df = data.copy()
@@ -2147,10 +2148,11 @@ def compute_cycle_lows(data: pd.DataFrame) -> pd.DataFrame:
     """
     cycle_periods = [
         ("Market Cycle 1", "2010-07-25", "2011-11-18"),
-        ("Market Cycle 2", "2011-11-18", "2015-01-14"),
-        ("Market Cycle 3", "2015-01-14", "2018-12-16"),
+        ("Market Cycle 2", "2011-11-18", "2015-01-15"),
+        ("Market Cycle 3", "2015-01-15", "2018-12-16"),
         ("Market Cycle 4", "2018-12-16", "2022-11-20"),
-        ("Market Cycle 5", "2022-11-20", pd.to_datetime("today").strftime("%Y-%m-%d")),
+        ("Market Cycle 5", "2022-11-20", "2026-02-06"),
+        ("Market Cycle 6", "2026-02-06", pd.to_datetime("today").strftime("%Y-%m-%d")),
     ]
 
     df = data.copy()
@@ -2167,8 +2169,20 @@ def compute_cycle_lows(data: pd.DataFrame) -> pd.DataFrame:
         if period.empty:
             continue
 
-        low_date = period["price_close"].idxmin()
-        low_px = float(period.loc[low_date, "price_close"])
+        valid_prices = period["price_close"].dropna()
+        valid_prices = valid_prices[valid_prices > 0]
+        if valid_prices.empty:
+            continue
+
+        # Cycle windows are anchored to the configured cycle-low date when valid.
+        # Early Bitcoin source data can contain zero placeholders before real market pricing.
+        if start_dt in valid_prices.index:
+            low_date = start_dt
+            low_px = float(valid_prices.loc[start_dt])
+        else:
+            low_date = valid_prices.index[0]
+            low_px = float(valid_prices.iloc[0])
+            period = period.loc[period.index >= low_date].copy()
 
         period["days_since_cycle_low"] = (period.index - low_date).days
         period["index_value"] = period["price_close"] / low_px
