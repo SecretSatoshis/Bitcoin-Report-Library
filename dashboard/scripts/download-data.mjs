@@ -37,6 +37,7 @@ const CSV_FILES = [
   "monthly_heatmap_data.csv",
   "relative_value_comparison.csv",
   "ohlc_data.csv",
+  "report_ohlc_summary.csv",
   "1k_bucket_table.csv",
   "5k_bucket_table.csv",
   "roi_table.csv",

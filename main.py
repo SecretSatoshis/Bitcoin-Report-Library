@@ -48,6 +48,14 @@ ohlc_data.index = pd.to_datetime(ohlc_data.index)
 if ohlc_data.index.tz is not None:
     ohlc_data.index = ohlc_data.index.tz_convert(None)
 
+daily_ohlc_start = (pd.to_datetime(report_date) - pd.Timedelta(days=14)).strftime(
+    "%Y-%m-%d"
+)
+daily_ohlc_data = data_format.get_brk_ohlc(index="day1", start=daily_ohlc_start)
+daily_ohlc_data.index = pd.to_datetime(daily_ohlc_data.index)
+if daily_ohlc_data.index.tz is not None:
+    daily_ohlc_data.index = daily_ohlc_data.index.tz_convert(None)
+
 # Calculate Custom Metrics
 data = data_format.calculate_custom_on_chain_metrics(data)
 data = data_format.calculate_moving_averages(data, moving_avg_metrics)
@@ -124,6 +132,7 @@ fundamentals_table = report_tables.create_fundamentals_table(
 
 # Create OHLC CSV
 report_tables.calculate_ohlc(ohlc_data)
+report_tables.create_report_ohlc_summary(daily_ohlc_data, report_date)
 
 # Create MTD Return Comparison Table
 mtd_return_comp = report_tables.create_monthly_returns_table(report_data, report_date)
@@ -132,7 +141,7 @@ mtd_return_comp = report_tables.create_monthly_returns_table(report_data, report
 ytd_return_comp = report_tables.create_yearly_returns_table(report_data, report_date)
 
 # Create Relative Valuation Table
-rv_table = report_tables.create_asset_valuation_table(data)
+rv_table = report_tables.create_asset_valuation_table(report_data, report_date)
 
 # Create the summary table
 summary_table = report_tables.create_summary_table(
@@ -149,7 +158,7 @@ performance_table = (
 
 
 # Create Heat Map CSV
-report_tables.monthly_heatmap(data)
+report_tables.monthly_heatmap(report_data, report_date)
 
 
 # CSV Exports

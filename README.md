@@ -138,6 +138,7 @@ The master metrics dataset is exported as gzipped CSV (`.csv.gz`) to keep the fi
 | `1k_bucket_table.csv` | Price distribution in $1,000 buckets with current bucket markers |
 | `monthly_heatmap_data.csv` | Monthly returns heatmap data |
 | `ohlc_data.csv` | BRK weekly OHLC price data using week-start labels |
+| `report_ohlc_summary.csv` | Report-date daily OHLC plus week-to-date context capped at the report date |
 | `summary_history.csv` | Last 30 days of headline metrics for dashboard sparklines + 30d deltas |
 | `onchain_price_models.csv` | Daily on-chain valuation models (Realized, STH/LTH Realized, Electricity Cost, 3× Realized) joined to BTC price |
 | `mtd_returns_history.csv` | Indexed MTD returns by year (current month vs. historical years) |

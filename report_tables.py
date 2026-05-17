@@ -586,7 +586,7 @@ def create_full_performance_table(
     return full_performance_df
 
 
-def monthly_heatmap(data, export_csv=True):
+def monthly_heatmap(data, report_date=None, export_csv=True):
     """
     Creates monthly and yearly Bitcoin returns heatmap data with statistical aggregations.
 
@@ -597,6 +597,7 @@ def monthly_heatmap(data, export_csv=True):
     Parameters:
     data (pd.DataFrame): DataFrame with DatetimeIndex and 'price_close' column. Data is filtered
                          to start from 2012-01-01 within the function.
+    report_date (str or datetime, optional): As-of date used to cap current-period returns.
     export_csv (bool): If True, exports heatmap data to csv/monthly_heatmap_data.csv. Default: True.
 
     Returns:
@@ -607,7 +608,12 @@ def monthly_heatmap(data, export_csv=True):
         - Current incomplete month shows MTD return
         - Statistical rows exclude incomplete month data
     """
-    # Filter data to start from January 2011
+    data = data.sort_index()
+    if report_date is not None:
+        report_date = pd.to_datetime(report_date).normalize()
+        data = data.loc[:report_date]
+
+    # Filter data to start from January 2012
     data = data[data.index >= pd.to_datetime("2012-01-01")]
 
     # Calculate monthly returns
@@ -686,9 +692,9 @@ def calculate_ohlc(ohlc_data, output_file="csv/ohlc_data.csv"):
     """
     Saves BRK weekly OHLC data to CSV.
 
-    BRK week1 rows are week-start labels and include the latest available current-week
-    candle. This keeps the report's price action aligned with the latest available
-    BRK price fields at generation time.
+    BRK week1 rows are week-start labels and include the latest available
+    current-week candle. For an open candle, Close represents the latest
+    available price, not a finalized weekly close.
 
     Parameters:
     ohlc_data (pd.DataFrame): DataFrame with DatetimeIndex and columns: 'Open', 'High', 'Low', 'Close'.
@@ -715,6 +721,66 @@ def calculate_ohlc(ohlc_data, output_file="csv/ohlc_data.csv"):
     weekly_ohlc.to_csv(output_file)
 
     return weekly_ohlc
+
+
+def create_report_ohlc_summary(
+    daily_ohlc_data, report_date, output_file="csv/report_ohlc_summary.csv"
+):
+    """
+    Create report-date OHLC context from daily candles.
+
+    The daily close is the canonical report-date close used in narrative/report
+    logic. The weekly fields are week-to-date values derived from daily candles
+    through the report date, so they provide weekly context without pulling in
+    post-report-date movement from an open weekly candle.
+
+    Parameters:
+    daily_ohlc_data (pd.DataFrame): Daily OHLC DataFrame with DatetimeIndex.
+    report_date (str or datetime): Canonical report as-of date.
+    output_file (str): Path for CSV export.
+
+    Returns:
+    pd.DataFrame: One-row report OHLC summary.
+    """
+    if daily_ohlc_data.empty:
+        out = pd.DataFrame()
+        out.to_csv(output_file, index=False)
+        return out
+
+    daily_ohlc_data = daily_ohlc_data[["Open", "High", "Low", "Close"]].copy()
+    daily_ohlc_data.index = pd.to_datetime(daily_ohlc_data.index).normalize()
+    daily_ohlc_data = daily_ohlc_data.sort_index().dropna()
+
+    report_date = pd.to_datetime(report_date).normalize()
+    available_dates = daily_ohlc_data.index[daily_ohlc_data.index <= report_date]
+    if len(available_dates) == 0:
+        raise ValueError("No daily OHLC data available on or before the report date.")
+
+    actual_report_date = available_dates.max()
+    daily_row = daily_ohlc_data.loc[actual_report_date]
+
+    week_start = actual_report_date - pd.Timedelta(days=actual_report_date.weekday())
+    week_to_date = daily_ohlc_data.loc[week_start:actual_report_date]
+
+    out = pd.DataFrame(
+        [
+            {
+                "Report Date": actual_report_date.strftime("%Y-%m-%d"),
+                "Daily Open": daily_row["Open"],
+                "Daily High": daily_row["High"],
+                "Daily Low": daily_row["Low"],
+                "Daily Close": daily_row["Close"],
+                "Week Start": week_start.strftime("%Y-%m-%d"),
+                "Week-to-Date Open": week_to_date["Open"].iloc[0],
+                "Week-to-Date High": week_to_date["High"].max(),
+                "Week-to-Date Low": week_to_date["Low"].min(),
+                "Week-to-Date Close": daily_row["Close"],
+                "Week-to-Date Days": len(week_to_date),
+            }
+        ]
+    )
+    out.to_csv(output_file, index=False)
+    return out
 
 
 def create_eoy_model_table(report_data, cagr_results):
@@ -814,6 +880,10 @@ def create_monthly_returns_table(selected_metrics, report_date=None):
     current_year = today.year
     current_month = today.month
     current_day = today.day
+
+    selected_metrics = selected_metrics.sort_index()
+    if report_date is not None:
+        selected_metrics = selected_metrics.loc[: pd.to_datetime(report_date).normalize()]
 
     # Ensure data is filtered to entries from January 1, 2014, onwards
     selected_metrics = selected_metrics[selected_metrics.index >= "2014-01-01"].copy()
@@ -920,6 +990,10 @@ def create_yearly_returns_table(selected_metrics, report_date=None):
     current_year = today.year
     current_day_of_year = today.timetuple().tm_yday
 
+    selected_metrics = selected_metrics.sort_index()
+    if report_date is not None:
+        selected_metrics = selected_metrics.loc[: pd.to_datetime(report_date).normalize()]
+
     # Ensure data is filtered correctly
     selected_metrics = selected_metrics[selected_metrics.index >= "2014-01-01"].copy()
 
@@ -992,7 +1066,7 @@ def create_yearly_returns_table(selected_metrics, report_date=None):
     return df_filtered
 
 
-def create_asset_valuation_table(report_data):
+def create_asset_valuation_table(report_data, report_date=None):
     """
     Generates relative valuation comparison table showing Bitcoin price if it matched other asset market caps.
 
@@ -1002,7 +1076,7 @@ def create_asset_valuation_table(report_data):
     for Bitcoin to reach each valuation milestone.
 
     Parameters:
-    report_data (pd.DataFrame): DataFrame with latest row containing:
+    report_data (pd.DataFrame): DataFrame with report-date row containing:
         - price_close: Current Bitcoin price
         - market_cap: Current Bitcoin market cap
         - *_mc_btc_price: Calculated BTC price if matching each asset's market cap
@@ -1057,8 +1131,11 @@ def create_asset_valuation_table(report_data):
         {"name": "Visa", "data": "V_mc_btc_price", "marketcap": "V_MarketCap"},
     ]
 
-    # Get the latest values (last row)
-    latest_data = report_data.iloc[-1]
+    latest_data = (
+        _row_asof(report_data, report_date)
+        if report_date is not None
+        else report_data.sort_index().iloc[-1]
+    )
     bitcoin_price = latest_data.get("price_close", float("nan"))
 
     valuation_data = []
