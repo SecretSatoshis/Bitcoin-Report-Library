@@ -1,11 +1,11 @@
 Metric,Value,Category
-Bitcoin Price USD,63328.99,Market Data
-Bitcoin Marketcap,1269225440750.47,Market Data
-Sats Per Dollar,1579.0556583959417,Market Data
-Bitcoin Supply,20041776.13997128,On-chain Data
-Bitcoin Miner Revenue,31555251.005999997,On-chain Data
-Bitcoin Transaction Volume,54400657682.325,On-chain Data
-Bitcoin Dominance,56.4550828048455,Investor Sentiment
-Bitcoin Fear & Greed Index,12.0,Investor Sentiment
+Bitcoin Price USD,64483.5,Market Data
+Bitcoin Marketcap,1292388859077.69,Market Data
+Sats Per Dollar,1550.78430916436,Market Data
+Bitcoin Supply,20042163.63996518,On-chain Data
+Bitcoin Miner Revenue,31132653.583333332,On-chain Data
+Bitcoin Transaction Volume,53199757812.65233,On-chain Data
+Bitcoin Dominance,56.594077445804444,Investor Sentiment
+Bitcoin Fear & Greed Index,13.0,Investor Sentiment
 Bitcoin Market Sentiment,Extreme Fear,Investor Sentiment
 Bitcoin Valuation,Fair Value,Investor Sentiment
