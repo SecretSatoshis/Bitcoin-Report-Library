@@ -1,5 +1,4 @@
 Metric,date,Value
-Bitcoin Price USD,2026-06-02,66853.7
 Bitcoin Price USD,2026-06-03,64751.85
 Bitcoin Price USD,2026-06-04,63257.25
 Bitcoin Price USD,2026-06-05,61526.79
@@ -29,7 +28,7 @@ Bitcoin Price USD,2026-06-28,59467.0
 Bitcoin Price USD,2026-06-29,60254.51
 Bitcoin Price USD,2026-06-30,58366.8
 Bitcoin Price USD,2026-07-01,60246.33
-Bitcoin Marketcap,2026-06-02,1339598848784.06
+Bitcoin Price USD,2026-07-02,61496.99
 Bitcoin Marketcap,2026-06-03,1297504322428.1
 Bitcoin Marketcap,2026-06-04,1267583442171.46
 Bitcoin Marketcap,2026-06-05,1232933492960.68
@@ -59,7 +58,7 @@ Bitcoin Marketcap,2026-06-28,1192274950054.06
 Bitcoin Marketcap,2026-06-29,1208087553948.95
 Bitcoin Marketcap,2026-06-30,1170266627064.3
 Bitcoin Marketcap,2026-07-01,1207978521811.51
-Sats Per Dollar,2026-06-02,1495.8035232156187
+Bitcoin Marketcap,2026-07-02,1233080252311.88
 Sats Per Dollar,2026-06-03,1544.3574199038328
 Sats Per Dollar,2026-06-04,1580.8464642392769
 Sats Per Dollar,2026-06-05,1625.3082600278674
@@ -89,7 +88,7 @@ Sats Per Dollar,2026-06-28,1681.6049237392165
 Sats Per Dollar,2026-06-29,1659.6268063585612
 Sats Per Dollar,2026-06-30,1713.3027680119517
 Sats Per Dollar,2026-07-01,1659.8521436907442
-Bitcoin Supply,2026-06-02,20037766.77706787
+Sats Per Dollar,2026-07-02,1626.0958463170311
 Bitcoin Supply,2026-06-03,20038104.27699146
 Bitcoin Supply,2026-06-04,20038548.02685009
 Bitcoin Supply,2026-06-05,20038969.90174006
@@ -119,7 +118,7 @@ Bitcoin Supply,2026-06-28,20049354.26461839
 Bitcoin Supply,2026-06-29,20049744.88961828
 Bitcoin Supply,2026-06-30,20050210.51461277
 Bitcoin Supply,2026-07-01,20050657.38961212
-Bitcoin Miner Revenue,2026-06-02,24042309.63
+Bitcoin Supply,2026-07-02,20051066.7645992
 Bitcoin Miner Revenue,2026-06-03,22944723.41
 Bitcoin Miner Revenue,2026-06-04,28838410.93
 Bitcoin Miner Revenue,2026-06-05,26334356.74
@@ -149,7 +148,7 @@ Bitcoin Miner Revenue,2026-06-28,24292519.25
 Bitcoin Miner Revenue,2026-06-29,24149471.02
 Bitcoin Miner Revenue,2026-06-30,27726377.3
 Bitcoin Miner Revenue,2026-07-01,27076108.93
-Bitcoin Transaction Volume,2026-06-02,79327617943.32
+Bitcoin Miner Revenue,2026-07-02,25178502.35
 Bitcoin Transaction Volume,2026-06-03,69039596656.28
 Bitcoin Transaction Volume,2026-06-04,65435119243.32
 Bitcoin Transaction Volume,2026-06-05,67174917478.0
@@ -179,8 +178,8 @@ Bitcoin Transaction Volume,2026-06-28,32168168100.05
 Bitcoin Transaction Volume,2026-06-29,59906826458.14
 Bitcoin Transaction Volume,2026-06-30,67044476867.0
 Bitcoin Transaction Volume,2026-07-01,53575063936.62
-Bitcoin Dominance,2026-07-01,55.69390572311096
-Bitcoin Fear & Greed Index,2026-06-02,23.0
+Bitcoin Transaction Volume,2026-07-02,58959197377.11
+Bitcoin Dominance,2026-07-02,55.66195615413163
 Bitcoin Fear & Greed Index,2026-06-03,11.0
 Bitcoin Fear & Greed Index,2026-06-04,12.0
 Bitcoin Fear & Greed Index,2026-06-05,12.0
@@ -210,3 +209,4 @@ Bitcoin Fear & Greed Index,2026-06-28,18.0
 Bitcoin Fear & Greed Index,2026-06-29,12.0
 Bitcoin Fear & Greed Index,2026-06-30,15.0
 Bitcoin Fear & Greed Index,2026-07-01,11.0
+Bitcoin Fear & Greed Index,2026-07-02,19.0
