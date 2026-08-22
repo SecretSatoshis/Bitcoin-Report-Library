@@ -1,0 +1,6 @@
+# Generated outputs should never be line-merged: combining rows from two pipeline
+# runs can create a plausible-looking but internally inconsistent report. The
+# built-in binary merge driver leaves an explicit conflict for the operator to
+# resolve, and unlike a custom `ours`/`theirs` driver it works in every clone.
+csv/*.csv merge=binary
+csv/*.gz  binary merge=binary

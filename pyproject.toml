@@ -1,0 +1,14 @@
+[project]
+name = "bitcoin-report-library"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "numpy==2.5.2",
+  "pandas==3.0.5",
+  "pyarrow==25.0.1",
+  "requests==2.34.2",
+  "yfinance==1.6.0",
+]
+
+[tool.uv]
+package = false

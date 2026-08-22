@@ -1,0 +1,416 @@
+/* ─────────────────────────────────────────────────────────────────
+   Secret Satoshis — Google Fonts (matches main site)
+   - JetBrains Mono : body, tables, numbers, UI
+   - Syne          : page titles, section headings (display)
+   ───────────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+	html {
+		@apply scroll-smooth;
+	}
+
+	body {
+		@apply select-none;
+		font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+		font-feature-settings: 'liga' 0, 'calt' 0; /* keep numbers crisp */
+	}
+
+	/* Default border color */
+	* {
+		@apply border-base-300;
+	}
+
+	/* osx style scrollbars */
+	.pretty-scrollbar {
+		scrollbar-width: thin;
+		scrollbar-color: theme('colors.base-300') transparent;
+	}
+
+	.pretty-scrollbar::-webkit-scrollbar {
+		height: 6px;
+		width: 6px;
+	}
+
+	.pretty-scrollbar::-webkit-scrollbar-track {
+		background-color: transparent;
+	}
+
+	.pretty-scrollbar::-webkit-scrollbar-thumb {
+		background-color: transparent;
+		border-radius: 7px;
+	}
+
+	.pretty-scrollbar:hover::-webkit-scrollbar-thumb {
+		background-color: theme('colors.base-200');
+	}
+
+	/* hidden scrollbar */
+	.no-scrollbar::-webkit-scrollbar {
+		display: none;
+	}
+	.no-scrollbar {
+		-ms-overflow-style: none;
+		scrollbar-width: none;
+	}
+
+	/* remove user agent styles for select */
+	select {
+		appearance: none;
+		-moz-appearance: none;
+		-webkit-appearance: none;
+	}
+}
+
+@layer components {
+	.markdown {
+		@apply leading-normal text-base antialiased;
+		font-family: 'JetBrains Mono', ui-monospace, monospace;
+	}
+
+	img.markdown {
+		@apply mx-auto h-auto max-w-full rounded-lg;
+	}
+
+	article.markdown a.markdown {
+		@apply text-primary underline decoration-transparent hover:decoration-primary  transition-all duration-200 !important;
+	}
+
+	p.markdown,
+	ul.markdown,
+	ol.markdown {
+		margin-block-end: 1.2em;
+		margin-block-start: 0em;
+	}
+
+	/* lists */
+
+	ol.markdown {
+		@apply list-decimal ps-6;
+	}
+	ul.markdown {
+		@apply list-disc ps-6;
+	}
+
+	ul.markdown,
+	ol.markdown {
+		& ul.markdown {
+			@apply list-circle;
+		}
+		& ol.markdown {
+			@apply list-lower-alpha;
+		}
+
+		& ul.markdown,
+		& ol.markdown {
+			@apply mt-1;
+			margin-block-end: 0em;
+
+			& ul.markdown {
+				@apply list-square;
+			}
+			& ol.markdown {
+				@apply list-lower-roman;
+			}
+		}
+
+		li.markdown {
+			@apply list-item;
+			text-align: -webkit-match-parent;
+
+			& + li.markdown {
+				@apply mt-1;
+			}
+		}
+	}
+
+	/* ─── Display headings — Syne (matches main site) ───────────── */
+	h1.markdown,
+	h2.markdown,
+	h1.title {
+		font-family: 'Syne', system-ui, sans-serif;
+		letter-spacing: -0.01em;
+	}
+
+	/* H3+ stays in JetBrains Mono for tight subsection labels */
+	h3.markdown,
+	h4.markdown,
+	h5.markdown,
+	h6.markdown {
+		font-family: 'JetBrains Mono', monospace;
+		letter-spacing: 0;
+	}
+
+	h1.markdown,
+	h2.markdown,
+	h3.markdown,
+	h4.markdown,
+	h5.markdown,
+	h6.markdown {
+		@apply scroll-mt-14 break-inside-avoid text-base-heading;
+	}
+
+	h1.title:first-of-type,
+	h1.markdown:first-of-type {
+		@apply mt-1 mb-2;
+	}
+
+	h1.title {
+		@apply mt-5 mb-1 text-2xl tracking-wide font-bold break-inside-avoid;
+	}
+
+	h1.markdown {
+		@apply mt-5 mb-1 text-2xl tracking-wide font-bold break-inside-avoid;
+	}
+
+	h2.markdown {
+		@apply mt-3 mb-1 text-xl font-semibold;
+	}
+
+	h3.markdown {
+		@apply mt-2 mb-1 font-semibold text-base uppercase tracking-wider;
+	}
+
+	h4.markdown {
+		@apply mt-1 text-sm  font-semibold;
+	}
+
+	h5.markdown {
+		@apply mt-1 text-xs font-semibold;
+	}
+
+	h6.markdown {
+		@apply mt-1 text-xs;
+	}
+
+	hr.markdown {
+		@apply h-px my-8 max-w-xl mx-auto bg-base-300 border-0;
+	}
+
+	code.markdown {
+		@apply font-mono text-[0.875em] bg-base-200 border border-base-300 rounded px-1 select-all py-0.5;
+	}
+
+	form code {
+		font-size: unset;
+	}
+
+	blockquote.markdown {
+		@apply bg-base-200 border-l-4 border-base-content-muted pl-3 my-8 py-2;
+	}
+
+	blockquote.markdown > blockquote.markdown {
+		@apply m-0;
+	}
+
+	blockquote.markdown > :first-child {
+		@apply mt-0;
+	}
+
+	blockquote.markdown > :last-child {
+		@apply mb-0;
+	}
+
+	blockquote.markdown * {
+		@apply text-base-content-muted;
+	}
+
+	strong.markdown {
+		@apply text-[1em] text-inherit;
+	}
+
+	em.markdown {
+		@apply text-[1em] text-inherit;
+	}
+
+	del.markdown {
+		@apply text-[1em] text-inherit;
+	}
+
+	a.markdown {
+		@apply text-[1em] text-inherit;
+	}
+
+	table.markdown {
+		@apply min-w-full  border-collapse text-center mx-auto my-5;
+	}
+
+	th.markdown {
+		@apply text-sm font-medium border-b border-gray-800 py-0 px-2 text-ellipsis overflow-hidden;
+	}
+
+	td.markdown {
+		@apply text-sm py-1 px-2 overflow-hidden text-ellipsis;
+	}
+}
+
+:root {
+	/* Layout header height */
+	--header-height: 3.5rem;
+	/* Font stacks — point Evidence's internals at our brand fonts */
+	--monospace-font-family: 'JetBrains Mono', ui-monospace, monospace;
+	--ui-font-family: 'JetBrains Mono', ui-monospace, monospace;
+	--ui-font-family-compact: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Force brand fonts on Evidence-owned components (BigValue, DataTable, charts) */
+.bigvalue,
+.bigvalue-title,
+.data-table,
+.data-table th,
+.data-table td,
+.echarts,
+nav,
+header,
+footer {
+	font-family: 'JetBrains Mono', ui-monospace, monospace !important;
+}
+
+.bitcoin-snapshot-cards .inline-block {
+	padding-top: 1rem !important;
+	padding-bottom: 1.25rem !important;
+}
+
+/* Title — slightly bigger label, more breathing room */
+.bitcoin-snapshot-cards .inline-block > p:first-child {
+	font-size: 1.1rem !important;
+	line-height: 1.2 !important;
+	margin-bottom: 0.65rem !important;
+}
+
+/* Big number — scale values without changing the info icon */
+.bitcoin-snapshot-cards .inline-block > div.relative {
+	font-size: 2rem !important;
+	line-height: 1.15 !important;
+}
+
+.bitcoin-snapshot-cards .inline-block > p:first-child [class*="info"],
+.bitcoin-snapshot-cards .inline-block > p:first-child svg {
+	font-size: 0.75rem !important;
+	height: 0.75rem !important;
+	width: 0.75rem !important;
+}
+
+/* Comparison delta — slightly larger for readability */
+.bitcoin-snapshot-cards .inline-block > p:last-child {
+	font-size: 1rem !important;
+	margin-top: 0.55rem !important;
+}
+
+/* Sparkline — scale up only the chart canvas, not info icons */
+.bitcoin-snapshot-cards .inline-block .echarts,
+.bitcoin-snapshot-cards .inline-block [class*="sparkline"] {
+	height: 56px !important;
+	min-height: 56px !important;
+	width: 100% !important;
+	min-width: 140px !important;
+}
+.bitcoin-snapshot-cards .inline-block .echarts svg {
+	height: 56px !important;
+	width: 100% !important;
+}
+
+/* 2026 Price Outlook BigValues — color match the chart cases */
+.price-outlook-cases {
+	display: flex;
+	justify-content: center;
+	width: 100%;
+}
+
+.price-outlook-cases > div {
+	max-width: 52rem;
+	width: 100%;
+}
+
+.price-outlook-cases .inline-block {
+	margin-right: 0 !important;
+	padding-right: 0 !important;
+	text-align: center;
+	width: 100%;
+}
+
+/* Match Price Outlook BigValue size to Bitcoin Snapshot cards (2rem). */
+.price-outlook-cases .inline-block > p:first-child {
+	font-size: 1.1rem !important;
+	line-height: 1.2 !important;
+	margin-bottom: 0.65rem !important;
+}
+.price-outlook-cases .inline-block > div.relative {
+	font-size: 2rem !important;
+	line-height: 1.15 !important;
+}
+
+.case-bear .inline-block > div.relative { color: #FF3B30 !important; }
+.case-base .inline-block > div.relative { color: #FFD700 !important; }
+.case-bull .inline-block > div.relative { color: #00FF88 !important; }
+
+/* Bitcoin Price chart — current model values strip */
+.model-values-strip {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 1.5rem;
+	padding: 0.75rem 1rem;
+	margin: 0.5rem auto;
+	border: 1px solid #1c1c2e;
+	border-radius: 6px;
+	background: #0e0e16;
+	font-family: 'JetBrains Mono', monospace;
+	font-size: 0.85rem;
+	width: fit-content;
+	max-width: 100%;
+}
+.model-values-strip .model-value {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+.model-values-strip .model-value .dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--c);
+	display: inline-block;
+}
+.model-values-strip .model-value .lbl {
+	color: #8A8D91;
+	font-weight: 400;
+}
+.model-values-strip .model-value .val {
+	color: var(--c);
+	font-weight: 600;
+}
+
+
+.monthly-heatmap-table table {
+	table-layout: fixed;
+	width: 100%;
+}
+
+.monthly-heatmap-table th:first-child,
+.monthly-heatmap-table td:first-child {
+	width: 8rem !important;
+	min-width: 8rem !important;
+	max-width: 8rem !important;
+}
+
+
+@media print {
+	html {
+		-webkit-print-color-adjust: exact;
+		print-color-adjust: exact;
+	}
+
+	h1, h2, h3, h4 {
+		break-after: avoid-page;
+	}
+
+	article {
+		orphans: 2;
+		widows: 2;
+	}
+}

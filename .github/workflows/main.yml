@@ -1,0 +1,120 @@
+name: Update Bitcoin Reports
+
+on:
+  pull_request:
+  schedule:
+    - cron: "00 16 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: update-reports-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  dashboard:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: dashboard/.nvmrc
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Install locked dashboard dependencies
+        run: npx --yes npm@12.0.2 ci
+
+      - name: Audit deployed dependency scope
+        run: npx --yes npm@12.0.2 audit --omit=dev
+
+      - name: Build the static dashboard
+        run: |
+          npx --yes npm@12.0.2 run sync:local
+          npx --yes npm@12.0.2 run sources
+          npx --yes npm@12.0.2 run build
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version-file: .python-version
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.5"
+
+      - name: Install locked dependencies
+        run: uv sync --locked
+
+      - name: Run regression tests
+        run: uv run --no-sync python -m unittest discover -s tests -t . -v
+
+      - name: Generate and validate reports
+        if: github.event_name != 'pull_request'
+        run: |
+          uv run --no-sync python main.py
+          uv run --no-sync python validate_outputs.py
+
+      - name: Upload generated reports
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: generated-reports-${{ github.run_id }}
+          path: |
+            csv/
+            README.md
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Download validated reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: generated-reports-${{ github.run_id }}
+          path: .
+
+      - name: Commit and push reports
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add csv/ README.md
+          git diff --cached --quiet || git commit -m "Update Reports"
+          gh auth setup-git
+          git pull --rebase origin main
+          git push origin HEAD:main
