@@ -26,7 +26,7 @@
 	<a class="brand-skip-link" href="#bitcoin-snapshot">Skip to dashboard</a>
 
 	<nav class="brand-site-nav" aria-label="Primary navigation">
-		<a href="#top" class="brand-nav-logo" aria-label="Secret Satoshis dashboard home">
+		<a href="https://secretsatoshis.com/" class="brand-nav-logo" aria-label="Secret Satoshis home">
 			<span class="brand-accent">//</span> <span>SECRET SATOSHIS</span>
 		</a>
 		<button
@@ -39,10 +39,11 @@
 			on:click={() => (menuOpen = !menuOpen)}
 		>≡</button>
 		<ul class:open={menuOpen} class="brand-nav-links" id="brandNavLinks">
+			<li><a href="https://secretsatoshis.com/" on:click={closeMenu}>Home</a></li>
 			<li><a href="https://newsletter.secretsatoshis.com/p/start-here" target="_blank" rel="noopener noreferrer" on:click={closeMenu}>Start Here</a></li>
 			<li><a href="https://chatgpt.com/g/g-BZXtVdU6M-agent-21" target="_blank" rel="noopener noreferrer" on:click={closeMenu}>Agent 21</a></li>
-			<li><a href="https://charts.secretsatoshis.com/" target="_blank" rel="noopener noreferrer" on:click={closeMenu}>Charts</a></li>
-			<li><a href="#top" aria-current="page" on:click={closeMenu}>Dashboard</a></li>
+			<li><a href="https://charts.secretsatoshis.com/" on:click={closeMenu}>Charts</a></li>
+			<li><a href="https://dashboard.secretsatoshis.com/" aria-current="page" on:click={closeMenu}>Dashboard</a></li>
 			<li><a href="https://newsletter.secretsatoshis.com/" target="_blank" rel="noopener noreferrer" on:click={closeMenu}>Newsletter</a></li>
 		</ul>
 	</nav>
@@ -66,7 +67,7 @@
 		<div class="brand-footer-inner">
 			<div class="brand-footer-top">
 				<div>
-					<a href="#top" class="brand-footer-brand" aria-label="Back to the top of the Secret Satoshis dashboard">
+					<a href="https://secretsatoshis.com/" class="brand-footer-brand" aria-label="Secret Satoshis home">
 						<span class="brand-accent">//</span> SECRET SATOSHIS
 					</a>
 					<p class="brand-footer-tagline">AI-native Bitcoin market intelligence</p>
@@ -82,8 +83,8 @@
 				<div>
 					<h2 class="brand-footer-col-title">Data</h2>
 					<ul class="brand-footer-links">
-						<li><a href="#top">Market Dashboard</a></li>
-						<li><a href="https://charts.secretsatoshis.com/" target="_blank" rel="noopener noreferrer">Chart Library</a></li>
+						<li><a href="https://dashboard.secretsatoshis.com/">Market Dashboard</a></li>
+						<li><a href="https://charts.secretsatoshis.com/">Chart Library</a></li>
 						<li><a href="https://github.com/SecretSatoshis" target="_blank" rel="noopener noreferrer">GitHub</a></li>
 					</ul>
 				</div>
