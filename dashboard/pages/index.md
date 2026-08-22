@@ -2,9 +2,25 @@
 title: Weekly Bitcoin Recap Dashboard
 ---
 
-<Alert status=info>
-<strong>Data as of:</strong> <Value data={data_date} column=date_label />
-</Alert>
+<section class="dashboard-hero" aria-labelledby="dashboardHeroTitle">
+  <div class="dashboard-hero-grid">
+    <div class="dashboard-hero-copy">
+      <p class="dashboard-eyebrow"><span class="brand-accent">//</span> Market Intelligence</p>
+      <h1 id="dashboardHeroTitle">Weekly Bitcoin Recap Dashboard<span class="brand-accent">.</span></h1>
+      <p class="dashboard-hero-sub">A live view of Bitcoin market performance, on-chain conditions, valuation, and network activity.</p>
+    </div>
+    <dl class="dashboard-hero-stats" aria-label="Dashboard status">
+      <div>
+        <dt>Latest data</dt>
+        <dd><Value data={data_date} column=date_label /></dd>
+      </div>
+      <div>
+        <dt>Refresh cadence</dt>
+        <dd>Daily</dd>
+      </div>
+    </dl>
+  </div>
+</section>
 
 ## Bitcoin Snapshot
 

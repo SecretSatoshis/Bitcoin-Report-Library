@@ -1,6 +1,6 @@
 # Bitcoin Report Dashboard
 
-An Evidence.dev dashboard for the Bitcoin Report Library outputs used by the Secret Satoshis research stack.
+An Evidence.dev dashboard for the Bitcoin Report Library outputs used by the Secret Satoshis research stack. It uses the same branded navigation, hero, typography, spacing, and footer structure as the Secret Satoshis Chart Library while rendering the dashboard natively through Evidence.
 
 **Live:** [dashboard.secretsatoshis.com](https://dashboard.secretsatoshis.com)
 
@@ -98,9 +98,9 @@ The production build sequence is `npm ci → sync:remote → sources → build`,
 
 ## Key Files
 
-- `pages/index.md` — main dashboard page and SQL queries
-- `pages/+layout.svelte` — Evidence layout, logo, and page chrome
+- `pages/index.md` — branded dashboard hero, report content, and SQL queries
+- `pages/+layout.svelte` — shared Secret Satoshis navigation/footer around the Evidence layout
 - `sources/bitcoin_report_library/connection.yaml` — CSV datasource config
 - `scripts/download-data.mjs` — local/remote CSV sync script
 - `evidence.config.yaml` — Evidence plugins, theme, and color config
-- `app.css` — custom brand styling (cypherpunk dark theme, JetBrains Mono + Syne)
+- `app.css` — shared site-shell tokens and custom dashboard styling (cypherpunk dark theme, JetBrains Mono + Syne)

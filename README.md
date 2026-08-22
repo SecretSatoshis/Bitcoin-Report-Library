@@ -174,10 +174,10 @@ These CSV files are pre-computed for downstream visualization by [Bitcoin-Chart-
 
 ## Dashboard
 
-The `dashboard/` subfolder is an [Evidence.dev](https://evidence.dev) BI-as-code dashboard that consumes the same CSV outputs as Chart Library and renders them as an interactive web report.
+The `dashboard/` subfolder is an [Evidence.dev](https://evidence.dev) BI-as-code dashboard that consumes the same CSV outputs as Chart Library and renders them as an interactive web report inside the shared Secret Satoshis navigation, hero, and footer design.
 
 - **Live URL:** [dashboard.secretsatoshis.com](https://dashboard.secretsatoshis.com)
-- **Local dev:** see [`dashboard/README.md`](dashboard/README.md) — `cd dashboard && npm install && npm run sync:local && npm run sources && npm run dev`
+- **Local dev:** see [`dashboard/README.md`](dashboard/README.md) — `cd dashboard && npm ci && npm run sync:local && npm run sources && npm run dev`
 
 ## Dependencies
 
