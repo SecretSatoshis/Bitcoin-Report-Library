@@ -16,7 +16,7 @@
 
 	body {
 		@apply select-none;
-		font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+		font-family: 'JetBrains Mono', monospace;
 		font-feature-settings: 'liga' 0, 'calt' 0; /* keep numbers crisp */
 	}
 
@@ -69,7 +69,7 @@
 @layer components {
 	.markdown {
 		@apply leading-normal text-base antialiased;
-		font-family: 'JetBrains Mono', ui-monospace, monospace;
+		font-family: 'JetBrains Mono', monospace;
 	}
 
 	img.markdown {
@@ -252,9 +252,9 @@
 	/* Layout header height */
 	--header-height: 4rem;
 	/* Font stacks — point Evidence's internals at our brand fonts */
-	--monospace-font-family: 'JetBrains Mono', ui-monospace, monospace;
-	--ui-font-family: 'JetBrains Mono', ui-monospace, monospace;
-	--ui-font-family-compact: 'JetBrains Mono', ui-monospace, monospace;
+	--monospace-font-family: 'JetBrains Mono', monospace;
+	--ui-font-family: 'JetBrains Mono', monospace;
+	--ui-font-family-compact: 'JetBrains Mono', monospace;
 	/* Shared Secret Satoshis shell tokens (matches the Chart Library). */
 	--brand-bg: #08080c;
 	--brand-bg-alt: #0b0b12;
@@ -266,8 +266,8 @@
 	--brand-accent: #f7931a;
 	--brand-white: #fff;
 	--brand-nav-height: 64px;
-	--brand-max-width: 1180px;
-	--brand-gutter: clamp(20px, 5vw, 64px);
+	--brand-max-width: 1120px;
+	--brand-gutter: clamp(20px, 5vw, 60px);
 }
 
 /* ─── Shared Secret Satoshis site shell ───────────────────────── */
@@ -346,10 +346,11 @@ body::after {
 	align-items: center;
 	gap: 8px;
 	color: var(--brand-white);
-	font-family: 'JetBrains Mono', ui-monospace, monospace;
+	font-family: 'JetBrains Mono', monospace;
 	font-size: 13px;
 	font-weight: 600;
 	letter-spacing: 0.08em;
+	line-height: 1.7;
 }
 
 .brand-nav-links {
@@ -358,23 +359,20 @@ body::after {
 	margin: 0;
 	padding: 0;
 	list-style: none;
-	font-family: 'JetBrains Mono', ui-monospace, monospace;
+	font-family: 'JetBrains Mono', monospace;
 	font-size: 12px;
 	font-weight: 500;
 	letter-spacing: 0.04em;
+	line-height: 1.7;
 }
 
 .brand-nav-links a {
 	color: var(--brand-text-dim);
-	transition: color 160ms ease;
+	transition: color 0.2s;
 }
 
 .brand-nav-links a:hover {
 	color: var(--brand-white);
-}
-
-.brand-nav-links a[aria-current='page'] {
-	color: var(--brand-accent);
 }
 
 .brand-nav-toggle {
@@ -388,7 +386,7 @@ body::after {
 	border: 0;
 	background: none;
 	color: var(--brand-text);
-	font-family: 'JetBrains Mono', ui-monospace, monospace;
+	font-family: 'JetBrains Mono', monospace;
 	font-size: 20px;
 	line-height: 1;
 }
@@ -461,7 +459,7 @@ body::after {
 .dashboard-eyebrow {
 	margin: 0 0 16px;
 	color: var(--brand-text-dim);
-	font-family: 'JetBrains Mono', ui-monospace, monospace;
+	font-family: 'JetBrains Mono', monospace;
 	font-size: 11px;
 	font-weight: 600;
 	letter-spacing: 0.12em;
@@ -483,7 +481,7 @@ body::after {
 	max-width: 700px;
 	margin: 22px 0 0;
 	color: var(--brand-text-dim);
-	font-family: 'JetBrains Mono', ui-monospace, monospace;
+	font-family: 'JetBrains Mono', monospace;
 	font-size: clamp(14px, 1.6vw, 17px);
 	line-height: 1.7;
 }
@@ -552,7 +550,7 @@ body::after {
 	width: 100%;
 	padding: 80px var(--brand-gutter) 40px;
 	background: var(--brand-bg);
-	font-family: 'JetBrains Mono', ui-monospace, monospace;
+	font-family: 'JetBrains Mono', monospace;
 }
 
 .brand-footer-inner {
@@ -577,7 +575,7 @@ body::after {
 .brand-footer-col-title {
 	margin: 0 0 16px;
 	color: var(--brand-text-mute);
-	font-family: 'JetBrains Mono', ui-monospace, monospace;
+	font-family: 'JetBrains Mono', monospace;
 	font-size: 10px;
 	font-weight: 700;
 	letter-spacing: 0.14em;
@@ -713,10 +711,11 @@ body::after {
 .data-table th,
 .data-table td,
 .echarts,
+.font-mono,
 nav,
 header,
 footer {
-	font-family: 'JetBrains Mono', ui-monospace, monospace !important;
+	font-family: 'JetBrains Mono', monospace !important;
 }
 
 .bitcoin-snapshot-cards .inline-block {
