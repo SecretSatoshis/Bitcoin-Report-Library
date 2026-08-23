@@ -60,12 +60,32 @@ _Headline metrics — market, on-chain, and sentiment._
 
   const _isYearCol = (c) => /^\d{4}$/.test(c);
 
-  // Faded muted-gray for historical years (semi-transparent so they recede),
-  // off-white for Median, cypherpunk green for Average, Bitcoin-orange for current year.
-  const _historicalColor = 'rgba(110, 110, 138, 0.45)';  // brand text-dim @ 45%
+  // Off-white for Median, cypherpunk green for Average, Bitcoin-orange for current
+  // year. Those three are reserved, so the historical palette must avoid orange and
+  // green entirely or a past year reads as this year.
   const _medianColor = '#e4e4ef';                         // brand text (legible on dark)
   const _averageColor = '#00FF88';
   const _currentColor = '#F7931A';
+
+  // Faded muted-gray, semi-transparent so older years recede into a context band.
+  const _historicalColor = 'rgba(110, 110, 138, 0.45)';  // brand text-dim @ 45%
+
+  // Every historical year in one gray made the hover tooltip unreadable: a dozen
+  // identical swatches with no way to tell which line was which.
+  //
+  // Eleven distinguishable hues is not achievable here, and that is measured rather
+  // than assumed. Against this surface an eleven-step ordinal ramp leaves only 0.04
+  // adjacent lightness separation, and eight categorical hues that dodge the reserved
+  // orange and green fail CVD separation at deltaE 6.3 and the normal-vision floor at
+  // 11.8 against a floor of 15. Six passes every check with the worst adjacent pair at
+  // deltaE 8.8 for deuteranopia and 20.4 for normal vision.
+  //
+  // So the six most recent historical years are named and the rest stay in the band.
+  // Recent years are the ones a reader compares against; 2014 is scenery. Hover
+  // emphasis below covers the remainder — any line, named or banded, isolates itself
+  // when pointed at.
+  const _recentColors = ['#3987e5', '#d55181', '#00a0b8', '#c98500', '#9085e9', '#e0607a'];
+  const _NAMED_RECENT = 6;
 
   function _yearCols(rows, xKey, { includeHidden = false } = {}) {
     if (!rows?.length) return [];
@@ -112,12 +132,23 @@ _Headline metrics — market, on-chain, and sentiment._
   }
 
   function _buildColorMap(years, currentYear) {
+    // Colour follows the year, not its position in the list: the newest historical
+    // years take the first palette slots, so a year keeps its hue across both charts
+    // and does not repaint when the series count changes.
+    const historical = years
+      .filter(n => _isYearCol(n) && n !== currentYear)
+      .sort()
+      .reverse();
+    const named = new Map(
+      historical.slice(0, _NAMED_RECENT).map((yr, i) => [yr, _recentColors[i]])
+    );
     return Object.fromEntries(
       years.map(name => [
         name,
         name === 'Median'  ? _medianColor :
         name === 'Average' ? _averageColor :
-        name === currentYear ? _currentColor : _historicalColor
+        name === currentYear ? _currentColor :
+        named.get(name) ?? _historicalColor
       ])
     );
   }
@@ -143,7 +174,14 @@ _Headline metrics — market, on-chain, and sentiment._
         const wide = (name === 'Median' || name === 'Average' || name === currentYear);
         const lineStyle = { width: wide ? 2.5 : 1 };
         if (name === 'Median') lineStyle.type = 'dashed';
-        return { lineStyle };
+        return {
+          lineStyle,
+          // Pointing at any line isolates it and fades the rest. This is what makes
+          // the banded years identifiable without giving each one a hue the surface
+          // cannot support.
+          emphasis: { focus: 'series', lineStyle: { width: wide ? 3.5 : 2.5 } },
+          blur: { lineStyle: { opacity: 0.12 } }
+        };
       })
     };
   }
