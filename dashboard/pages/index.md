@@ -650,13 +650,6 @@ _Network health, security & on-chain economics._
   />
   <Column id="52W Low" title="52W Low" align=right />
   <Column id="52W High" title="52W High" align=right />
-  <Column id=Monday title="Mon" align=right />
-  <Column id=Tuesday title="Tue" align=right />
-  <Column id=Wednesday title="Wed" align=right />
-  <Column id=Thursday title="Thu" align=right />
-  <Column id=Friday title="Fri" align=right />
-  <Column id=Saturday title="Sat" align=right />
-  <Column id=Sunday title="Sun" align=right />
 </DataTable>
 
 ## Bitcoin ROI by Time Frame
