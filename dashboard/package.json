@@ -13,7 +13,8 @@
     "sources": "evidence sources",
     "dev": "evidence dev",
     "build": "evidence build",
-    "preview": "evidence preview"
+    "preview": "evidence preview",
+    "export:newsletter": "node scripts/export-newsletter-visuals.mjs"
   },
   "devDependencies": {
     "@evidence-dev/component-utilities": "^4.0.13",
@@ -27,6 +28,7 @@
     "echarts": "^6.0.0",
     "echarts-stat": "^1.2.0",
     "git-remote-origin-url": "^4.0.0",
+    "playwright-core": "^1.62.1",
     "postcss": "^8.5.10",
     "postcss-load-config": "^4.0.2",
     "svelte": "^4.2.19",

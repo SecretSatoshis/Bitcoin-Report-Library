@@ -834,9 +834,24 @@ footer {
 }
 
 
+.monthly-heatmap-table {
+	max-width: 100%;
+}
+
+.monthly-heatmap-table .table-container,
+.monthly-heatmap-table .scrollbox {
+	max-width: 100%;
+}
+
 .monthly-heatmap-table table {
 	table-layout: fixed;
 	width: 100%;
+	min-width: 64rem;
+}
+
+.monthly-heatmap-table th,
+.monthly-heatmap-table td {
+	white-space: nowrap;
 }
 
 .monthly-heatmap-table th:first-child,
@@ -844,6 +859,31 @@ footer {
 	width: 8rem !important;
 	min-width: 8rem !important;
 	max-width: 8rem !important;
+}
+
+/* Deterministic newsletter exports use the dashboard's real components and
+   brand styles, with only a fixed capture canvas and print-safe overflow. */
+.newsletter-visual {
+	display: flow-root;
+}
+
+body.newsletter-export-mode .newsletter-visual {
+	box-sizing: border-box;
+	width: 70rem;
+	max-width: none;
+	margin: 0;
+	padding: 2rem;
+	background: #08080c;
+}
+
+body.newsletter-export-mode .newsletter-visual .table-container,
+body.newsletter-export-mode .newsletter-visual .scrollbox {
+	max-width: none;
+	overflow: visible !important;
+}
+
+body.newsletter-export-mode [data-newsletter-visual="monthly-return-heatmap"] table {
+	min-width: 64rem;
 }
 
 

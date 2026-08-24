@@ -126,8 +126,12 @@ yahoo_market_cap_fx_tickers = {
 # First Bitcoin halving date - used as start date for statistics calculations
 stats_start_date = "2012-11-28"
 
-# Report date defaults to yesterday (T-1) to ensure data availability
-report_date = pd.Timestamp(datetime.date.today() - datetime.timedelta(days=1))
+# The report represents the last completed UTC day. GitHub-hosted runners currently use
+# UTC, but making the clock explicit keeps local and CI runs identical across timezones.
+report_date = (
+    pd.Timestamp.now(tz="UTC").normalize().tz_localize(None)
+    - pd.Timedelta(days=1)
+)
 
 
 # =============================================================================

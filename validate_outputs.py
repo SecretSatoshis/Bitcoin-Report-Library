@@ -23,6 +23,7 @@ class RowBounds:
 OUTPUT_RULES = {
     "1k_bucket_table.csv": RowBounds(1, 10_000),
     "5k_bucket_table.csv": RowBounds(1, 10_000),
+    "bitcoin_dominance_history.csv": RowBounds(1, 100_000),
     "brk_onchain_raw.csv": RowBounds(365, 100_000),
     "cagr_data.csv": RowBounds(365, 100_000),
     "cycle_low_data.csv": RowBounds(1, 100_000),
@@ -53,6 +54,9 @@ OUTPUT_RULES = {
 REQUIRED_COLUMNS = {
     "1k_bucket_table.csv": {"Price Range ($)", "Count", "Current Price"},
     "5k_bucket_table.csv": {"Price Range ($)", "Count", "Current Price"},
+    "bitcoin_dominance_history.csv": {
+        "date", "bitcoin_dominance", "source_updated_at",
+    },
     "brk_onchain_raw.csv": {"timestamp", "price_close"},
     "cagr_data.csv": {"time", "price_close_2_Year_CAGR", "price_close_4_Year_CAGR"},
     "cycle_low_data.csv": {"days_since_cycle_low", "index_value", "Cycle"},
@@ -155,6 +159,7 @@ SUMMARY_HISTORY_METRICS = {
 RETAINED_OUTPUTS = {
     "1k_bucket_table.csv",
     "5k_bucket_table.csv",
+    "bitcoin_dominance_history.csv",
     "cycle_low_data.csv",
     "eoy_model_data.csv",
     "electricity_cost_scenarios.csv",
@@ -791,6 +796,54 @@ def _validate_report_agreement(
         errors,
         require_every_row=True,
     )
+
+    dominance = frames.get("bitcoin_dominance_history.csv")
+    if dominance is not None and not dominance.empty:
+        _validate_dated_output(
+            frames,
+            "bitcoin_dominance_history.csv",
+            "date",
+            expected_report_date,
+            errors,
+        )
+        dates = _normalized_dates(
+            dominance,
+            "date",
+            "bitcoin_dominance_history.csv",
+            errors,
+        )
+        if dates is not None and dates.duplicated().any():
+            errors.append("bitcoin_dominance_history.csv: contains duplicate dates")
+        values = pd.to_numeric(dominance["bitcoin_dominance"], errors="coerce")
+        if values.isna().any() or not values.between(0, 100, inclusive="neither").all():
+            errors.append(
+                "bitcoin_dominance_history.csv: dominance must be numeric and between 0 and 100"
+            )
+        source_updated_at = pd.to_datetime(
+            dominance["source_updated_at"], errors="coerce", utc=True
+        )
+        if source_updated_at.isna().any():
+            errors.append(
+                "bitcoin_dominance_history.csv: contains invalid source_updated_at values"
+            )
+
+        summary = frames.get("summary_table.csv")
+        if summary is not None and {"Metric", "Value"}.issubset(summary.columns):
+            report_value = values.loc[dates.eq(expected_report_date)] if dates is not None else []
+            summary_value = pd.to_numeric(
+                summary.loc[
+                    summary["Metric"].eq("Bitcoin Dominance"), "Value"
+                ],
+                errors="coerce",
+            ).dropna()
+            if (
+                len(report_value) != 1
+                or len(summary_value) != 1
+                or not np.isclose(report_value.iloc[0], summary_value.iloc[0])
+            ):
+                errors.append(
+                    "summary_table.csv: Bitcoin Dominance disagrees with report-date history"
+                )
 
     history = frames.get("summary_history.csv")
     if history is not None and not history.empty:

@@ -25,6 +25,23 @@ class ReportRegressionTests(unittest.TestCase):
             index=[pd.Timestamp("2024-01-01")],
         )
 
+    def test_summary_table_requires_a_dominance_capture(self):
+        report_data = pd.DataFrame(
+            {
+                "price_close": [50_000.0],
+                "market_cap": [1.0e12],
+                "supply": [20_000_000.0],
+                "coinbase_sum_24h_usd": [25_000_000.0],
+                "transfer_volume_sum_24h_usd": [10_000_000_000.0],
+                "fear_greed_value": [55.0],
+                "mvrv_ratio": [1.5],
+            },
+            index=[pd.Timestamp("2024-01-09")],
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "Bitcoin dominance is required"):
+            report_tables.create_summary_table(report_data, "2024-01-09")
+
     def test_electricity_cost_uses_observed_subsidy_plus_fees_and_tariffs(self):
         result = data_format.electric_price_models(self._energy_input()).iloc[0]
 

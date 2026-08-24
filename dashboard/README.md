@@ -62,6 +62,42 @@ npm run build
 The static site is written to ignored directory `build/`. Use `npm run preview` to
 serve that production build locally.
 
+## Newsletter visual exports
+
+The weekly Secret Satoshis newsletter uses exact, frozen exports from the same local
+Dashboard build as the report data. Install the pinned Playwright browser once after
+`npm ci`:
+
+```bash
+node node_modules/playwright-core/cli.js install chromium
+```
+
+After the completed Report Library run, create the production build and export the
+five approved newsletter visuals:
+
+```bash
+npm run sync:local
+npm run sources
+npm run build
+npm run export:newsletter -- \
+  --report-date YYYY-MM-DD \
+  --output-dir /absolute/path/to/run/visuals
+```
+
+The report date must equal the Dashboard's latest data date. The exporter refuses to
+overwrite files, renders at a fixed 1440px dark viewport and 2x pixel density, checks
+capture contents/dimensions, and writes SHA-256 provenance to `visual-manifest.json`.
+Its immutable outputs are:
+
+- the Bitcoin Snapshot Market Data card row only;
+- the Bitcoin Price section with BTC, realized/STH/LTH/3x realized prices and the
+  bear/base/bull cases (electricity/power expense is excluded);
+- the Monthly Bitcoin Price Return Heatmap;
+- separate MTD and YTD seasonal-return charts for newsletter legibility.
+
+The export-only layout is activated by the exporter and does not change the live
+Dashboard layout.
+
 ## How It Works
 
 1. `npm run sync:local` copies the dashboard CSV subset from `../csv/`.
@@ -92,7 +128,7 @@ Wide files such as `master_metrics_data.csv.gz` and `cagr_data.csv` are intentio
 
 ## Production Deploy
 
-The dashboard is published at [dashboard.secretsatoshis.com](https://dashboard.secretsatoshis.com). Its Cloudflare Pages Git integration is configured outside this repository to rebuild when relevant `dashboard/` or `csv/` changes reach `main`. The repository's daily data-refresh workflow runs at 16:00 UTC, tests and regenerates the report, validates the outputs, and commits refreshed CSVs; that commit triggers the same-day dashboard rebuild.
+The dashboard is published at [dashboard.secretsatoshis.com](https://dashboard.secretsatoshis.com). Its Cloudflare Pages Git integration is configured outside this repository to rebuild when relevant `dashboard/` or `csv/` changes reach `main`. The repository's daily data-refresh workflow runs at 00:30 UTC, shortly after the completed UTC day, then tests, regenerates, and validates the report before committing refreshed CSVs; that commit triggers the same-evening dashboard rebuild in New York.
 
 The production build sequence is `npm ci → sync:remote → sources → build`, with the static `build/` folder served behind a CDN. Because the hosting integration is external, verify those build settings in Cloudflare when changing the Node version or production command.
 
@@ -102,5 +138,6 @@ The production build sequence is `npm ci → sync:remote → sources → build`,
 - `pages/+layout.svelte` — shared Secret Satoshis navigation/footer around the Evidence layout
 - `sources/bitcoin_report_library/connection.yaml` — CSV datasource config
 - `scripts/download-data.mjs` — local/remote CSV sync script
+- `scripts/export-newsletter-visuals.mjs` — deterministic Dashboard-to-newsletter PNG exporter
 - `evidence.config.yaml` — Evidence plugins, theme, and color config
 - `app.css` — shared site-shell tokens and custom dashboard styling (cypherpunk dark theme, JetBrains Mono + Syne)

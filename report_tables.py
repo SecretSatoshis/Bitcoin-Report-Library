@@ -626,7 +626,11 @@ def create_summary_table(report_data, report_date):
     # snapshot definition identical instead of silently substituting a 30-day mean.
     miner_revenue = latest["coinbase_sum_24h_usd"]
     tx_volume = latest["transfer_volume_sum_24h_usd"]
-    btc_dominance = latest["bitcoin_dominance"]
+    btc_dominance = latest.get("bitcoin_dominance", np.nan)
+    if pd.isna(btc_dominance):
+        raise RuntimeError(
+            "Bitcoin dominance is required for the report-date summary snapshot"
+        )
 
     fear_greed_value = latest.get("fear_greed_value", np.nan)
     fear_greed = latest.get("fear_greed_classification", "")

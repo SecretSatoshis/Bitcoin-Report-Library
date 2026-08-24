@@ -20,6 +20,7 @@ import numpy as np
 import yfinance as yf
 from datetime import datetime
 from io import StringIO
+from pathlib import Path
 import time
 import csv, io
 import warnings
@@ -133,7 +134,7 @@ def get_bitcoin_dominance() -> pd.DataFrame:
 
         data = response.json()
         bitcoin_dominance = data["data"]["market_cap_percentage"]["btc"]
-        timestamp = pd.to_datetime(data["data"]["updated_at"], unit="s")
+        timestamp = pd.to_datetime(data["data"]["updated_at"], unit="s", utc=True)
 
         df = pd.DataFrame(
             {"bitcoin_dominance": [bitcoin_dominance], "time": [timestamp]}
@@ -147,6 +148,127 @@ def get_bitcoin_dominance() -> pd.DataFrame:
     except (KeyError, ValueError) as e:
         print(f"Failed to parse Bitcoin dominance data: {e}")
         return pd.DataFrame(columns=["bitcoin_dominance", "time"])
+
+
+BITCOIN_DOMINANCE_HISTORY_COLUMNS = [
+    "date",
+    "bitcoin_dominance",
+    "source_updated_at",
+]
+BITCOIN_DOMINANCE_MAX_CLOSE_DELAY = pd.Timedelta(hours=4)
+
+
+def _write_bitcoin_dominance_history(path: Path, history: pd.DataFrame) -> None:
+    """Atomically persist valid observations, including an empty initialized history."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.with_suffix(path.suffix + ".tmp")
+    output = history[BITCOIN_DOMINANCE_HISTORY_COLUMNS].copy()
+    if not output.empty:
+        output["date"] = pd.to_datetime(output["date"]).dt.strftime("%Y-%m-%d")
+    output.to_csv(temporary_path, index=False)
+    os.replace(temporary_path, path)
+
+
+def update_bitcoin_dominance_history(
+    snapshot: pd.DataFrame,
+    report_date,
+    output_path: str | Path = "csv/bitcoin_dominance_history.csv",
+) -> pd.DataFrame:
+    """Persist one near-UTC-close dominance observation for the completed report day.
+
+    CoinGecko's free ``/global`` endpoint is a current snapshot rather than a historical
+    daily series. The report runs shortly after 00:00 UTC, so the first successful
+    snapshot is treated as a near-close proxy for the UTC day that just ended. Existing
+    report-date rows are immutable: a delayed retry must not replace a close-adjacent
+    observation with a value fetched later in the day.
+    """
+    path = Path(output_path)
+    report_day = pd.to_datetime(report_date).normalize()
+
+    if path.is_file():
+        history = pd.read_csv(path)
+        missing = set(BITCOIN_DOMINANCE_HISTORY_COLUMNS) - set(history.columns)
+        if missing:
+            raise RuntimeError(
+                f"{path} is missing required columns {sorted(missing)}"
+            )
+        history = history[BITCOIN_DOMINANCE_HISTORY_COLUMNS].copy()
+        history["date"] = pd.to_datetime(history["date"], errors="coerce").dt.normalize()
+        if history["date"].isna().any():
+            raise RuntimeError(f"{path} contains an invalid dominance date")
+        history["bitcoin_dominance"] = pd.to_numeric(
+            history["bitcoin_dominance"], errors="coerce"
+        )
+
+        existing = history.loc[history["date"].eq(report_day)]
+        if not existing.empty:
+            if len(existing) != 1 or existing["bitcoin_dominance"].isna().any():
+                raise RuntimeError(
+                    f"{path} has duplicate or unusable data for {report_day.date()}"
+                )
+            return history.sort_values("date").reset_index(drop=True)
+    else:
+        history = pd.DataFrame(columns=BITCOIN_DOMINANCE_HISTORY_COLUMNS)
+
+    if snapshot is None or snapshot.empty:
+        raise RuntimeError(
+            f"CoinGecko returned no Bitcoin dominance snapshot for {report_day.date()}"
+        )
+    if not {"bitcoin_dominance", "time"}.issubset(snapshot.columns):
+        raise RuntimeError("CoinGecko dominance snapshot is missing value or time")
+
+    values = pd.to_numeric(snapshot["bitcoin_dominance"], errors="coerce")
+    fetched_times = pd.to_datetime(snapshot["time"], errors="coerce", utc=True)
+    valid = values.notna() & fetched_times.notna()
+    if not valid.any():
+        raise RuntimeError("CoinGecko dominance snapshot contains no usable observation")
+
+    value = float(values.loc[valid].iloc[-1])
+    source_updated_at = fetched_times.loc[valid].iloc[-1]
+    if not 0 < value < 100:
+        raise RuntimeError(f"CoinGecko returned invalid Bitcoin dominance {value}")
+
+    utc_close = report_day.tz_localize("UTC") + pd.Timedelta(days=1)
+    close_delay = source_updated_at - utc_close
+    if (
+        close_delay < -pd.Timedelta(minutes=15)
+        or close_delay > BITCOIN_DOMINANCE_MAX_CLOSE_DELAY
+    ):
+        raise RuntimeError(
+            "CoinGecko Bitcoin dominance was not captured near the completed UTC close: "
+            f"report_date={report_day.date()}, "
+            f"source_updated_at={source_updated_at.isoformat()}"
+        )
+
+    new_row = pd.DataFrame(
+        {
+            "date": [report_day],
+            "bitcoin_dominance": [value],
+            "source_updated_at": [source_updated_at.isoformat()],
+        }
+    )
+    history = pd.concat([history, new_row], ignore_index=True)
+    history["date"] = pd.to_datetime(history["date"]).dt.normalize()
+    history = (
+        history.drop_duplicates(subset=["date"], keep="first")
+        .sort_values("date")
+        .reset_index(drop=True)
+    )
+
+    _write_bitcoin_dominance_history(path, history)
+    return history
+
+
+def dominance_history_for_merge(history: pd.DataFrame) -> pd.DataFrame:
+    """Return persisted report-date dominance observations in merge-ready form."""
+    if history is None or history.empty:
+        return pd.DataFrame(columns=["bitcoin_dominance", "time"])
+    merged = history[["date", "bitcoin_dominance"]].rename(
+        columns={"date": "time"}
+    )
+    merged["time"] = pd.to_datetime(merged["time"]).dt.normalize()
+    merged[_source_observation_column("bitcoin_dominance")] = merged["time"]
+    return merged
 
 
 def assert_ohlc_usable(ohlc_data: pd.DataFrame, label: str = "OHLC") -> None:
@@ -1453,7 +1575,12 @@ def assert_onchain_freshness(data: pd.DataFrame, report_date, metrics=None) -> N
         )
 
 
-def get_data(tickers: dict, start_date: str) -> pd.DataFrame:
+def get_data(
+    tickers: dict,
+    start_date: str,
+    report_date=None,
+    bitcoin_dominance_history_path: str | Path | None = None,
+) -> pd.DataFrame:
     """
     Primary data orchestration function that fetches and merges all data sources into unified dataset.
 
@@ -1478,6 +1605,10 @@ def get_data(tickers: dict, start_date: str) -> pd.DataFrame:
                     Example: {"stocks": ["AAPL", "MSFT"], "crypto": ["ethereum"]}
     start_date (str): Historical data start date in 'YYYY-MM-DD' format. Typically '2010-01-01'
                       to capture maximum history from Yahoo Finance. BRK data starts ~2009.
+    report_date (str or pd.Timestamp, optional): Completed UTC day represented by the report.
+    bitcoin_dominance_history_path (str or Path, optional): Persistent CoinGecko
+                    near-close snapshot history. When both optional arguments are supplied,
+                    dominance is aligned to report_date instead of the fetch timestamp.
     """
     # Fetch data
     coindata = get_brk_onchain(start_date)
@@ -1489,7 +1620,17 @@ def get_data(tickers: dict, start_date: str) -> pd.DataFrame:
     btc_trade_volume_14d = get_btc_trade_volume_14d()
     crypto_data = get_crypto_data(tickers["crypto"])
 
-    if not bitcoin_dominance.empty and "time" in bitcoin_dominance.columns:
+    if report_date is not None and bitcoin_dominance_history_path is not None:
+        dominance_history = update_bitcoin_dominance_history(
+            bitcoin_dominance,
+            report_date,
+            bitcoin_dominance_history_path,
+        )
+        bitcoin_dominance = dominance_history_for_merge(dominance_history)
+    elif not bitcoin_dominance.empty and "time" in bitcoin_dominance.columns:
+        # Backwards-compatible snapshot behavior for library callers that do not opt
+        # into persistent report-date history. The production pipeline always supplies
+        # report_date and bitcoin_dominance_history_path.
         bitcoin_dominance["time"] = pd.to_datetime(bitcoin_dominance["time"]).dt.normalize()
         if not coindata.empty and "time" in coindata.columns:
             latest_data_date = pd.to_datetime(coindata["time"]).max().normalize()

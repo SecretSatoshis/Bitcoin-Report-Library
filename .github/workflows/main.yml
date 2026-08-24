@@ -3,7 +3,9 @@ name: Update Bitcoin Reports
 on:
   pull_request:
   schedule:
-    - cron: "00 16 * * *"
+    # 00:30 UTC is 20:30 EDT / 19:30 EST: shortly after Bitcoin's UTC daily close
+    # and safely after the New York market close.
+    - cron: "30 0 * * *"
   workflow_dispatch:
 
 permissions: {}

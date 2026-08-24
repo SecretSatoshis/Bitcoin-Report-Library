@@ -9,6 +9,10 @@ happens here. Downstream consumers—including
 bundled `dashboard/`—read the validated CSV outputs rather than duplicating their
 calculations.
 
+The bundled Dashboard also owns the deterministic PNG export targets consumed by the
+local Secret Satoshis weekly-newsletter pipeline. Those exports are built from the same
+frozen CSV run and carry a hashed `visual-manifest.json`; see `dashboard/README.md`.
+
 ## Features
 
 - **On-Chain Analytics**: Hash rate, difficulty, transaction metrics, UTXO age bands, address activity, miner revenue, and supply dynamics
@@ -91,12 +95,13 @@ uv run --no-sync python main.py
 The pipeline executes in sequence:
 1. Fetches the configured on-chain and market series from the BRK API
 2. Retrieves market data from Yahoo Finance and CoinGecko
-3. Pulls weekly and recent daily OHLC data from BRK
-4. Calculates derived metrics, mining signals, and valuation models (Metcalfe, power law, Hash Ribbons, Reserve Risk, MVRV, NVT, volatility, etc.)
-5. Runs performance analysis (7d, 90d, MTD, YTD, YOY changes)
-6. Generates report tables
-7. Computes cycle analysis (drawdowns, halving eras, cycle lows)
-8. Exports all outputs to `csv/`
+3. Stores one CoinGecko Bitcoin-dominance observation for the completed UTC day
+4. Pulls weekly and recent daily OHLC data from BRK
+5. Calculates derived metrics, mining signals, and valuation models (Metcalfe, power law, Hash Ribbons, Reserve Risk, MVRV, NVT, volatility, etc.)
+6. Runs performance analysis (7d, 90d, MTD, YTD, YOY changes)
+7. Generates report tables
+8. Computes cycle analysis (drawdowns, halving eras, cycle lows)
+9. Exports all outputs to `csv/`
 
 **Note:** The CSV output is consumed by
 [Bitcoin-Chart-Library](https://github.com/SecretSatoshis/Bitcoin-Chart-Library) for
@@ -109,7 +114,7 @@ visualization. Run this pipeline first when Chart Library is configured with a l
 |--------|-----------|----------|
 | **BRK (Bitview) API** | On-chain metrics, difficulty, supply data | `bitview.space/api` |
 | **Yahoo Finance** | Equities, ETFs, indices, commodities, forex | `yfinance` library |
-| **CoinGecko** | Altcoin prices, market caps, BTC dominance | Public API |
+| **CoinGecko** | Altcoin prices, market caps, and a near-UTC-close BTC-dominance snapshot | Public API |
 | **Alternative.me** | Fear & Greed Index | Public API |
 | **Google Sheets** | Miner efficiency data | CSV export |
 
@@ -136,6 +141,7 @@ The master metrics dataset is exported as gzipped CSV (`.csv.gz`) to keep the fi
 | `master_metrics_data.csv.gz` | Complete dataset with all calculated metrics and change calculations (gzipped) |
 | `fundamentals_table.csv` | Network performance, security, economics, valuation metrics |
 | `summary_table.csv` | Labeled summary metrics with `Metric`, `Value`, and `Category` columns |
+| `bitcoin_dominance_history.csv` | Persistent daily CoinGecko BTC-dominance observations captured near the completed UTC close; each report-date row is immutable |
 | `performance_table.csv` | Multi-asset performance comparison |
 | `mtd_return_comparison.csv` | Month-to-date return from the latest positive close before the month began, plus the historical median projection |
 | `ytd_return_comparison.csv` | Year-to-date return from the latest positive close before January 1, plus the historical median projection |
@@ -178,6 +184,18 @@ The `dashboard/` subfolder is an [Evidence.dev](https://evidence.dev) BI-as-code
 
 - **Live URL:** [dashboard.secretsatoshis.com](https://dashboard.secretsatoshis.com)
 - **Local dev:** see [`dashboard/README.md`](dashboard/README.md) — `cd dashboard && npm ci && npm run sync:local && npm run sources && npm run dev`
+
+## Daily Refresh
+
+The scheduled GitHub Actions workflow starts at **00:30 UTC**, shortly after the UTC
+day closes and safely after the New York market close. It refreshes the source data,
+records the completed day's Bitcoin-dominance observation, runs the regression and
+output-validation suites, and commits the validated CSV outputs. That publication
+supplies the dashboard and the downstream Chart Library refresh.
+
+Bitcoin dominance is a required report-date input. If CoinGecko has no usable
+near-close observation, the pipeline fails rather than substituting a later current
+reading or publishing an incomplete report.
 
 ## Dependencies
 

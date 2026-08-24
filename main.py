@@ -37,7 +37,12 @@ from data_definitions import (
 )
 
 # Fetch the data
-data = data_format.get_data(tickers, market_data_start_date)
+data = data_format.get_data(
+    tickers,
+    market_data_start_date,
+    report_date=report_date,
+    bitcoin_dominance_history_path="csv/bitcoin_dominance_history.csv",
+)
 
 ## Forward fill market data only.
 ## Equities/ETFs/FX print on trading days and miner efficiency prints monthly, so both
@@ -242,9 +247,9 @@ network_model_metrics.to_csv("csv/network_model_metrics.csv")
 
 
 ## Summary History CSV - inclusive 30-day comparison window (31 daily endpoints)
-## Bitcoin Dominance is deliberately absent: CoinGecko only supplies a current reading,
-## so it lands as a single row and would render as a flat sparkline with a 0% delta —
-## worse than showing no trend at all. The current value is published in summary_table.
+## Bitcoin Dominance is maintained separately in bitcoin_dominance_history.csv. Its
+## required report-date value still flows into summary_table, but it stays out of this
+## fixed 30-day headline window until the dedicated history has accumulated enough observations.
 HEADLINE_METRICS = {
     "Bitcoin Price USD": "price_close",
     "Bitcoin Marketcap": "market_cap",

@@ -293,6 +293,95 @@ class IngestionReliabilityTests(unittest.TestCase):
         )
         self.assertTrue(pd.isna(filled.loc["2024-01-10", "bitcoin_dominance"]))
 
+    def test_bitcoin_dominance_history_uses_completed_report_date_once(self):
+        first_snapshot = pd.DataFrame(
+            {
+                "bitcoin_dominance": [51.25],
+                "time": [pd.Timestamp("2024-01-10T00:30:00Z")],
+            }
+        )
+        later_snapshot = pd.DataFrame(
+            {
+                "bitcoin_dominance": [59.0],
+                "time": [pd.Timestamp("2024-01-10T03:00:00Z")],
+            }
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "bitcoin_dominance_history.csv"
+            first = data_format.update_bitcoin_dominance_history(
+                first_snapshot, "2024-01-09", path
+            )
+            rerun = data_format.update_bitcoin_dominance_history(
+                later_snapshot, "2024-01-09", path
+            )
+            written = pd.read_csv(path)
+
+        self.assertEqual(first.loc[0, "date"], pd.Timestamp("2024-01-09"))
+        self.assertEqual(first.loc[0, "bitcoin_dominance"], 51.25)
+        self.assertEqual(rerun.loc[0, "bitcoin_dominance"], 51.25)
+        self.assertEqual(written.loc[0, "date"], "2024-01-09")
+        self.assertEqual(written.loc[0, "bitcoin_dominance"], 51.25)
+
+    def test_bitcoin_dominance_history_rejects_a_late_first_capture(self):
+        late_snapshot = pd.DataFrame(
+            {
+                "bitcoin_dominance": [51.25],
+                "time": [pd.Timestamp("2024-01-10T12:00:00Z")],
+            }
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "bitcoin_dominance_history.csv"
+            with self.assertRaisesRegex(RuntimeError, "not captured near"):
+                data_format.update_bitcoin_dominance_history(
+                    late_snapshot, "2024-01-09", path
+                )
+            self.assertFalse(path.exists())
+
+    def test_get_data_merges_report_date_dominance_history(self):
+        coindata = pd.DataFrame(
+            {
+                "time": pd.to_datetime(["2024-01-09", "2024-01-10"]),
+                "price_close": [42_000.0, 43_000.0],
+            }
+        )
+        dominance = pd.DataFrame(
+            {
+                "bitcoin_dominance": [51.25],
+                "time": [pd.Timestamp("2024-01-10T00:30:00Z")],
+            }
+        )
+        empty = pd.DataFrame(columns=["time"])
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            history_path = Path(temp_dir) / "bitcoin_dominance_history.csv"
+            with patch.object(data_format, "get_brk_onchain", return_value=coindata), \
+                patch.object(data_format, "get_price", return_value=empty), \
+                patch.object(data_format, "get_marketcap", return_value=empty), \
+                patch.object(data_format, "get_fear_and_greed_index", return_value=empty), \
+                patch.object(data_format, "get_miner_data", return_value=empty), \
+                patch.object(data_format, "get_bitcoin_dominance", return_value=dominance), \
+                patch.object(data_format, "get_btc_trade_volume_14d", return_value=empty), \
+                patch.object(data_format, "get_crypto_data", return_value=empty):
+                result = data_format.get_data(
+                    {"stocks": [], "crypto": []},
+                    "2024-01-01",
+                    report_date="2024-01-09",
+                    bitcoin_dominance_history_path=history_path,
+                )
+
+            written = pd.read_csv(history_path)
+
+        marker = data_format._source_observation_column("bitcoin_dominance")
+        self.assertEqual(result.loc["2024-01-09", "bitcoin_dominance"], 51.25)
+        self.assertEqual(result.loc["2024-01-09", marker], pd.Timestamp("2024-01-09"))
+        self.assertEqual(written.loc[0, "date"], "2024-01-09")
+        issues = data_format.warn_on_stale_market_data(result, "2024-01-09")
+        self.assertFalse(any(issue.startswith("bitcoin_dominance") for issue in issues))
+        filled = data_format.forward_fill_market_data(result)
+        self.assertEqual(filled.loc["2024-01-09", "bitcoin_dominance"], 51.25)
+
     def test_miner_fetch_uses_timeout_and_retains_source_provenance(self):
         response = FakeResponse(
             text=(

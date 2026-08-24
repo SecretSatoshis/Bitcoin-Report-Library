@@ -129,6 +129,85 @@ class OutputValidationTests(unittest.TestCase):
             errors, ["summary_table.csv: required output is missing"]
         )
 
+    def test_validator_aligns_dominance_history_with_summary_snapshot(self):
+        rules = {
+            "bitcoin_dominance_history.csv": RowBounds(1, 100),
+            "summary_table.csv": RowBounds(1, 100),
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            pd.DataFrame(
+                [
+                    {
+                        "date": "2024-02-15",
+                        "bitcoin_dominance": 51.25,
+                        "source_updated_at": "2024-02-16T00:30:00+00:00",
+                    }
+                ]
+            ).to_csv(directory / "bitcoin_dominance_history.csv", index=False)
+            pd.DataFrame(
+                [
+                    {
+                        "Metric": "Bitcoin Price USD",
+                        "Value": 50_000.0,
+                        "Category": "Market Data",
+                    },
+                    {
+                        "Metric": "Bitcoin Dominance",
+                        "Value": 51.25,
+                        "Category": "Investor Sentiment",
+                    },
+                ]
+            ).to_csv(directory / "summary_table.csv", index=False)
+
+            self.assertEqual(
+                validate_outputs(directory, "2024-02-15", rules=rules), []
+            )
+
+            summary = pd.read_csv(directory / "summary_table.csv")
+            summary.loc[summary["Metric"].eq("Bitcoin Dominance"), "Value"] = 52.0
+            summary.to_csv(directory / "summary_table.csv", index=False)
+            errors = validate_outputs(directory, "2024-02-15", rules=rules)
+
+        self.assertTrue(any("Bitcoin Dominance disagrees" in error for error in errors))
+
+    def test_validator_rejects_stale_dominance_history(self):
+        rules = {
+            "bitcoin_dominance_history.csv": RowBounds(1, 100),
+            "summary_table.csv": RowBounds(1, 100),
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            pd.DataFrame(
+                [
+                    {
+                        "date": "2024-02-14",
+                        "bitcoin_dominance": 51.25,
+                        "source_updated_at": "2024-02-15T00:30:00+00:00",
+                    }
+                ]
+            ).to_csv(directory / "bitcoin_dominance_history.csv", index=False)
+            pd.DataFrame(
+                [
+                    {
+                        "Metric": "Bitcoin Price USD",
+                        "Value": 50_000.0,
+                        "Category": "Market Data",
+                    },
+                    {
+                        "Metric": "Bitcoin Dominance",
+                        "Value": 51.25,
+                        "Category": "Investor Sentiment",
+                    },
+                ]
+            ).to_csv(directory / "summary_table.csv", index=False)
+
+            errors = validate_outputs(directory, "2024-02-15", rules=rules)
+
+        self.assertTrue(
+            any("latest 'date' is 2024-02-14" in error for error in errors)
+        )
+
     def test_validator_cross_checks_btc_mtd_and_ytd_returns(self):
         rules = {
             "performance_table.csv": RowBounds(1, 10),

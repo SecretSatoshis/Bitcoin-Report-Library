@@ -2,7 +2,7 @@
 title: Bitcoin Market Dashboard
 ---
 
-<section class="dashboard-hero" aria-labelledby="dashboardHeroTitle">
+<section class="dashboard-hero" aria-labelledby="dashboardHeroTitle" data-dashboard-date={data_date?.[0]?.date_iso ?? ''}>
   <div class="dashboard-hero-grid">
     <div class="dashboard-hero-copy">
       <p class="dashboard-eyebrow"><span class="brand-accent">//</span> Market Intelligence</p>
@@ -28,6 +28,8 @@ _Headline metrics — market, on-chain, and sentiment._
 
 <div class="bitcoin-snapshot-cards">
 
+<div class="newsletter-visual" data-newsletter-visual="bitcoin-snapshot-market-data">
+
 ### Market Data
 
 <script>
@@ -47,7 +49,7 @@ _Headline metrics — market, on-chain, and sentiment._
   // viewer's clock. A browser-clock year flips on Jan 1 before the pipeline has
   // published a column for it, which silently drops the current-year styling and
   // annotation; a browser-clock month is wrong for anyone whose local date is
-  // ahead of the 16:00 UTC refresh.
+  // ahead of the 00:30 UTC refresh.
   $: dataMonthName = data_date?.[0]?.month_name ?? '';
   $: dataYearLabel = data_date?.[0]?.year_label ?? '';
 
@@ -67,25 +69,16 @@ _Headline metrics — market, on-chain, and sentiment._
   const _averageColor = '#00FF88';
   const _currentColor = '#F7931A';
 
-  // Faded muted-gray, semi-transparent so older years recede into a context band.
-  const _historicalColor = 'rgba(110, 110, 138, 0.45)';  // brand text-dim @ 45%
-
-  // Every historical year in one gray made the hover tooltip unreadable: a dozen
-  // identical swatches with no way to tell which line was which.
-  //
-  // Eleven distinguishable hues is not achievable here, and that is measured rather
-  // than assumed. Against this surface an eleven-step ordinal ramp leaves only 0.04
-  // adjacent lightness separation, and eight categorical hues that dodge the reserved
-  // orange and green fail CVD separation at deltaE 6.3 and the normal-vision floor at
-  // 11.8 against a floor of 15. Six passes every check with the worst adjacent pair at
-  // deltaE 8.8 for deuteranopia and 20.4 for normal vision.
-  //
-  // So the six most recent historical years are named and the rest stay in the band.
-  // Recent years are the ones a reader compares against; 2014 is scenery. Hover
-  // emphasis below covers the remainder — any line, named or banded, isolates itself
-  // when pointed at.
-  const _recentColors = ['#3987e5', '#d55181', '#00a0b8', '#c98500', '#9085e9', '#e0607a'];
-  const _NAMED_RECENT = 6;
+  // Historical years use one cool-blue recency ramp: the oldest visible year is
+  // darkest and the newest is brightest. This keeps every trajectory on the chart
+  // without suggesting that each year is a separate category. Exact year identity
+  // comes from the interactive legend and hover focus, so shade is not the only cue.
+  function _historicalShade(index, total) {
+    const t = total <= 1 ? 1 : index / (total - 1);
+    const saturation = Math.round(44 + (t * 28));
+    const lightness = Math.round(34 + (t * 40));
+    return `hsl(214, ${saturation}%, ${lightness}%)`;
+  }
 
   function _yearCols(rows, xKey, { includeHidden = false } = {}) {
     if (!rows?.length) return [];
@@ -137,10 +130,9 @@ _Headline metrics — market, on-chain, and sentiment._
     // and does not repaint when the series count changes.
     const historical = years
       .filter(n => _isYearCol(n) && n !== currentYear)
-      .sort()
-      .reverse();
-    const named = new Map(
-      historical.slice(0, _NAMED_RECENT).map((yr, i) => [yr, _recentColors[i]])
+      .sort();
+    const shades = new Map(
+      historical.map((yr, i) => [yr, _historicalShade(i, historical.length)])
     );
     return Object.fromEntries(
       years.map(name => [
@@ -148,7 +140,7 @@ _Headline metrics — market, on-chain, and sentiment._
         name === 'Median'  ? _medianColor :
         name === 'Average' ? _averageColor :
         name === currentYear ? _currentColor :
-        named.get(name) ?? _historicalColor
+        shades.get(name) ?? _medianColor
       ])
     );
   }
@@ -166,48 +158,109 @@ _Headline metrics — market, on-chain, and sentiment._
   $: mtdSeriesColors = _buildColorMap(mtdYears, mtdCurrentYear);
   $: ytdSeriesColors = _buildColorMap(ytdYears, ytdCurrentYear);
 
-  // Per-series line widths: emphasize current year + Median + Average.
-  // Median uses a dashed line so it visually separates from the white axis labels.
-  function _buildSeriesWidths(years, currentYear) {
+  // Per-series presentation: recent historical years gain a little weight and
+  // opacity, while current year + Median + Average remain the strongest references.
+  // Hover restores a historical line to full opacity and reveals its year at the
+  // endpoint; the scrollable legend still names every year and can toggle any line.
+  function _buildSeriesOptions(years, currentYear) {
+    const historical = years
+      .filter(name => _isYearCol(name) && name !== currentYear)
+      .sort();
+    const historicalRank = new Map(historical.map((yr, i) => [yr, i]));
+    const legendData = [
+      currentYear,
+      ...historical.slice().reverse(),
+      'Median',
+      'Average'
+    ].filter(Boolean);
+
     return {
+      legend: {
+        show: true,
+        type: 'scroll',
+        data: legendData,
+        top: 4,
+        left: 'center',
+        right: 20,
+        itemWidth: 18,
+        itemHeight: 3,
+        itemGap: 14,
+        textStyle: {
+          color: '#9090a8',
+          fontFamily: 'JetBrains Mono',
+          fontSize: 10
+        },
+        pageIconColor: '#F7931A',
+        pageIconInactiveColor: '#3a3a50',
+        pageTextStyle: { color: '#9090a8' }
+      },
+      grid: { top: 62, containLabel: true },
+      tooltip: { trigger: 'axis', confine: true },
       series: years.map(name => {
         const wide = (name === 'Median' || name === 'Average' || name === currentYear);
-        const lineStyle = { width: wide ? 2.5 : 1 };
+        const rank = historicalRank.get(name);
+        const isHistorical = rank != null;
+        const recency = rank == null || historical.length <= 1
+          ? 1
+          : rank / (historical.length - 1);
+        const historicalOpacity = 0.76 + (recency * 0.16);
+        const historicalColor = isHistorical
+          ? _historicalShade(rank, historical.length)
+          : undefined;
+        const lineStyle = {
+          width: wide ? 2.5 : 1 + (recency * 0.7),
+          opacity: isHistorical ? historicalOpacity : 1
+        };
         if (name === 'Median') lineStyle.type = 'dashed';
         return {
+          z: wide ? 3 : 1,
           lineStyle,
-          // Pointing at any line isolates it and fades the rest. This is what makes
-          // the banded years identifiable without giving each one a hue the surface
-          // cannot support.
-          emphasis: { focus: 'series', lineStyle: { width: wide ? 3.5 : 2.5 } },
+          triggerEvent: isHistorical ? 'line' : false,
+          endLabel: isHistorical ? { show: false } : undefined,
+          emphasis: {
+            focus: 'series',
+            lineStyle: { width: wide ? 3.5 : 2.5, opacity: 1 },
+            endLabel: isHistorical ? {
+              show: true,
+              formatter: '{a}',
+              color: historicalColor,
+              backgroundColor: 'rgba(8, 8, 12, 0.9)',
+              borderRadius: 3,
+              padding: [3, 5],
+              align: 'right',
+              distance: 4,
+              fontFamily: 'JetBrains Mono',
+              fontSize: 10,
+              fontWeight: 600
+            } : undefined
+          },
           blur: { lineStyle: { opacity: 0.12 } }
         };
       })
     };
   }
-  $: mtdEchartsOptions = _buildSeriesWidths(mtdYears, mtdCurrentYear);
-  $: ytdEchartsOptions = _buildSeriesWidths(ytdYears, ytdCurrentYear);
+  $: mtdEchartsOptions = _buildSeriesOptions(mtdYears, mtdCurrentYear);
+  $: ytdEchartsOptions = _buildSeriesOptions(ytdYears, ytdCurrentYear);
 
   function _fmtUsd(n) {
     if (n == null || isNaN(n)) return '';
     return '$' + Math.round(Number(n)).toLocaleString();
   }
   function _buildLatestPoints(rows, xKey, currentYear) {
-    if (!rows?.length || !currentYear) return { current: [], median: [], average: [] };
+    if (!rows?.length || !currentYear) return { current: [], average: [] };
     // last row where current year col is not null (= today)
     let currentRow = null;
     for (let i = rows.length - 1; i >= 0; i--) {
       if (rows[i][currentYear] != null) { currentRow = rows[i]; break; }
     }
-    // last row of full series for Median/Average (end of month / end of year)
+    // last row of the full Average series (end of month / end of year)
     let endRow = null;
     for (let i = rows.length - 1; i >= 0; i--) {
-      if (rows[i]['Median'] != null || rows[i]['Average'] != null) { endRow = rows[i]; break; }
+      if (rows[i]['Average'] != null) { endRow = rows[i]; break; }
     }
     return {
-      current: currentRow ? [{ x: currentRow[xKey], y: currentRow[currentYear], label: _fmtUsd(currentRow[currentYear]) }] : [],
-      median:  endRow     ? [{ x: endRow[xKey],     y: endRow['Median'],  label: _fmtUsd(endRow['Median']) }]   : [],
-      average: endRow     ? [{ x: endRow[xKey],     y: endRow['Average'], label: _fmtUsd(endRow['Average']) }]  : [],
+      current: currentRow ? [{ x: currentRow[xKey], y: currentRow[currentYear], label: `${currentYear} · ${_fmtUsd(currentRow[currentYear])}` }] : [],
+      average: endRow     ? [{ x: endRow[xKey],     y: endRow['Average'], label: `Average · ${_fmtUsd(endRow['Average'])}` }]  : [],
     };
   }
   $: mtdLatest = _buildLatestPoints(mtdPlot, 'day', mtdCurrentYear);
@@ -234,11 +287,12 @@ _Headline metrics — market, on-chain, and sentiment._
     'BTC Price':           { color: '#F7931A', label: 'BTC Price' },
     'Realized Price':      { color: '#2962FF', label: 'Realized' },
     'STH Realized Price':  { color: '#E040FB', label: 'STH Realized' },
+    'LTH Realized Price':  { color: '#00A0B8', label: 'LTH Realized' },
     '3x Realized Price':   { color: '#8B5E34', label: '3× Realized' },
-    'Power Expense ($0.05/kWh)': { color: '#8A8D91', label: 'Power Expense · $0.05/kWh' },
   };
   $: modelStrip = (() => {
-    const rows = (btc_models_latest || []).filter(r => r.y != null);
+    const rows = (btc_models_latest || [])
+      .filter(r => r.y != null && _modelMeta[r.series]);
     if (!rows.length) return [];
     const btc = rows.find(r => r.series === 'BTC Price');
     const others = rows
@@ -299,6 +353,8 @@ _Headline metrics — market, on-chain, and sentiment._
     description="Satoshis per USD."
   />
 </Grid>
+
+</div>
 
 ---
 
@@ -425,6 +481,8 @@ _Returns vs Bitcoin across asset classes._
   <Column id=return_90d title="90 Day Return" fmt='#,##0.00"%"' contentType=delta chip=true align=center />
 </DataTable>
 
+<div class="newsletter-visual" data-newsletter-visual="bitcoin-price">
+
 ## Bitcoin Price
 
 _Price vs on-chain valuation models._
@@ -454,7 +512,7 @@ _Price vs on-chain valuation models._
 <LineChart
   data={btc_with_models}
   x=date
-  y={['BTC Price', 'Realized Price', 'STH Realized Price', 'Power Expense ($0.05/kWh)', '3x Realized Price']}
+  y={['BTC Price', 'Realized Price', 'STH Realized Price', 'LTH Realized Price', '3x Realized Price']}
   xFmt="mmm yyyy"
   yAxisTitle="Price (USD)"
   yFmt=usd0
@@ -468,7 +526,8 @@ _Price vs on-chain valuation models._
     'Realized Price': '#2962FF',
     'STH Realized Price': '#E040FB',
     'Sth Realized Price': '#E040FB',
-    'Power Expense ($0.05/kWh)': '#8A8D91',
+    'LTH Realized Price': '#00A0B8',
+    'Lth Realized Price': '#00A0B8',
     '3x Realized Price': '#8B5E34'
   }}
   echartsOptions={{
@@ -490,6 +549,8 @@ _Price vs on-chain valuation models._
   <ReferenceLine data={[c]} y=price label=label hideValue=true labelPosition=aboveEnd lineColor={c.color} lineType=dashed lineWidth=2 />
   {/each}
 </LineChart>
+
+</div>
 
 ## Trading Range
 
@@ -541,6 +602,8 @@ _Days spent at each price level._
 
 </Grid>
 
+<div class="newsletter-visual" data-newsletter-visual="monthly-return-heatmap">
+
 ## Monthly Bitcoin Price Return Heatmap
 
 _Monthly returns by year._
@@ -591,9 +654,13 @@ _Monthly returns by year._
 
 </div>
 
+</div>
+
 ## Seasonal Returns
 
 _Current MTD & YTD vs historical years._
+
+<div class="newsletter-visual" data-newsletter-visual="seasonal-mtd">
 
 ### Bitcoin {dataMonthName} MTD Returns Comparison
 
@@ -610,14 +677,17 @@ _Current MTD & YTD vs historical years._
   yGridlines=true
   xGridlines=false
   markers=false
-  legend=false
+  legend=true
   yScale=true
   chartAreaHeight={420}
 >
   <ReferencePoint data={mtdLatest.current} x=x y=y label=label labelPosition=right symbolSize=4 fontSize=11 color="#F7931A" labelColor="#F7931A" symbolColor="#F7931A" />
-  <ReferencePoint data={mtdLatest.median} x=x y=y label=label labelPosition=right symbolSize=4 fontSize=11 color="#e4e4ef" labelColor="#e4e4ef" symbolColor="#e4e4ef" />
   <ReferencePoint data={mtdLatest.average} x=x y=y label=label labelPosition=right symbolSize=4 fontSize=11 color="#00FF88" labelColor="#00FF88" symbolColor="#00FF88" />
 </LineChart>
+
+</div>
+
+<div class="newsletter-visual" data-newsletter-visual="seasonal-ytd">
 
 ### Bitcoin {dataYearLabel} YTD Returns Comparison
 
@@ -634,14 +704,15 @@ _Current MTD & YTD vs historical years._
   yGridlines=true
   xGridlines=false
   markers=false
-  legend=false
+  legend=true
   yScale=true
   chartAreaHeight={420}
 >
   <ReferencePoint data={ytdLatest.current} x=x y=y label=label labelPosition=right symbolSize=4 fontSize=11 color="#F7931A" labelColor="#F7931A" symbolColor="#F7931A" />
-  <ReferencePoint data={ytdLatest.median} x=x y=y label=label labelPosition=right symbolSize=4 fontSize=11 color="#e4e4ef" labelColor="#e4e4ef" symbolColor="#e4e4ef" />
   <ReferencePoint data={ytdLatest.average} x=x y=y label=label labelPosition=right symbolSize=4 fontSize=11 color="#00FF88" labelColor="#00FF88" symbolColor="#00FF88" />
 </LineChart>
+
+</div>
 
 ## Relative Valuation
 
@@ -718,6 +789,7 @@ _Returns by holding period._
 -- never name a period the chart isn't showing.
 select
   strftime(max(cast(date as date)), '%B %d, %Y') as date_label,
+  strftime(max(cast(date as date)), '%Y-%m-%d') as date_iso,
   strftime(max(cast(date as date)), '%B') as month_name,
   strftime(max(cast(date as date)), '%Y') as year_label
 from bitcoin_report_library.summary_history
@@ -920,8 +992,8 @@ with model_history as (
   select
     cast(date as date) as date,
     "BTC Price",
-    "Electricity Cost" as "Power Expense ($0.05/kWh)",
     "STH Realized Price",
+    "LTH Realized Price",
     "Realized Price",
     "3x Realized Price"
   from bitcoin_report_library.onchain_price_models
@@ -951,7 +1023,7 @@ with latest as (
 select 'BTC Price' as series, date as x, "BTC Price" as y, '$' || format('{:,.0f}', "BTC Price") as label from latest
 union all select 'Realized Price', date, "Realized Price", '$' || format('{:,.0f}', "Realized Price") from latest
 union all select 'STH Realized Price', date, "STH Realized Price", '$' || format('{:,.0f}', "STH Realized Price") from latest
-union all select 'Power Expense ($0.05/kWh)', date, "Power Expense ($0.05/kWh)", '$' || format('{:,.0f}', "Power Expense ($0.05/kWh)") from latest
+union all select 'LTH Realized Price', date, "LTH Realized Price", '$' || format('{:,.0f}', "LTH Realized Price") from latest
 union all select '3x Realized Price', date, "3x Realized Price", '$' || format('{:,.0f}', "3x Realized Price") from latest
 ```
 
