@@ -20,6 +20,28 @@ ENV/
 # Environment variables
 .env*
 !.env.example
+.netrc
+.npmrc
+.pypirc
+*.key
+*.p12
+*.pem
+*.pfx
+credentials*.json
+secrets*.json
+
+# Local AI-agent tooling
+AGENTS.md
+CLAUDE.md
+.agents/
+.claude/
+.codex/
+.local/
+
+# Private/generated local artifacts
+artifacts/
+outputs/
+runs/
 
 # Distribution / packaging
 dist/

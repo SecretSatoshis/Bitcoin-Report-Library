@@ -9,9 +9,8 @@ happens here. Downstream consumers—including
 bundled `dashboard/`—read the validated CSV outputs rather than duplicating their
 calculations.
 
-The bundled Dashboard also owns the deterministic PNG export targets consumed by the
-local Secret Satoshis weekly-newsletter pipeline. Those exports are built from the same
-frozen CSV run and carry a hashed `visual-manifest.json`; see `dashboard/README.md`.
+The bundled Dashboard also supports deterministic PNG exports built from the same frozen
+CSV run with a hashed `visual-manifest.json`; see `dashboard/README.md`.
 
 ## Features
 
