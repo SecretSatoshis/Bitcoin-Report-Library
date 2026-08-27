@@ -323,7 +323,7 @@ class IngestionReliabilityTests(unittest.TestCase):
         self.assertEqual(written.loc[0, "date"], "2024-01-09")
         self.assertEqual(written.loc[0, "bitcoin_dominance"], 51.25)
 
-    def test_bitcoin_dominance_history_rejects_a_late_first_capture(self):
+    def test_bitcoin_dominance_history_accepts_a_late_first_capture(self):
         late_snapshot = pd.DataFrame(
             {
                 "bitcoin_dominance": [51.25],
@@ -333,11 +333,16 @@ class IngestionReliabilityTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "bitcoin_dominance_history.csv"
-            with self.assertRaisesRegex(RuntimeError, "not captured near"):
-                data_format.update_bitcoin_dominance_history(
-                    late_snapshot, "2024-01-09", path
-                )
-            self.assertFalse(path.exists())
+            history = data_format.update_bitcoin_dominance_history(
+                late_snapshot, "2024-01-09", path
+            )
+            written = pd.read_csv(path)
+
+        self.assertEqual(history.loc[0, "date"], pd.Timestamp("2024-01-09"))
+        self.assertEqual(history.loc[0, "bitcoin_dominance"], 51.25)
+        self.assertEqual(
+            written.loc[0, "source_updated_at"], "2024-01-10T12:00:00+00:00"
+        )
 
     def test_get_data_merges_report_date_dominance_history(self):
         coindata = pd.DataFrame(

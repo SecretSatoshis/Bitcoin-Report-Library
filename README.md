@@ -113,7 +113,7 @@ visualization. Run this pipeline first when Chart Library is configured with a l
 |--------|-----------|----------|
 | **BRK (Bitview) API** | On-chain metrics, difficulty, supply data | `bitview.space/api` |
 | **Yahoo Finance** | Equities, ETFs, indices, commodities, forex | `yfinance` library |
-| **CoinGecko** | Altcoin prices, market caps, and a near-UTC-close BTC-dominance snapshot | Public API |
+| **CoinGecko** | Altcoin prices, market caps, and the latest available BTC-dominance snapshot | Public API |
 | **Alternative.me** | Fear & Greed Index | Public API |
 | **Google Sheets** | Miner efficiency data | CSV export |
 
@@ -140,7 +140,7 @@ The master metrics dataset is exported as gzipped CSV (`.csv.gz`) to keep the fi
 | `master_metrics_data.csv.gz` | Complete dataset with all calculated metrics and change calculations (gzipped) |
 | `fundamentals_table.csv` | Network performance, security, economics, valuation metrics |
 | `summary_table.csv` | Labeled summary metrics with `Metric`, `Value`, and `Category` columns |
-| `bitcoin_dominance_history.csv` | Persistent daily CoinGecko BTC-dominance observations captured near the completed UTC close; each report-date row is immutable |
+| `bitcoin_dominance_history.csv` | Persistent daily CoinGecko BTC-dominance observations using the latest snapshot available to each run; each report-date row is immutable |
 | `performance_table.csv` | Multi-asset performance comparison |
 | `mtd_return_comparison.csv` | Month-to-date return from the latest positive close before the month began, plus the historical median projection |
 | `ytd_return_comparison.csv` | Year-to-date return from the latest positive close before January 1, plus the historical median projection |
@@ -192,9 +192,9 @@ records the completed day's Bitcoin-dominance observation, runs the regression a
 output-validation suites, and commits the validated CSV outputs. That publication
 supplies the dashboard and the downstream Chart Library refresh.
 
-Bitcoin dominance is a required report-date input. If CoinGecko has no usable
-near-close observation, the pipeline fails rather than substituting a later current
-reading or publishing an incomplete report.
+Bitcoin dominance is a required report-date input. The pipeline stores the latest usable
+CoinGecko snapshot available when the run executes, including delayed runs, and fails only
+when CoinGecko returns no usable observation rather than publishing an incomplete report.
 
 ## Dependencies
 

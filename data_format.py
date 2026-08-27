@@ -155,7 +155,6 @@ BITCOIN_DOMINANCE_HISTORY_COLUMNS = [
     "bitcoin_dominance",
     "source_updated_at",
 ]
-BITCOIN_DOMINANCE_MAX_CLOSE_DELAY = pd.Timedelta(hours=4)
 
 
 def _write_bitcoin_dominance_history(path: Path, history: pd.DataFrame) -> None:
@@ -174,13 +173,12 @@ def update_bitcoin_dominance_history(
     report_date,
     output_path: str | Path = "csv/bitcoin_dominance_history.csv",
 ) -> pd.DataFrame:
-    """Persist one near-UTC-close dominance observation for the completed report day.
+    """Persist the latest available dominance observation for the report day.
 
     CoinGecko's free ``/global`` endpoint is a current snapshot rather than a historical
-    daily series. The report runs shortly after 00:00 UTC, so the first successful
-    snapshot is treated as a near-close proxy for the UTC day that just ended. Existing
-    report-date rows are immutable: a delayed retry must not replace a close-adjacent
-    observation with a value fetched later in the day.
+    daily series. The first successful snapshot is assigned to the completed report day,
+    regardless of when a delayed workflow runs. Existing report-date rows are immutable,
+    so a retry does not replace the observation already recorded for that day.
     """
     path = Path(output_path)
     report_day = pd.to_datetime(report_date).normalize()
@@ -227,18 +225,6 @@ def update_bitcoin_dominance_history(
     source_updated_at = fetched_times.loc[valid].iloc[-1]
     if not 0 < value < 100:
         raise RuntimeError(f"CoinGecko returned invalid Bitcoin dominance {value}")
-
-    utc_close = report_day.tz_localize("UTC") + pd.Timedelta(days=1)
-    close_delay = source_updated_at - utc_close
-    if (
-        close_delay < -pd.Timedelta(minutes=15)
-        or close_delay > BITCOIN_DOMINANCE_MAX_CLOSE_DELAY
-    ):
-        raise RuntimeError(
-            "CoinGecko Bitcoin dominance was not captured near the completed UTC close: "
-            f"report_date={report_day.date()}, "
-            f"source_updated_at={source_updated_at.isoformat()}"
-        )
 
     new_row = pd.DataFrame(
         {
@@ -1607,7 +1593,7 @@ def get_data(
                       to capture maximum history from Yahoo Finance. BRK data starts ~2009.
     report_date (str or pd.Timestamp, optional): Completed UTC day represented by the report.
     bitcoin_dominance_history_path (str or Path, optional): Persistent CoinGecko
-                    near-close snapshot history. When both optional arguments are supplied,
+                    daily snapshot history. When both optional arguments are supplied,
                     dominance is aligned to report_date instead of the fetch timestamp.
     """
     # Fetch data
