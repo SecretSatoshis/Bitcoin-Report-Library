@@ -39,6 +39,9 @@ from data_definitions import (
     yahoo_market_cap_fx_tickers,
     yahoo_share_ticker_aliases,
     BITCOIN_GENESIS_DATE,
+    REFERENCE_DATA_VINTAGES,
+    PRICE_OUTLOOK_YEAR,
+    REFERENCE_DATA_MAX_AGE_DAYS,
     METCALFE_ADDRESS_COLUMNS,
     HASH_RIBBON_FAST_WINDOW,
     HASH_RIBBON_SLOW_WINDOW,
@@ -49,6 +52,14 @@ import os
 # Ordinary market feeds should bridge weekends and short exchange holidays, not outages.
 # Five calendar days covers those expected gaps while ensuring a stalled source becomes NaN.
 MARKET_DATA_MAX_FFILL_DAYS = 5
+
+# Yahoo publishes shares outstanding on each issuer's filing cadence, not daily, so this
+# series needs its own budget rather than the ordinary market one. Observed source ages
+# across the tracked tickers run from same-day (NVDA, MU) to 162 days (2222.SR, which
+# files semi-annually); 220 days clears a semi-annual filer plus its lag while still
+# refusing a share count that has gone quiet for the better part of a year. A share count
+# carried indefinitely silently understates market cap by the issuer's dilution since.
+SHARES_OUTSTANDING_MAX_AGE_DAYS = 220
 
 # Coin Metrics miner efficiency is a monthly observation. Allow at most two monthly
 # publication intervals before refusing to carry it further; freshness is validated from
@@ -466,7 +477,12 @@ def get_price(tickers: dict, start_date: str) -> pd.DataFrame:
     Returns:
     pd.DataFrame: DataFrame containing close prices for all tickers with 'time' column.
     """
-    end_date = datetime.today().strftime("%Y-%m-%d")
+    # Anchor on the UTC clock, not the local one, so a local run and a CI run request
+    # the same window. yfinance treats `end` as exclusive, so this asks for everything
+    # through the current UTC day.
+    end_date = pd.Timestamp.now(tz="UTC").normalize().tz_localize(None).strftime(
+        "%Y-%m-%d"
+    )
     excluded_crypto_tickers = {
         "ethereum",
         "ripple",
@@ -656,7 +672,8 @@ def get_marketcap(
     stocks = list(tickers.get("stocks", []))
     requested_start = pd.to_datetime(start_date).normalize()
     requested_end = (
-        pd.Timestamp.today().normalize() - pd.Timedelta(days=1)
+        pd.Timestamp.now(tz="UTC").normalize().tz_localize(None)
+        - pd.Timedelta(days=1)
         if end_date is None
         else pd.to_datetime(end_date).normalize()
     )
@@ -738,6 +755,36 @@ def get_marketcap(
             shares_on_price_dates = (
                 shares.reindex(combined_index).ffill().reindex(close.index)
             )
+
+            # Carry the true filing date alongside the value so staleness is measured
+            # from the observation, never inferred from a repeated daily figure. Beyond
+            # the budget the market cap becomes NaN rather than silently understating
+            # the issuer's dilution.
+            share_source_dates = (
+                pd.Series(shares.index, index=shares.index)
+                .reindex(combined_index)
+                .ffill()
+                .reindex(close.index)
+            )
+            row_dates = pd.Series(close.index, index=close.index).dt.normalize()
+            share_age_days = (
+                row_dates - share_source_dates.dt.normalize()
+            ).dt.days
+            fresh = share_age_days.between(0, SHARES_OUTSTANDING_MAX_AGE_DAYS)
+            shares_on_price_dates = shares_on_price_dates.where(fresh)
+
+            newest_share_date = shares.index.max()
+            newest_age = (requested_end.normalize() - newest_share_date.normalize()).days
+            if newest_age > SHARES_OUTSTANDING_MAX_AGE_DAYS:
+                warnings.warn(
+                    f"Shares outstanding for {ticker} last observed "
+                    f"{newest_share_date.date()} ({newest_age} days before "
+                    f"{requested_end.date()}); {ticker}_MarketCap will be null past the "
+                    f"{SHARES_OUTSTANDING_MAX_AGE_DAYS}-day budget",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+
             market_cap = (close * shares_on_price_dates).replace(
                 [np.inf, -np.inf], np.nan
             )
@@ -790,6 +837,16 @@ def get_marketcap(
                         else None
                     )
             if current_market_cap is not None:
+                # A live intraday quote in a column otherwise made of settled daily
+                # closes. It is confined to the final row and never broadcast backward,
+                # but it should not pass unremarked in the run log.
+                warnings.warn(
+                    f"{value_column} on {requested_end.date()} is Yahoo's live scalar "
+                    "market cap, not a settled close: no historical share series was "
+                    "available for this ticker",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
                 data.loc[requested_end, value_column] = current_market_cap
 
     return data.reset_index()
@@ -1561,6 +1618,117 @@ def assert_onchain_freshness(data: pd.DataFrame, report_date, metrics=None) -> N
         )
 
 
+# Series that feed a cumulative sum. A hole in one of these is not a missing day — it
+# permanently shifts every subsequent total, and the resulting curve looks entirely
+# plausible, so it has to be caught at ingest rather than eyeballed downstream.
+CUMULATIVE_ONCHAIN_INPUTS = ["coinbase_sum_24h_usd"]
+
+
+def assert_price_outlook_current(report_date, outlook_year: int = PRICE_OUTLOOK_YEAR) -> None:
+    """
+    Verify the published case levels forecast the year the report belongs to.
+
+    The bull/base/bear levels are hand-maintained and revised once a year. Without this
+    check, the first run of a new year silently republishes last year's forecast — and
+    both the dashboard cards and the homepage tracker label it with the new year.
+
+    Raises:
+    RuntimeError: If the outlook year does not match the report date's year.
+    """
+    report_date = pd.to_datetime(report_date).normalize()
+    if int(outlook_year) != report_date.year:
+        raise RuntimeError(
+            f"Price outlook is for {outlook_year} but the report date is "
+            f"{report_date.date()}. Publish the new Year Ahead Outlook and update "
+            "PRICE_OUTLOOK_YEAR and price_outlook_levels in data_definitions.py."
+        )
+
+
+def assert_reference_data_fresh(
+    report_date, vintages=None, max_age_days: int = REFERENCE_DATA_MAX_AGE_DAYS
+) -> None:
+    """
+    Verify the hand-maintained reference figures have been re-checked recently enough.
+
+    These are broadcast across the entire daily history, so a stale figure is presented as
+    though it held in 2010. Unlike the fetched sources there is nothing to observe their
+    age from — only the vintage a maintainer recorded when last confirming them.
+
+    Raises:
+    RuntimeError: If any reference figure is older than the budget on the report date.
+    """
+    vintages = REFERENCE_DATA_VINTAGES if vintages is None else vintages
+    report_date = pd.to_datetime(report_date).normalize()
+
+    stale = []
+    for name, as_of in vintages.items():
+        as_of_date = pd.to_datetime(as_of, errors="coerce")
+        if pd.isna(as_of_date):
+            stale.append(f"{name} (invalid vintage {as_of!r})")
+            continue
+        as_of_date = as_of_date.normalize()
+        if getattr(as_of_date, "tz", None) is not None:
+            as_of_date = as_of_date.tz_convert(None)
+        age_days = (report_date - as_of_date).days
+        if age_days < 0:
+            stale.append(f"{name} (future vintage {as_of_date.date()})")
+            continue
+        if age_days > max_age_days:
+            stale.append(f"{name} (as of {as_of_date.date()}, {age_days} days old)")
+
+    if stale:
+        raise RuntimeError(
+            "Hand-maintained reference data is stale: "
+            + "; ".join(stale)
+            + f". Maximum allowed age is {max_age_days} days. Re-check the figures in "
+            "data_definitions.py and bump their *_AS_OF vintage."
+        )
+
+
+def assert_no_internal_onchain_gaps(
+    data: pd.DataFrame, report_date, columns=None
+) -> None:
+    """
+    Verify cumulative on-chain inputs have no holes between first and last observation.
+
+    Leading nulls before a series begins are expected and contribute zero. A gap *inside*
+    the observed range is not recoverable by zero-filling: `RevAllTimeUSD` and every
+    thermocap series derived from it would be understated for all later dates with no
+    visible artefact.
+
+    Raises:
+    RuntimeError: If any monitored column has an internal gap on or before the report date.
+    """
+    columns = columns or CUMULATIVE_ONCHAIN_INPUTS
+    report_date = pd.to_datetime(report_date).normalize()
+    normalized_index = _normalized_index(data)
+    in_range = data.loc[normalized_index <= report_date]
+
+    problems = []
+    for column in columns:
+        if column not in in_range.columns:
+            problems.append(f"{column} is absent")
+            continue
+        values = in_range[column]
+        observed = values.notna()
+        if not observed.any():
+            problems.append(f"{column} has no observations")
+            continue
+        interior = values.loc[observed.idxmax() : observed[::-1].idxmax()]
+        gaps = interior.index[interior.isna()]
+        if len(gaps):
+            shown = ", ".join(str(d.date()) for d in gaps[:5])
+            more = f" (+{len(gaps) - 5} more)" if len(gaps) > 5 else ""
+            problems.append(f"{column} has an internal gap on {shown}{more}")
+
+    if problems:
+        raise RuntimeError(
+            "Cumulative on-chain inputs are incomplete: "
+            + "; ".join(problems)
+            + ". Refusing to publish rather than zero-filling a running total."
+        )
+
+
 def get_data(
     tickers: dict,
     start_date: str,
@@ -1704,6 +1872,9 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
     miner_revenue_usd = data["coinbase_sum_24h_usd"]
 
     # --- Intermediates that later metrics build on -------------------------------
+    # Only leading nulls survive `assert_no_internal_onchain_gaps`, and those legitimately
+    # contribute zero: they precede the series' first observation. An interior hole would
+    # have aborted the run already.
     rev_all_time = miner_revenue_usd.fillna(0).cumsum()
     nvt_adj = market_cap / transfer_volume
     nvt_adj_90 = market_cap / transfer_volume.rolling(90).mean()
@@ -1736,8 +1907,15 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
     hodl_bank = daily_hodl_value.cumsum()
 
     # Average Cap and Delta Cap
+    # The divisor is the network's true age, not a row counter. The fetched history
+    # starts 2010-01-01 — 363 days after genesis — so counting rows understates the
+    # denominator and overstates Average Cap by ~6%, with the error shrinking as the
+    # window lengthens (which distorts the curve's shape, not just its level).
     cumulative_market_cap = market_cap.cumsum()
-    days_since_start = pd.Series(range(1, len(data) + 1), index=data.index)
+    days_since_start = pd.Series(
+        (_normalized_index(data) - BITCOIN_GENESIS_DATE).days + 1,
+        index=data.index,
+    ).clip(lower=1)
     average_cap = cumulative_market_cap / days_since_start
     delta_cap = realized_cap - average_cap
 

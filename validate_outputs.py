@@ -33,6 +33,7 @@ OUTPUT_RULES = {
     "fundamentals_table.csv": RowBounds(1, 1_000),
     "halving_data.csv": RowBounds(1, 100_000),
     "master_metrics_data.csv.gz": RowBounds(365, 100_000),
+    "model_coefficients.csv": RowBounds(6, 6),
     "monthly_heatmap_data.csv": RowBounds(4, 1_000),
     "mtd_return_comparison.csv": RowBounds(2, 10),
     "mtd_returns_history.csv": RowBounds(29, 32),
@@ -53,6 +54,9 @@ OUTPUT_RULES = {
 
 REQUIRED_COLUMNS = {
     "1k_bucket_table.csv": {"Price Range ($)", "Count", "Current Price"},
+    "model_coefficients.csv": {
+        "coefficient", "value", "report_date", "fit_end_date",
+    },
     "5k_bucket_table.csv": {"Price Range ($)", "Count", "Current Price"},
     "bitcoin_dominance_history.csv": {
         "date", "bitcoin_dominance", "source_updated_at",
@@ -132,7 +136,7 @@ REQUIRED_COLUMNS = {
     "performance_table.csv": {
         "Category", "Asset", "Price", "MTD Return (%)", "YTD Return (%)",
     },
-    "price_outlook.csv": {"label", "price", "type", "color"},
+    "price_outlook.csv": {"label", "price", "type", "color", "outlook_year"},
     "relative_value_comparison.csv": {"Asset", "Market Cap (USD)", "Market Cap BTC Price"},
     "report_ohlc_summary.csv": {"Report Date", "Daily Close"},
     "roi_table.csv": {"Time Frame", "ROI (%)", "Start Date", "BTC Price"},
@@ -164,6 +168,7 @@ RETAINED_OUTPUTS = {
     "eoy_model_data.csv",
     "electricity_cost_scenarios.csv",
     "halving_data.csv",
+    "model_coefficients.csv",
     "monthly_heatmap_data.csv",
     "mtd_return_comparison.csv",
     "mtd_returns_history.csv",
@@ -263,6 +268,43 @@ def _validate_dated_output(
                 f"{expected_report_date.date()}, found {found}"
             )
     elif dates.max() != expected_report_date:
+        errors.append(
+            f"{filename}: latest {column!r} is {dates.max().date()}, "
+            f"expected {expected_report_date.date()}"
+        )
+
+
+# Exports too large to retain in memory are checked by streaming their index column
+# only. The master is ~99MB raw; holding it the way RETAINED_OUTPUTS does would be
+# wasteful when the only thing left to assert is the cutoff.
+INDEX_CUTOFF_OUTPUTS = {
+    "master_metrics_data.csv.gz": "time",
+    "cagr_data.csv": "time",
+}
+
+
+def _validate_index_cutoff(
+    output_dir: Path,
+    filename: str,
+    column: str,
+    expected_report_date: pd.Timestamp,
+    errors: list[str],
+) -> None:
+    """Assert a large dated export ends exactly on the report date."""
+    path = output_dir / filename
+    if not path.is_file():
+        return
+    try:
+        index = pd.read_csv(path, usecols=[column])[column]
+    except (OSError, UnicodeError, ValueError, pd.errors.ParserError) as exc:
+        errors.append(f"{filename}: cannot read {column!r} ({exc})")
+        return
+
+    dates = pd.to_datetime(index, errors="coerce").dt.normalize()
+    if dates.isna().any():
+        errors.append(f"{filename}: {column!r} contains invalid or missing dates")
+        return
+    if dates.max() != expected_report_date:
         errors.append(
             f"{filename}: latest {column!r} is {dates.max().date()}, "
             f"expected {expected_report_date.date()}"
@@ -796,6 +838,17 @@ def _validate_report_agreement(
         errors,
         require_every_row=True,
     )
+    # Every coefficient row must name the release it was fitted for; a row carrying an
+    # older report date means the file was not regenerated with the rest of the release.
+    for column in ("report_date", "fit_end_date"):
+        _validate_dated_output(
+            frames,
+            "model_coefficients.csv",
+            column,
+            expected_report_date,
+            errors,
+            require_every_row=True,
+        )
 
     dominance = frames.get("bitcoin_dominance_history.csv")
     if dominance is not None and not dominance.empty:
@@ -937,6 +990,11 @@ def validate_outputs(
             errors.append(f"{filename}: contains positive or negative infinity")
         if frame is not None:
             retained_frames[filename] = frame
+
+    for filename, column in INDEX_CUTOFF_OUTPUTS.items():
+        _validate_index_cutoff(
+            output_dir, filename, column, expected_report_date, errors
+        )
 
     _validate_report_agreement(retained_frames, expected_report_date, errors)
     return errors

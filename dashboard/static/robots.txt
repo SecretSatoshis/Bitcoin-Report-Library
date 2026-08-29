@@ -1,0 +1,6 @@
+# All crawlers welcome, including AI retrieval and training agents.
+# Deliberate: this public dashboard permits crawling.
+User-agent: *
+Allow: /
+
+Sitemap: https://dashboard.secretsatoshis.com/sitemap.xml

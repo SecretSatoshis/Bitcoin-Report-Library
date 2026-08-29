@@ -20,6 +20,24 @@
 	}
 </script>
 
+<svelte:head>
+	<!-- Evidence's preprocessor emits title, description, og:title,
+	     og:description, og:image, twitter:card, twitter:title,
+	     twitter:description and twitter:image from the page front matter.
+	     Only what it does not emit belongs here — duplicating a tag is worse
+	     than omitting it. -->
+	<link rel="canonical" href="https://dashboard.secretsatoshis.com/" />
+	<meta name="robots" content="index, follow, max-image-preview:large" />
+	<meta name="theme-color" content="#08080c" />
+	<meta property="og:type" content="website" />
+	<meta property="og:site_name" content="Secret Satoshis" />
+	<meta property="og:url" content="https://dashboard.secretsatoshis.com/" />
+	<meta
+		property="og:image:alt"
+		content="Secret Satoshis — AI-Native Bitcoin Market Intelligence"
+	/>
+</svelte:head>
+
 <svelte:window on:keydown={handleKeydown} />
 
 <div class="brand-shell" id="top">

@@ -1,5 +1,13 @@
 ---
-title: Bitcoin Market Dashboard
+# Evidence's preprocessor builds <title>, description, og: and twitter: tags
+# from this block. Without a title here it emits <title>Evidence</title>, and a
+# layout <svelte:head> cannot override it — the page renders last and wins.
+# hide_title suppresses Evidence's own <h1> so the branded hero is the only one.
+title: Bitcoin Market Dashboard | Secret Satoshis
+description: Current Bitcoin market data, valuation models, on-chain conditions and cycle context, updated daily from an open pipeline.
+hide_title: true
+og:
+  image: https://secretsatoshis.com/assets/images/social-card.jpg
 ---
 
 <section class="dashboard-hero" aria-labelledby="dashboardHeroTitle" data-dashboard-date={data_date?.[0]?.date_iso ?? ''}>
@@ -8,6 +16,9 @@ title: Bitcoin Market Dashboard
       <p class="dashboard-eyebrow"><span class="brand-accent">//</span> Market Intelligence</p>
       <h1 id="dashboardHeroTitle">Bitcoin Market Dashboard<span class="brand-accent">.</span></h1>
       <p class="dashboard-hero-sub">A live view of Bitcoin market performance, on-chain conditions, valuation, and network activity.</p>
+      <noscript>
+        <p class="dashboard-hero-source">The tables and charts on this page are rendered in the browser and stay empty without JavaScript. Every figure they show is computed from an <a href="https://secretsatoshis.github.io/Bitcoin-Report-Library/">open Bitcoin data release</a>, published daily as CSV and readable directly.</p>
+      </noscript>
     </div>
     <dl class="dashboard-hero-stats" aria-label="Dashboard status">
       <div>

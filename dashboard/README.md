@@ -7,7 +7,7 @@ An Evidence.dev dashboard for the Bitcoin Report Library outputs used by the Sec
 The dashboard can read CSVs from local report outputs or from the published GitHub Pages CSV endpoint:
 
 - Local outputs: `../csv/`
-- Published outputs: `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/`
+- Published CSV base path: `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/`
 
 Source repo: `https://github.com/SecretSatoshis/Bitcoin-Report-Library`
 
@@ -130,7 +130,7 @@ Wide files such as `master_metrics_data.csv.gz` and `cagr_data.csv` are intentio
 
 The dashboard is published at [dashboard.secretsatoshis.com](https://dashboard.secretsatoshis.com). Its Cloudflare Pages Git integration is configured outside this repository to rebuild when relevant `dashboard/` or `csv/` changes reach `main`. The repository's daily data-refresh workflow runs at 00:30 UTC, shortly after the completed UTC day, then tests, regenerates, and validates the report before committing refreshed CSVs; that commit triggers the same-evening dashboard rebuild in New York.
 
-The production build sequence is `npm ci → sync:remote → sources → build`, with the static `build/` folder served behind a CDN. Because the hosting integration is external, verify those build settings in Cloudflare when changing the Node version or production command.
+The production build sequence is `npm ci → sync:remote → sources → build`, with the static `build/` folder served behind a CDN. The build finishes by replacing Evidence's hardcoded X publisher attribution with `@SecretSatoshis`; it fails if the upstream tag changes instead of silently publishing incorrect metadata. Because the hosting integration is external, verify those build settings in Cloudflare when changing the Node version or production command.
 
 ## Key Files
 
@@ -139,5 +139,7 @@ The production build sequence is `npm ci → sync:remote → sources → build`,
 - `sources/bitcoin_report_library/connection.yaml` — CSV datasource config
 - `scripts/download-data.mjs` — local/remote CSV sync script
 - `scripts/export-newsletter-visuals.mjs` — deterministic Dashboard-to-newsletter PNG exporter
+- `scripts/fix-social-attribution.mjs` — post-build correction for Evidence's hardcoded X attribution
+- `static/robots.txt` and `static/sitemap.xml` — crawler policy and canonical dashboard URL
 - `evidence.config.yaml` — Evidence plugins, theme, and color config
 - `app.css` — shared site-shell tokens and custom dashboard styling (cypherpunk dark theme, JetBrains Mono + Syne)

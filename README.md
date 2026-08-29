@@ -32,6 +32,9 @@ Bitcoin-Report-Library/
 ├── report_tables.py     # Table generation and formatting
 ├── data_definitions.py  # Configuration and constants
 ├── validate_outputs.py  # Local publication checks used by CI
+├── build_release_page.py # Generates the public data landing page and sitemap
+├── index.html           # Generated public data-release landing page
+├── sitemap.xml          # Generated public release sitemap
 ├── tests/               # Regression tests for calculations and ingestion
 ├── csv/                 # Output directory (consumed by Chart Library + dashboard)
 ├── dashboard/           # Live web dashboard (Evidence.dev)
@@ -46,6 +49,7 @@ Bitcoin-Report-Library/
 | `data_format.py` | Fetches raw data from APIs, normalizes timestamps, engineers features, calculates derived metrics, computes cycle analysis (drawdowns, halvings, cycle lows) |
 | `report_tables.py` | Builds tabular outputs: fundamentals, ROI, performance comparisons, valuations, heatmaps, OHLC |
 | `data_definitions.py` | Central configuration: tickers, API settings, reference data, metric templates, constants |
+| `build_release_page.py` | Reads the completed CSV release and regenerates its crawlable landing page, Dataset structured data, file inventory, and sitemap |
 
 ### Data Flow
 
@@ -122,14 +126,14 @@ visualization. Run this pipeline first when Chart Library is configured with a l
 All configuration is centralized in `data_definitions.py`:
 
 - **Tickers**: Asset symbols organized by category (stocks, ETFs, indices, commodities, forex, crypto)
-- **Reference Data**: Fiat money supply, precious metals supply, gold allocation breakdown
+- **Reference Data**: Fiat money supply, precious metals supply, and gold allocation breakdown, each with an explicit reviewed vintage and maximum age
 - **API Settings**: Configured BRK series, endpoint URLs, timeout values
 - **Model Parameters**: Metcalfe address bands, Bitcoin genesis anchor, Hash Ribbon windows, electricity-tariff scenarios, mining overhead assumptions, trading days, and unit conversions
 - **Report Settings**: Analysis columns, correlation data columns, metrics templates
 
 ## Outputs
 
-All outputs are written to `csv/` and served via GitHub Pages at `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/` for remote consumption by downstream projects.
+All data outputs are written to `csv/` and served from the GitHub Pages base path `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/` for remote consumption by downstream projects. The repository root publishes a generated data-release landing page and sitemap whose dates, coverage, file counts, and download links are derived from the same completed CSV release.
 
 The master metrics dataset is exported as gzipped CSV (`.csv.gz`) to keep the file under GitHub's size limits. `pd.read_csv()` reads `.csv.gz` files natively — no manual decompression needed.
 
@@ -156,9 +160,10 @@ The master metrics dataset is exported as gzipped CSV (`.csv.gz`) to keep the fi
 | `onchain_price_models.csv` | Daily valuation models (Metcalfe, power law, Realized, STH/LTH Realized, canonical $0.05/kWh power expense, and 3× Realized) joined to BTC price through `report_date` |
 | `electricity_cost_scenarios.csv` | Daily network energy inputs, $0.03–$0.07/kWh power-expense scenarios, break-even tariff, and retained legacy/Production Cost/Hayes/Energy Value comparisons through `report_date` |
 | `network_model_metrics.csv` | Daily Metcalfe inputs and four address-band values, fitted power-law inputs/parameters, and 30/60-day Hash Ribbon metrics through `report_date` |
+| `model_coefficients.csv` | The six fitted power-law and Metcalfe coefficients used by the current release, labeled with their report and fit-end dates |
 | `mtd_returns_history.csv` | Indexed MTD paths with row 0 as the shared prior-month close anchor; day 1 retains its actual move and the current series is capped at `report_date` |
 | `ytd_returns_history.csv` | Indexed YTD paths with row 0 as the shared prior-year close anchor; calendar dates align across leap years and the current series is capped at `report_date` |
-| `price_outlook.csv` | Hand-maintained Bear/Base/Bull cases plus retained support/resistance reference data; the bundled dashboard renders only the three case lines |
+| `price_outlook.csv` | Hand-maintained Bear/Base/Bull cases, their forecast year, and retained support/resistance reference data; the website and bundled dashboard render the three case lines |
 
 ### Chart-Ready Datasets
 
@@ -189,8 +194,14 @@ The `dashboard/` subfolder is an [Evidence.dev](https://evidence.dev) BI-as-code
 The scheduled GitHub Actions workflow starts at **00:30 UTC**, shortly after the UTC
 day closes and safely after the New York market close. It refreshes the source data,
 records the completed day's Bitcoin-dominance observation, runs the regression and
-output-validation suites, and commits the validated CSV outputs. That publication
-supplies the dashboard and the downstream Chart Library refresh.
+output-validation suites, rebuilds the public release page and sitemap, and commits the
+validated CSV and public release outputs. That publication supplies the dashboard and
+the downstream Chart Library refresh.
+
+The run fails closed if a cumulative on-chain input contains an internal gap, a
+hand-maintained reference dataset exceeds its reviewed-age budget, or a large dated
+export extends past the completed report date. Model coefficients are published with
+each release so fitted valuation series remain reproducible.
 
 Bitcoin dominance is a required report-date input. The pipeline stores the latest usable
 CoinGecko snapshot available when the run executes, including delayed runs, and fails only
@@ -199,11 +210,11 @@ when CoinGecko returns no usable observation rather than publishing an incomplet
 ## Dependencies
 
 ```
-pandas==2.2.0
-pyarrow==15.0.0
-numpy==1.26.4
-requests==2.32.3
-yfinance==0.2.60
+pandas==3.0.5
+pyarrow==25.0.1
+numpy==2.5.2
+requests==2.34.2
+yfinance==1.6.0
 ```
 
 ## Local Development
@@ -219,10 +230,11 @@ Refresh every live data source, rebuild the report outputs, and validate them:
 ```bash
 uv run --no-sync python main.py
 uv run --no-sync python validate_outputs.py
+uv run --no-sync python build_release_page.py
 ```
 
 `main.py` contacts the configured live APIs and rewrites files in `csv/`. To view the
-existing local CSVs without refreshing them first, skip those two commands.
+existing local CSVs without refreshing them first, skip the three release commands above.
 
 Launch the dashboard from a second VS Code terminal:
 
@@ -252,12 +264,13 @@ npm run build
 The generated `dashboard/build/` directory and compiled Evidence caches are ignored by
 Git. Only source code, configuration, the lockfile, and report CSV outputs are committed.
 
-The CI workflow runs the regression suite, regenerates the report, and then runs
-`uv run --no-sync python validate_outputs.py` before committing refreshed CSVs. The
-validator is local-only and rejects missing or truncated required files, non-finite
-values, implausible row counts, report-date disagreements, invalid cycle-low baselines,
-halving eras without a valid day-zero anchor, and inconsistent electricity, Metcalfe,
-power-law, or Hash Ribbon calculations.
+The CI workflow runs the regression suite, regenerates and validates the report, rebuilds
+the public release page and sitemap, and reruns the release-page SEO checks against the
+new data before committing the refreshed CSVs and generated public files. The output
+validator rejects missing or truncated required files, non-finite values, implausible row
+counts, report-date disagreements, invalid cycle-low baselines, halving eras without a
+valid day-zero anchor, and inconsistent electricity, Metcalfe, power-law, or Hash Ribbon
+calculations.
 
 ## License
 

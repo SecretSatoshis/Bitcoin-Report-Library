@@ -6,7 +6,19 @@ It fetches data from multiple sources, calculates metrics, generates report tabl
 CSV files for downstream analysis.
 """
 
+# This module is the pipeline entry point: its body runs the whole fetch-and-export at
+# import time. Refuse to be imported so a test collector, IDE indexer or stray
+# `import main` cannot trigger network fetches and overwrite csv/ as a side effect.
+if __name__ != "__main__":
+    raise RuntimeError(
+        "main.py is an executable pipeline, not an importable module — running it as a "
+        "side effect of an import would fetch upstream data and rewrite csv/. Import "
+        "data_format or report_tables instead, or run `python main.py`."
+    )
+
 # Import Packages
+import os
+
 import pandas as pd
 import warnings
 import sys
@@ -34,6 +46,7 @@ from data_definitions import (
     correlation_data,
     metrics_template,
     price_outlook_levels,
+    PRICE_OUTLOOK_YEAR,
 )
 
 # Fetch the data
@@ -52,6 +65,9 @@ data = data_format.get_data(
 data_format.warn_on_stale_market_data(data, report_date)
 data = data_format.forward_fill_market_data(data)
 data_format.assert_onchain_freshness(data, report_date)
+data_format.assert_no_internal_onchain_gaps(data, report_date)
+data_format.assert_reference_data_fresh(report_date)
+data_format.assert_price_outlook_current(report_date)
 data_format.warn_on_stale_miner_efficiency(data, report_date)
 
 ## BRK OHLC data
@@ -187,6 +203,14 @@ network_model_metrics = report_tables.create_network_model_metrics(
 
 # CSV Exports
 
+## Every exported frame is truncated to the report date. Upstream fetches return a
+## partial, in-progress UTC day whose 24h aggregates (hash rate, miner revenue, tx
+## count, supply issuance) are a fraction of a real day; publishing it puts a spurious
+## final point on every downstream chart. Do this once, here, so no export can miss it.
+report_data = report_data.loc[:report_date]
+cagr_results = cagr_results.loc[:report_date]
+
+
 ## Price Bucket CSVs
 bucket_counts_5k_df.to_csv("csv/5k_bucket_table.csv", index=False)
 bucket_counts_1k_df.to_csv("csv/1k_bucket_table.csv", index=False)
@@ -198,6 +222,9 @@ fundamentals_table.to_csv("csv/fundamentals_table.csv", index=False)
 summary_table.to_csv("csv/summary_table.csv", index=False)
 
 ## Fixed Price Outlook CSV
+## The outlook year travels with the levels so every consumer can verify it is looking
+## at the current forecast rather than trusting its own hardcoded copy.
+price_outlook_levels = price_outlook_levels.assign(outlook_year=PRICE_OUTLOOK_YEAR)
 price_outlook_levels.to_csv("csv/price_outlook.csv", index=False)
 
 ## MTD / YTD Historical Returns — indexed to current-period start price.
@@ -288,7 +315,6 @@ eoy_model_data.to_csv("csv/eoy_model_data.csv", index=True)
 report_data.to_csv("csv/master_metrics_data.csv.gz", index=True, compression="gzip")
 
 ## Remove old uncompressed master if it exists (prevent stale 99MB file in repo)
-import os
 old_master = "csv/master_metrics_data.csv"
 if os.path.exists(old_master):
     os.remove(old_master)
@@ -310,3 +336,29 @@ halving_data.to_csv("csv/halving_data.csv", index=False)
 
 ## CAGR results
 cagr_results.to_csv("csv/cagr_data.csv", index=True)
+
+## Model coefficients — the power-law and Metcalfe fits are re-run every day over all
+## observations through the report date, so `power_law_price` and `metcalfe_value` change
+## retroactively for every historical date on every run. Publishing the coefficients that
+## produced this release makes any cited value reproducible from the release it came from
+## instead of drifting silently run over run.
+MODEL_COEFFICIENT_COLUMNS = [
+    "power_law_exponent",
+    "power_law_scale",
+    "metcalfe_scale_any_balance",
+    "metcalfe_scale_0p001_btc",
+    "metcalfe_scale_0p01_btc",
+    "metcalfe_scale_0p1_btc",
+]
+_coefficient_row = report_data.loc[report_date]
+model_coefficients = pd.DataFrame(
+    {
+        "coefficient": MODEL_COEFFICIENT_COLUMNS,
+        "value": [
+            float(_coefficient_row[column]) for column in MODEL_COEFFICIENT_COLUMNS
+        ],
+        "report_date": report_date.strftime("%Y-%m-%d"),
+        "fit_end_date": report_date.strftime("%Y-%m-%d"),
+    }
+)
+model_coefficients.to_csv("csv/model_coefficients.csv", index=False)

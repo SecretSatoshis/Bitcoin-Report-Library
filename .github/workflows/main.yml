@@ -79,6 +79,12 @@ jobs:
         run: |
           uv run --no-sync python main.py
           uv run --no-sync python validate_outputs.py
+          uv run --no-sync python build_release_page.py
+          # Re-check the release page against the data it was just built from.
+          # The suite above ran before generation, so it validated the previous
+          # commit's output; this catches a stale page in the same run rather
+          # than one run later.
+          uv run --no-sync python -m unittest tests.test_release_page_seo -v
 
       - name: Upload generated reports
         if: github.event_name != 'pull_request'
@@ -88,6 +94,8 @@ jobs:
           path: |
             csv/
             README.md
+            index.html
+            sitemap.xml
           if-no-files-found: error
           retention-days: 1
 
@@ -115,7 +123,7 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add csv/ README.md
+          git add csv/ README.md index.html sitemap.xml
           git diff --cached --quiet || git commit -m "Update Reports"
           gh auth setup-git
           git pull --rebase origin main

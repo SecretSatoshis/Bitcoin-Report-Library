@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bitcoin Data Release | Secret Satoshis</title>
+<meta name="description" content="The daily Secret Satoshis Bitcoin data release: 27 CSV files covering price, supply, mining, network activity and valuation, regenerated each day by an open pipeline.">
+<link rel="canonical" href="https://secretsatoshis.github.io/Bitcoin-Report-Library/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="theme-color" content="#08080c">
+<link rel="icon" href="https://secretsatoshis.com/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="https://secretsatoshis.com/assets/images/favicon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Secret Satoshis">
+<meta property="og:title" content="Bitcoin Data Release | Secret Satoshis">
+<meta property="og:description" content="The daily Secret Satoshis Bitcoin data release: 27 CSV files covering price, supply, mining, network activity and valuation, regenerated each day by an open pipeline.">
+<meta property="og:url" content="https://secretsatoshis.github.io/Bitcoin-Report-Library/">
+<meta property="og:image" content="https://secretsatoshis.com/assets/images/social-card.jpg">
+<meta property="og:image:alt" content="Secret Satoshis — AI-Native Bitcoin Market Intelligence">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://secretsatoshis.com/assets/images/social-card.jpg">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Dataset",
+  "name": "Secret Satoshis Bitcoin Data Release",
+  "description": "A daily Bitcoin market and on-chain data release covering price, market capitalisation, supply, mining, network activity, valuation models and multi-asset performance comparisons. Published as CSV and regenerated each day by an open pipeline.",
+  "url": "https://secretsatoshis.github.io/Bitcoin-Report-Library/",
+  "isAccessibleForFree": true,
+  "dateModified": "2026-08-28",
+  "temporalCoverage": "2010-01-01/2026-08-28",
+  "keywords": [
+    "Bitcoin",
+    "on-chain data",
+    "market data",
+    "open data",
+    "BTC"
+  ],
+  "creator": {
+    "@type": "Organization",
+    "name": "Secret Satoshis",
+    "url": "https://secretsatoshis.com/"
+  },
+  "isBasedOn": {
+    "@type": "SoftwareSourceCode",
+    "name": "Bitcoin Report Library",
+    "codeRepository": "https://github.com/SecretSatoshis/Bitcoin-Report-Library",
+    "license": "https://www.gnu.org/licenses/gpl-3.0.html"
+  },
+  "distribution": [
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/1k_bucket_table.csv",
+      "name": "1k bucket table"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/5k_bucket_table.csv",
+      "name": "5k bucket table"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/bitcoin_dominance_history.csv",
+      "name": "Bitcoin dominance history"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/brk_onchain_raw.csv",
+      "name": "Brk onchain raw"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/cagr_data.csv",
+      "name": "Cagr data"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/cycle_low_data.csv",
+      "name": "Cycle low data"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/drawdown_data.csv",
+      "name": "Drawdown data"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/electricity_cost_scenarios.csv",
+      "name": "Electricity cost scenarios"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/eoy_model_data.csv",
+      "name": "Eoy model data"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/fundamentals_table.csv",
+      "name": "Fundamentals table"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/halving_data.csv",
+      "name": "Halving data"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/model_coefficients.csv",
+      "name": "Model coefficients"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/monthly_heatmap_data.csv",
+      "name": "Monthly heatmap data"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/mtd_return_comparison.csv",
+      "name": "Mtd return comparison"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/mtd_returns_history.csv",
+      "name": "Mtd returns history"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/network_model_metrics.csv",
+      "name": "Network model metrics"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/ohlc_data.csv",
+      "name": "Ohlc data"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/onchain_price_models.csv",
+      "name": "Onchain price models"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/performance_table.csv",
+      "name": "Performance table"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/price_outlook.csv",
+      "name": "Price outlook"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/relative_value_comparison.csv",
+      "name": "Relative value comparison"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/report_ohlc_summary.csv",
+      "name": "Report ohlc summary"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/roi_table.csv",
+      "name": "Roi table"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/summary_history.csv",
+      "name": "Summary history"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/summary_table.csv",
+      "name": "Summary table"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/ytd_return_comparison.csv",
+      "name": "Ytd return comparison"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/ytd_returns_history.csv",
+      "name": "Ytd returns history"
+    }
+  ]
+}
+</script>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; background:#08080c; color:#e4e4ef;
+         font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:15px; line-height:1.65; }
+  .wrap { max-width:1000px; margin:0 auto; padding:64px clamp(20px,5vw,48px) 96px; }
+  .eyebrow { font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:#5a5a74; margin:0 0 16px; }
+  .eyebrow span { color:#F7931A; }
+  h1 { font-size:clamp(28px,5vw,40px); line-height:1.1; margin:0 0 20px; letter-spacing:-.02em; }
+  p { max-width:66ch; color:#9090a8; font-weight:300; }
+  a { color:#F7931A; text-underline-offset:3px; }
+  h2 { font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#5a5a74; margin:48px 0 14px; }
+  .tablewrap { overflow-x:auto; border:1px solid #1c1c2e; background:#0e0e16; }
+  table { border-collapse:collapse; width:100%; min-width:720px; font-size:13px; }
+  th { text-align:left; font-size:10px; letter-spacing:.14em; text-transform:uppercase;
+        color:#5a5a74; padding:12px 16px; border-bottom:1px solid #2a2a42; background:#0b0b12; white-space:nowrap; }
+  td { padding:11px 16px; border-bottom:1px solid #1c1c2e; color:#9090a8; font-weight:300; vertical-align:top; }
+  tr:last-child td { border-bottom:0; }
+  td.f { color:#e4e4ef; }
+  td.f code { display:inline-block; margin-top:3px; font-size:11px; color:#5a5a74; }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  footer { margin-top:56px; padding-top:22px; border-top:1px solid #1c1c2e; font-size:12px; color:#5a5a74; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <p class="eyebrow"><span>//</span> Open Data</p>
+    <h1>Bitcoin Data Release</h1>
+    <p>
+      The daily Secret Satoshis Bitcoin data release. 27 CSV files covering price, market
+      capitalisation, supply, mining, network activity, valuation models and multi-asset
+      performance, regenerated each day by an open pipeline and read directly by
+      <a href="https://dashboard.secretsatoshis.com/">the Market Dashboard</a>,
+      <a href="https://charts.secretsatoshis.com/">the Chart Library</a> and
+      <a href="https://secretsatoshis.com/">secretsatoshis.com</a>.
+    </p>
+    <p>
+      Coverage runs <strong>2010-01-01</strong> to <strong>2026-08-28</strong>. The code that produces
+      these files is public at
+      <a href="https://github.com/SecretSatoshis/Bitcoin-Report-Library">Bitcoin-Report-Library</a> and licensed GPL-3.0; the market data
+      it ingests is third-party and keeps the terms of its upstream publishers. Nothing here is
+      investment advice.
+    </p>
+
+    <h2>Files</h2>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>File</th><th>Coverage</th><th>Rows</th><th>Cols</th><th>Size</th></tr>
+        </thead>
+        <tbody>
+        <tr>
+          <td class="f"><a href="csv/1k_bucket_table.csv">1k bucket table</a><br><code>1k_bucket_table.csv</code></td>
+          <td>—</td>
+          <td class="num">125</td>
+          <td class="num">4</td>
+          <td class="num">3 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/5k_bucket_table.csv">5k bucket table</a><br><code>5k_bucket_table.csv</code></td>
+          <td>—</td>
+          <td class="num">25</td>
+          <td class="num">4</td>
+          <td class="num">1 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/bitcoin_dominance_history.csv">Bitcoin dominance history</a><br><code>bitcoin_dominance_history.csv</code></td>
+          <td>2026-08-24 → 2026-08-28</td>
+          <td class="num">5</td>
+          <td class="num">3</td>
+          <td class="num">0 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/brk_onchain_raw.csv">Brk onchain raw</a><br><code>brk_onchain_raw.csv</code></td>
+          <td>—</td>
+          <td class="num">6,085</td>
+          <td class="num">79</td>
+          <td class="num">5.4 MB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/cagr_data.csv">Cagr data</a><br><code>cagr_data.csv</code></td>
+          <td>2010-01-01 → 2026-08-28</td>
+          <td class="num">6,084</td>
+          <td class="num">27</td>
+          <td class="num">2.2 MB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/cycle_low_data.csv">Cycle low data</a><br><code>cycle_low_data.csv</code></td>
+          <td>—</td>
+          <td class="num">5,710</td>
+          <td class="num">3</td>
+          <td class="num">207 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/drawdown_data.csv">Drawdown data</a><br><code>drawdown_data.csv</code></td>
+          <td>—</td>
+          <td class="num">4,092</td>
+          <td class="num">3</td>
+          <td class="num">160 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/electricity_cost_scenarios.csv">Electricity cost scenarios</a><br><code>electricity_cost_scenarios.csv</code></td>
+          <td>2011-03-01 → 2026-08-28</td>
+          <td class="num">5,660</td>
+          <td class="num">18</td>
+          <td class="num">1.5 MB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/eoy_model_data.csv">Eoy model data</a><br><code>eoy_model_data.csv</code></td>
+          <td>2010-01-01 → 2026-08-28</td>
+          <td class="num">6,084</td>
+          <td class="num">15</td>
+          <td class="num">1.2 MB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/fundamentals_table.csv">Fundamentals table</a><br><code>fundamentals_table.csv</code></td>
+          <td>—</td>
+          <td class="num">20</td>
+          <td class="num">14</td>
+          <td class="num">3 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/halving_data.csv">Halving data</a><br><code>halving_data.csv</code></td>
+          <td>—</td>
+          <td class="num">5,022</td>
+          <td class="num">3</td>
+          <td class="num">150 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/model_coefficients.csv">Model coefficients</a><br><code>model_coefficients.csv</code></td>
+          <td>2026-08-28 → 2026-08-28</td>
+          <td class="num">6</td>
+          <td class="num">4</td>
+          <td class="num">0 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/monthly_heatmap_data.csv">Monthly heatmap data</a><br><code>monthly_heatmap_data.csv</code></td>
+          <td>—</td>
+          <td class="num">18</td>
+          <td class="num">14</td>
+          <td class="num">4 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/mtd_return_comparison.csv">Mtd return comparison</a><br><code>mtd_return_comparison.csv</code></td>
+          <td>—</td>
+          <td class="num">2</td>
+          <td class="num">5</td>
+          <td class="num">0 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/mtd_returns_history.csv">Mtd returns history</a><br><code>mtd_returns_history.csv</code></td>
+          <td>—</td>
+          <td class="num">32</td>
+          <td class="num">16</td>
+          <td class="num">8 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/network_model_metrics.csv">Network model metrics</a><br><code>network_model_metrics.csv</code></td>
+          <td>2010-08-16 → 2026-08-28</td>
+          <td class="num">5,857</td>
+          <td class="num">27</td>
+          <td class="num">2.4 MB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/ohlc_data.csv">Ohlc data</a><br><code>ohlc_data.csv</code></td>
+          <td>2016-12-26 → 2026-08-24</td>
+          <td class="num">505</td>
+          <td class="num">5</td>
+          <td class="num">22 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/onchain_price_models.csv">Onchain price models</a><br><code>onchain_price_models.csv</code></td>
+          <td>2010-01-01 → 2026-08-28</td>
+          <td class="num">6,084</td>
+          <td class="num">9</td>
+          <td class="num">629 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/performance_table.csv">Performance table</a><br><code>performance_table.csv</code></td>
+          <td>—</td>
+          <td class="num">17</td>
+          <td class="num">10</td>
+          <td class="num">3 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/price_outlook.csv">Price outlook</a><br><code>price_outlook.csv</code></td>
+          <td>—</td>
+          <td class="num">9</td>
+          <td class="num">5</td>
+          <td class="num">1 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/relative_value_comparison.csv">Relative value comparison</a><br><code>relative_value_comparison.csv</code></td>
+          <td>—</td>
+          <td class="num">21</td>
+          <td class="num">4</td>
+          <td class="num">1 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/report_ohlc_summary.csv">Report ohlc summary</a><br><code>report_ohlc_summary.csv</code></td>
+          <td>2026-08-24 → 2026-08-28</td>
+          <td class="num">1</td>
+          <td class="num">11</td>
+          <td class="num">0 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/roi_table.csv">Roi table</a><br><code>roi_table.csv</code></td>
+          <td>2016-08-28 → 2026-08-27</td>
+          <td class="num">10</td>
+          <td class="num">4</td>
+          <td class="num">0 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/summary_history.csv">Summary history</a><br><code>summary_history.csv</code></td>
+          <td>2026-07-29 → 2026-08-28</td>
+          <td class="num">217</td>
+          <td class="num">3</td>
+          <td class="num">10 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/summary_table.csv">Summary table</a><br><code>summary_table.csv</code></td>
+          <td>—</td>
+          <td class="num">10</td>
+          <td class="num">3</td>
+          <td class="num">0 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/ytd_return_comparison.csv">Ytd return comparison</a><br><code>ytd_return_comparison.csv</code></td>
+          <td>—</td>
+          <td class="num">2</td>
+          <td class="num">5</td>
+          <td class="num">0 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/ytd_returns_history.csv">Ytd returns history</a><br><code>ytd_returns_history.csv</code></td>
+          <td>—</td>
+          <td class="num">366</td>
+          <td class="num">16</td>
+          <td class="num">96 KB</td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <footer>
+      Updated 2026-08-28. Created by <a href="https://treybrunson.com/">Trey Brunson</a>.
+      Don't trust. Verify.
+    </footer>
+  </div>
+</body>
+</html>

@@ -138,8 +138,32 @@ report_date = (
 # REFERENCE DATA
 # =============================================================================
 
+# Vintages for the hand-maintained reference figures below. Every other input in this
+# pipeline carries a source observation date and an age budget; these are scalars typed in
+# by hand, broadcast across the whole daily history, and published as `{Country}_btc_price`
+# and the gold market-cap series — so they need the same treatment.
+#
+# NOTE: the repository history was squashed at the public baseline (2026-08-22), so these
+# dates record when the figures were last confirmed present, not when they were sourced.
+# Bump each one to the day you actually re-check the underlying figure.
+FIAT_MONEY_AS_OF = pd.Timestamp("2026-08-22")
+PRECIOUS_METALS_AS_OF = pd.Timestamp("2026-08-22")
+GOLD_BREAKDOWN_AS_OF = pd.Timestamp("2026-08-22")
+
+# How far behind the report date a reference figure may fall before the build fails.
+# Above-ground gold grows ~1.7%/yr and global M0 moves considerably faster, so a figure
+# more than a year old is materially wrong, not merely dusty.
+REFERENCE_DATA_MAX_AGE_DAYS = 365
+
+REFERENCE_DATA_VINTAGES = {
+    "fiat_money_data_top10": FIAT_MONEY_AS_OF,
+    "gold_silver_supply": PRECIOUS_METALS_AS_OF,
+    "gold_supply_breakdown": GOLD_BREAKDOWN_AS_OF,
+}
+
+
 # Global fiat money supply (M0) by country in USD trillions
-# Source: Central bank data, updated periodically
+# Source: Central bank data. Vintage: FIAT_MONEY_AS_OF.
 fiat_money_data_top10 = pd.DataFrame(
     {
         "Country": [
@@ -173,6 +197,7 @@ fiat_money_data_top10 = pd.DataFrame(
 
 # Above-ground precious metals supply in troy ounces
 # Gold: ~6.1B oz, Silver: ~30.9B oz (World Gold Council estimates)
+# Vintage: PRECIOUS_METALS_AS_OF.
 gold_silver_supply = pd.DataFrame(
     {
         "Metal": ["Gold", "Silver"],
@@ -180,7 +205,7 @@ gold_silver_supply = pd.DataFrame(
     }
 )
 
-# Gold market allocation by use case (World Gold Council)
+# Gold market allocation by use case (World Gold Council). Vintage: GOLD_BREAKDOWN_AS_OF.
 gold_supply_breakdown = pd.DataFrame(
     {
         "Gold Supply Breakdown": [
@@ -192,6 +217,12 @@ gold_supply_breakdown = pd.DataFrame(
         "Percentage Of Market": [47.00, 22.00, 17.00, 14.00],
     }
 )
+
+# The calendar year the case levels below forecast. Published once a year in the Year
+# Ahead Outlook. `assert_price_outlook_current` fails the build when this falls behind
+# the report date, so a stale forecast cannot be presented as the current one — the
+# homepage tracker and the dashboard both label these levels with this year.
+PRICE_OUTLOOK_YEAR = 2026
 
 # Fixed price outlook levels used by the dashboard and weekly report.
 # `color` is the single source of truth for case styling — the dashboard reads it for

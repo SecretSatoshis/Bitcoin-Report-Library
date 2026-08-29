@@ -12,7 +12,7 @@
     "sync:remote": "node scripts/download-data.mjs",
     "sources": "evidence sources",
     "dev": "evidence dev",
-    "build": "evidence build",
+    "build": "evidence build && node scripts/fix-social-attribution.mjs",
     "preview": "evidence preview",
     "export:newsletter": "node scripts/export-newsletter-visuals.mjs"
   },
