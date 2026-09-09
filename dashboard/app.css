@@ -470,7 +470,7 @@ body::after {
 }
 
 .dashboard-hero h1 {
-	max-width: 760px;
+	max-width: none;
 	margin: 0;
 	color: var(--brand-white);
 	font-family: 'Syne', system-ui, sans-serif;
@@ -478,6 +478,7 @@ body::after {
 	font-weight: 700;
 	letter-spacing: -0.04em;
 	line-height: 1.08;
+	white-space: nowrap;
 }
 
 .dashboard-hero-sub {
@@ -685,6 +686,7 @@ body::after {
 
 	.dashboard-hero h1 {
 		font-size: clamp(38px, 12vw, 56px);
+		white-space: normal;
 	}
 
 	.dashboard-hero-stats {
