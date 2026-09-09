@@ -57,12 +57,11 @@
 			on:click={() => (menuOpen = !menuOpen)}
 		>≡</button>
 		<ul class:open={menuOpen} class="brand-nav-links" id="brandNavLinks">
-			<li><a href="https://secretsatoshis.com/" on:click={closeMenu}>Home</a></li>
 			<li><a href="https://newsletter.secretsatoshis.com/p/start-here" target="_blank" rel="noopener noreferrer" on:click={closeMenu}>Start Here</a></li>
+			<li><a href="https://newsletter.secretsatoshis.com/" target="_blank" rel="noopener noreferrer" on:click={closeMenu}>Newsletter</a></li>
 			<li><a href="https://chatgpt.com/g/g-BZXtVdU6M-agent-21" target="_blank" rel="noopener noreferrer" on:click={closeMenu}>Agent 21</a></li>
 			<li><a href="https://charts.secretsatoshis.com/" on:click={closeMenu}>Charts</a></li>
 			<li><a href="https://dashboard.secretsatoshis.com/" aria-current="page" on:click={closeMenu}>Dashboard</a></li>
-			<li><a href="https://newsletter.secretsatoshis.com/" target="_blank" rel="noopener noreferrer" on:click={closeMenu}>Newsletter</a></li>
 		</ul>
 	</nav>
 
