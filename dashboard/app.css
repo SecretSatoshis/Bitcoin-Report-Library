@@ -474,7 +474,9 @@ body::after {
 	margin: 0;
 	color: var(--brand-white);
 	font-family: 'Syne', system-ui, sans-serif;
-	font-size: clamp(42px, 5vw, 64px);
+	/* Keep the longer dashboard title within the same hero column as the
+	   shorter Chart Library title, without changing the grid or card spacing. */
+	font-size: clamp(42px, 3.7vw, 53px);
 	font-weight: 700;
 	letter-spacing: -0.04em;
 	line-height: 1.18;
