@@ -799,7 +799,7 @@ _Returns by holding period._
 -- Month and year labels come from the data, not the viewer's clock, so headings can
 -- never name a period the chart isn't showing.
 select
-  strftime(max(cast(date as date)), '%B %d, %Y') as date_label,
+  strftime(max(cast(date as date)), '%b %-d, %Y') as date_label,
   strftime(max(cast(date as date)), '%Y-%m-%d') as date_iso,
   strftime(max(cast(date as date)), '%B') as month_name,
   strftime(max(cast(date as date)), '%Y') as year_label

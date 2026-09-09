@@ -470,8 +470,6 @@ body::after {
 }
 
 .dashboard-hero h1 {
-	display: block;
-	width: max-content;
 	max-width: none;
 	margin: 0;
 	color: var(--brand-white);
@@ -479,12 +477,12 @@ body::after {
 	font-size: clamp(42px, 5vw, 64px);
 	font-weight: 700;
 	letter-spacing: -0.04em;
-	line-height: 1.08;
-	white-space: nowrap !important;
+	line-height: 1.18;
+	white-space: nowrap;
 }
 
 .dashboard-hero-sub {
-	max-width: 700px;
+	max-width: 680px;
 	margin: 22px 0 0;
 	color: var(--brand-text-dim);
 	font-family: 'JetBrains Mono', monospace;
@@ -687,8 +685,7 @@ body::after {
 	}
 
 	.dashboard-hero h1 {
-		width: auto;
-		font-size: clamp(38px, 12vw, 56px);
+		font-size: clamp(38px, 13vw, 58px);
 		white-space: normal;
 	}
 
