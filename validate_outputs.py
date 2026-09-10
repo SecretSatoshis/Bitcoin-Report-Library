@@ -161,6 +161,8 @@ SUMMARY_HISTORY_METRICS = {
 
 
 RETAINED_OUTPUTS = {
+    "ohlc_data.csv",
+    "fundamentals_table.csv",
     "1k_bucket_table.csv",
     "5k_bucket_table.csv",
     "bitcoin_dominance_history.csv",
@@ -304,6 +306,11 @@ def _validate_index_cutoff(
     if dates.isna().any():
         errors.append(f"{filename}: {column!r} contains invalid or missing dates")
         return
+    from data_validation import validate_calendar
+    try:
+        validate_calendar(pd.DatetimeIndex(index), filename)
+    except (RuntimeError, ValueError) as exc:
+        errors.append(str(exc))
     if dates.max() != expected_report_date:
         errors.append(
             f"{filename}: latest {column!r} is {dates.max().date()}, "
@@ -949,6 +956,77 @@ def _validate_report_agreement(
     _validate_network_models(frames, expected_report_date, errors)
 
 
+def _validate_review_contracts(frames, output_dir, report_date, errors):
+    from data_validation import validate_candles, validate_calendar
+    weekly = frames.get("ohlc_data.csv")
+    if weekly is not None:
+        try:
+            weekly = weekly.set_index("Time")
+            validate_candles(weekly, "ohlc_data.csv")
+            validate_calendar(weekly.index, "ohlc_data.csv", step=7)
+        except (ValueError, RuntimeError, KeyError) as exc:
+            errors.append(str(exc))
+    summary = frames.get("report_ohlc_summary.csv")
+    if summary is not None:
+        try:
+            for prefix in ("Daily", "Week-to-Date"):
+                candles = summary[[f"{prefix} {c}" for c in ("Open", "High", "Low", "Close")]].copy()
+                candles.columns = ["Open", "High", "Low", "Close"]
+                validate_candles(candles, "report_ohlc_summary.csv " + prefix)
+            row = summary.iloc[0]
+            if (pd.Timestamp(row["Week Start"]) != report_date - pd.Timedelta(days=report_date.weekday())
+                    or float(row["Week-to-Date Days"]) != report_date.weekday() + 1
+                    or float(row["Week-to-Date Close"]) != float(row["Daily Close"])
+                    or float(row["Week-to-Date High"]) < float(row["Daily High"])
+                    or float(row["Week-to-Date Low"]) > float(row["Daily Low"])):
+                raise ValueError("report_ohlc_summary.csv: inconsistent week-to-date candle")
+        except (ValueError, KeyError, IndexError) as exc:
+            errors.append(f"report_ohlc_summary.csv: {exc}")
+    coefficients = frames.get("model_coefficients.csv")
+    if coefficients is not None:
+        mapping = {
+            "power_law_exponent": "Power Law Exponent", "power_law_scale": "Power Law Scale",
+            "metcalfe_scale_any_balance": "Metcalfe Scale (Any Balance)",
+            "metcalfe_scale_0p001_btc": "Metcalfe Scale (0.001+ BTC)",
+            "metcalfe_scale_0p01_btc": "Metcalfe Scale (0.01+ BTC)",
+            "metcalfe_scale_0p1_btc": "Metcalfe Scale (0.1+ BTC)",
+        }
+        try:
+            if set(coefficients.coefficient) != set(mapping) or coefficients.coefficient.duplicated().any():
+                raise ValueError("expected exactly six unique named coefficients")
+            network = frames.get("network_model_metrics.csv")
+            for name, column in mapping.items():
+                value = float(coefficients.set_index("coefficient").loc[name, "value"])
+                if not np.isfinite(value) or (name != "power_law_exponent" and value <= 0):
+                    raise ValueError(f"invalid {name}")
+                if network is not None:
+                    reference = pd.to_numeric(network[column], errors="coerce").dropna()
+                    if reference.empty or not np.isclose(reference, value, rtol=1e-9, atol=0).all():
+                        raise ValueError(f"{name} disagrees with network model coefficients")
+        except (ValueError, KeyError, AttributeError) as exc:
+            errors.append(f"model_coefficients.csv: {exc}")
+    fundamentals = frames.get("fundamentals_table.csv")
+    master_path = output_dir / "master_metrics_data.csv.gz"
+    if fundamentals is not None and master_path.is_file():
+        from data_definitions import metrics_template
+        from report_tables import create_fundamentals_table
+        try:
+            columns = list(dict.fromkeys(["time"] + [item[0] for group in metrics_template.values() for item in group.values()]))
+            master = pd.read_csv(master_path, usecols=columns, parse_dates=["time"]).set_index("time")
+            expected = create_fundamentals_table(master, metrics_template, report_date)
+            change = "7 Day Change (%)"
+            if not np.allclose(pd.to_numeric(fundamentals[change], errors="coerce"),
+                               expected[change], rtol=1e-10, atol=1e-10, equal_nan=True):
+                raise ValueError("7 Day Change (%) differs from source")
+            fundamentals = fundamentals.drop(columns=[change])
+            expected = expected.drop(columns=[change])
+            pd.testing.assert_frame_equal(
+                fundamentals.fillna("").astype(str).reset_index(drop=True),
+                expected.fillna("").astype(str).reset_index(drop=True), check_dtype=False)
+        except (ValueError, KeyError, AssertionError) as exc:
+            errors.append(f"fundamentals_table.csv: does not match report-date source values ({str(exc)[:180]})")
+
+
 def validate_outputs(
     output_dir: str | Path,
     expected_report_date,
@@ -997,6 +1075,7 @@ def validate_outputs(
         )
 
     _validate_report_agreement(retained_frames, expected_report_date, errors)
+    _validate_review_contracts(retained_frames, output_dir, expected_report_date, errors)
     return errors
 
 

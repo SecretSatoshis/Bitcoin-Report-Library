@@ -505,23 +505,17 @@ def create_fundamentals_table(df, metrics_template, report_date=None):
     if report_date is not None:
         df = df.loc[: pd.to_datetime(report_date).normalize()]
 
-    latest_date = df.index.max()
+    latest_date = pd.to_datetime(report_date).normalize() if report_date is not None else df.index.max()
     start_of_week = latest_date - timedelta(days=latest_date.weekday())
     weekly_index = pd.date_range(start=start_of_week.normalize(), periods=7, freq="D")
 
     for section, metrics in metrics_template.items():
         for metric_display_name, (column_name, format_type) in metrics.items():
-            series = df[column_name].dropna()
-            if len(series) == 0:
-                continue
-
-            current = series.iloc[-1]
-
-            # Look the prior value up by calendar date, not by row offset: after dropna()
-            # a row offset of 8 means "8 observations back", which drifts away from seven
-            # days whenever a metric has gaps.
-            prior_dates = series.index[series.index <= series.index[-1] - timedelta(days=7)]
-            seven_days_ago = series.loc[prior_dates[-1]] if len(prior_dates) else np.nan
+            series = df[column_name]
+            current = series.get(latest_date, np.nan)
+            if pd.isna(current):
+                raise ValueError(f"Fundamental {column_name} is missing on {latest_date.date()}")
+            seven_days_ago = series.get(latest_date - timedelta(days=7), np.nan)
 
             # Spot-to-spot change between the two values displayed beside it. This column
             # previously compared a 7-day mean against the prior 7-day mean, which is a
@@ -536,7 +530,7 @@ def create_fundamentals_table(df, metrics_template, report_date=None):
                 else np.nan
             )
 
-            year_window = series.tail(365)
+            year_window = series.loc[latest_date - timedelta(days=364):latest_date]
             low_52w = year_window.min()
             high_52w = year_window.max()
 
@@ -982,9 +976,8 @@ def monthly_heatmap(data, report_date=None, export_csv=True):
     if current_year in heatmap_data.index:
         if is_incomplete_month:
             heatmap_data_excluded.loc[current_year, current_month] = pd.NA
-        # The current year is unfinished by definition, so its partial yearly figure must
-        # not be averaged in with completed years.
-        heatmap_data_excluded.loc[current_year, 13] = pd.NA
+        if (last_date.month, last_date.day) != (12, 31):
+            heatmap_data_excluded.loc[current_year, 13] = pd.NA
 
     # Add the "4-Year Average" row — the four most recent years that actually have data
     # for each column. Slicing the last four *rows* instead averages only three values
@@ -1053,6 +1046,8 @@ def calculate_ohlc(ohlc_data, output_file="csv/ohlc_data.csv"):
         )
 
     # Ensure the index is a datetime index before export without mutating the caller.
+    from data_validation import validate_candles
+    validate_candles(ohlc_data, "Weekly OHLC")
     ohlc_data = ohlc_data.copy()
     ohlc_data.index = pd.to_datetime(ohlc_data.index)
     weekly_ohlc = (
@@ -1103,6 +1098,8 @@ def create_report_ohlc_summary(
             f"Daily OHLC data is missing required columns {missing}; refusing to overwrite output"
         )
 
+    from data_validation import validate_candles
+    validate_candles(daily_ohlc_data, "Daily OHLC")
     daily_ohlc_data = daily_ohlc_data[required_columns].copy()
     daily_ohlc_data = daily_ohlc_data.apply(pd.to_numeric, errors="coerce")
     daily_ohlc_data = daily_ohlc_data.replace([np.inf, -np.inf], np.nan)
@@ -1119,10 +1116,14 @@ def create_report_ohlc_summary(
         raise ValueError("No daily OHLC data available on or before the report date.")
 
     actual_report_date = available_dates.max()
+    if actual_report_date != report_date:
+        raise ValueError("Daily OHLC is missing the report date")
     daily_row = daily_ohlc_data.loc[actual_report_date]
 
     week_start = actual_report_date - pd.Timedelta(days=actual_report_date.weekday())
     week_to_date = daily_ohlc_data.loc[week_start:actual_report_date]
+    if not week_to_date.index.equals(pd.date_range(week_start, report_date)):
+        raise ValueError("Daily OHLC is missing a day in the report week")
 
     out = pd.DataFrame(
         [

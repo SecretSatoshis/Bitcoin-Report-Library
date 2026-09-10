@@ -1102,15 +1102,14 @@ order by
 ```
 
 ```sql monthly_returns_years
--- The newest year is still in progress, so its Yearly figure is a partial-year return
--- sitting in a column of completed years. Label it so it can't be read as a full year.
+-- Label the newest year as partial only while its report cutoff precedes December 31.
 with years as (
   select *, try_cast(time as integer) as yr
   from bitcoin_report_library.monthly_heatmap_data
   where try_cast(time as integer) is not null
 )
 select
-  case when yr = (select max(yr) from years) then time || ' (YTD)' else time end as time,
+  case when yr = (select max(yr) from years) and (select strftime(max(cast(date as date)), '%m-%d') from bitcoin_report_library.summary_history) <> '12-31' then time || ' (YTD)' else time end as time,
   Jan, Feb, Mar, Apr, May, Jun,
   Jul, Aug, Sep, Oct, Nov, Dec,
   Yearly
@@ -1132,8 +1131,8 @@ with parsed as (
 )
 select
   "Price Range ($)",
-  case when "Current Price" between low_bound and low_bound + 1000 then Count end as Current,
-  case when "Current Price" between low_bound and low_bound + 1000 then null else Count end as Other
+  case when "Current Price" >= low_bound and "Current Price" < low_bound + 1000 then Count end as Current,
+  case when "Current Price" >= low_bound and "Current Price" < low_bound + 1000 then null else Count end as Other
 from parsed
 where low_bound between "Current Price" - 12000 and "Current Price" + 12000
 ```
@@ -1153,8 +1152,8 @@ with parsed as (
 )
 select
   "Price Range ($)",
-  case when "Current Price" between low_bound and low_bound + 5000 then Count end as Current,
-  case when "Current Price" between low_bound and low_bound + 5000 then null else Count end as Other
+  case when "Current Price" >= low_bound and "Current Price" < low_bound + 5000 then Count end as Current,
+  case when "Current Price" >= low_bound and "Current Price" < low_bound + 5000 then null else Count end as Other
 from parsed
 ```
 

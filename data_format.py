@@ -279,12 +279,8 @@ def assert_ohlc_usable(ohlc_data: pd.DataFrame, label: str = "OHLC") -> None:
             f"{label} data is missing required columns {missing}; refusing to overwrite OHLC outputs"
         )
 
-    numeric = ohlc_data[OHLC_COLUMNS].apply(pd.to_numeric, errors="coerce")
-    numeric = numeric.replace([np.inf, -np.inf], np.nan).dropna()
-    if numeric.empty:
-        raise RuntimeError(
-            f"{label} data contains no complete numeric candles; refusing to overwrite OHLC outputs"
-        )
+    from data_validation import validate_candles
+    validate_candles(ohlc_data, label)
 
 
 def get_brk_ohlc(index: str = "week1", start: str = "2017-01-01") -> pd.DataFrame:
@@ -312,13 +308,18 @@ def get_brk_ohlc(index: str = "week1", start: str = "2017-01-01") -> pd.DataFram
         )
         ohlc_response.raise_for_status()
 
-        dates = date_response.json()["data"]
-        ohlc_rows = ohlc_response.json()["data"]
-
+        date_payload, candle_payload = date_response.json(), ohlc_response.json()
+        dates, ohlc_rows = date_payload["data"], candle_payload["data"]
         if not dates or not ohlc_rows:
-            raise ValueError(
-                f"BRK returned no {index} OHLC observations for start={start}"
-            )
+            raise ValueError(f"BRK returned no {index} OHLC observations for start={start}")
+        for payload in (date_payload, candle_payload):
+            if (payload.get("index") != index
+                    or type(payload.get("start")) is not int
+                    or type(payload.get("end")) is not int
+                    or payload["end"] - payload["start"] != len(payload["data"])):
+                raise ValueError("BRK OHLC metadata does not match the requested index/range")
+        if any(date_payload[key] != candle_payload[key] for key in ("start", "end")):
+            raise ValueError("BRK date/OHLC metadata ranges differ")
 
         if len(dates) != len(ohlc_rows):
             raise ValueError(
@@ -328,7 +329,9 @@ def get_brk_ohlc(index: str = "week1", start: str = "2017-01-01") -> pd.DataFram
         df = pd.DataFrame(ohlc_rows, columns=["Open", "High", "Low", "Close"])
         df["Time"] = pd.to_datetime(dates)
         df.set_index("Time", inplace=True)
-        df = df.astype(float).sort_index()
+        df = df.astype(float)
+        from data_validation import validate_calendar
+        validate_calendar(df.index, f"BRK {index} OHLC", step=7 if index == "week1" else 1)
         assert_ohlc_usable(df, label=f"BRK {index} OHLC")
         return df
 
@@ -377,8 +380,8 @@ def get_crypto_data(ticker_list: list) -> pd.DataFrame:
     pd.DataFrame: DataFrame containing merged close prices, volumes, and market caps.
     """
     data_frames = []  # Collect all DataFrames for efficient concatenation
-    max_retries = 5  # Maximum number of retries per ticker
-    initial_retry_delay = 60  # Initial delay in seconds for retry attempts
+    max_retries = 3  # Bound optional-source failures within the workflow budget
+    initial_retry_delay = 5  # Initial delay in seconds for retry attempts
 
     for ticker in ticker_list:
         success = False
@@ -431,9 +434,10 @@ def get_crypto_data(ticker_list: list) -> pd.DataFrame:
 
             except requests.HTTPError as http_err:
                 if http_err.response.status_code == 429:
-                    time.sleep(retry_delay)
-                    retry_delay *= 2  # Exponential backoff for rate limits
                     retries += 1
+                    if retries < max_retries:
+                        time.sleep(retry_delay)
+                        retry_delay *= 2
                 else:
                     print(f"HTTP error for {ticker}: {http_err}")
                     break  # Break the loop for non-429 HTTP errors
@@ -1250,10 +1254,18 @@ def get_brk_onchain(
         for header, rows, raw_csv in responses:
             raw_parts.append(raw_csv.strip())
 
+            if not header or header[0] != "timestamp" or len(set(header)) != len(header):
+                raise RuntimeError("BRK bulk: invalid or duplicate headers")
+            seen_timestamps = set()
             for r in rows:
+                if len(r) != len(header) or not r[0] or r[0] in seen_timestamps:
+                    raise RuntimeError("BRK bulk: malformed row or duplicate timestamp")
                 ts = r[0]
+                seen_timestamps.add(ts)
                 d = data.setdefault(ts, {"timestamp": ts})
                 for k, v in zip(header[1:], r[1:]):
+                    if k in d and d[k] != v:
+                        raise RuntimeError(f"BRK bulk: conflicting {k} at {ts}")
                     d[k] = v
 
             for c in header[1:]:
@@ -1701,6 +1713,8 @@ def assert_no_internal_onchain_gaps(
     """
     columns = columns or CUMULATIVE_ONCHAIN_INPUTS
     report_date = pd.to_datetime(report_date).normalize()
+    from data_validation import validate_calendar
+    validate_calendar(data.index, "On-chain data")
     normalized_index = _normalized_index(data)
     in_range = data.loc[normalized_index <= report_date]
 
@@ -1829,11 +1843,20 @@ def get_data(
             "a report on a different index."
         )
 
+    from data_validation import validate_calendar
     data = processed_datasets["coindata"]
+    validate_calendar(data.index, "BRK on-chain data")
     for name, dataset in processed_datasets.items():
         if name == "coindata":
             continue
         data = pd.merge(data, dataset, left_index=True, right_index=True, how="left")
+
+    # Optional assets retain a stable schema when their providers return no data.
+    optional = [f"{ticker}_close" for group in tickers.values() for ticker in group]
+    optional += [f"{ticker}_MarketCap" for ticker in tickers.get("stocks", [])]
+    optional += [f"{ticker}_{suffix}" for ticker in tickers.get("crypto", [])
+                 for suffix in ("volume", "market_cap")]
+    data = data.reindex(columns=list(dict.fromkeys([*data.columns, *optional])))
 
     # Handle duplicates
     if data.columns.duplicated().any():
@@ -2935,7 +2958,7 @@ def create_btc_correlation_data(report_date, tickers, correlations_data):
 
     Returns:
     dict: Dictionary with keys: "price_close_7_days", "price_close_30_days", "price_close_90_days",
-          "price_close_365_days". Each value is a pandas Series with:
+          "price_close_365_days". Each value is a one-row pandas DataFrame with:
           - Index: Asset column names ({ticker}_close)
           - Values: Correlation coefficient with Bitcoin (-1 to +1)
           Missing data returns NaN. Bitcoin's correlation with itself is always 1.0.
@@ -2946,14 +2969,12 @@ def create_btc_correlation_data(report_date, tickers, correlations_data):
         f"{ticker}_close" for ticker in all_tickers
     ]
 
-    filtered_data = correlations_data[ticker_list_with_suffix].dropna(
+    filtered_data = correlations_data.reindex(columns=ticker_list_with_suffix).dropna(
         subset=["price_close"]
     )
 
     if filtered_data.empty:
-        empty_corr = pd.Series(
-            index=[f"{ticker}_close" for ticker in all_tickers], dtype=float
-        )
+        empty_corr = pd.DataFrame(index=["price_close"], columns=ticker_list_with_suffix, dtype=float)
         return {f"price_close_{p}_days": empty_corr for p in [7, 30, 90, 365]}
 
     correlations = calculate_rolling_correlations(
@@ -2980,9 +3001,7 @@ def create_btc_correlation_data(report_date, tickers, correlations_data):
                     closest_date
                 ].loc[["price_close"]]
         except KeyError:
-            btc_correlations[f"price_close_{period}_days"] = pd.Series(
-                index=[f"{ticker}_close" for ticker in all_tickers], dtype=float
-            )
+            btc_correlations[f"price_close_{period}_days"] = pd.DataFrame(index=["price_close"], columns=ticker_list_with_suffix, dtype=float)
 
     return btc_correlations
 
