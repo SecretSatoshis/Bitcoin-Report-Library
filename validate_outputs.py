@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 from dataclasses import dataclass
 from pathlib import Path
 import sys
@@ -1031,6 +1033,7 @@ def validate_outputs(
     output_dir: str | Path,
     expected_report_date,
     rules: dict[str, RowBounds] | None = None,
+    require_release_manifest: bool = False,
 ) -> list[str]:
     """Return validation errors for generated outputs; an empty list means success."""
     output_dir = Path(output_dir)
@@ -1076,7 +1079,44 @@ def validate_outputs(
 
     _validate_report_agreement(retained_frames, expected_report_date, errors)
     _validate_review_contracts(retained_frames, output_dir, expected_report_date, errors)
+    _validate_release_manifest(output_dir, expected_report_date, errors, require_release_manifest)
     return errors
+
+
+def _validate_release_manifest(output_dir, expected_report_date, errors, required=False):
+    path = Path(output_dir) / "release_manifest.json"
+    if not path.is_file():
+        if required:
+            errors.append("release_manifest.json: required release contract is missing")
+        return
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        errors.append(f"release_manifest.json: cannot parse manifest ({exc})")
+        return
+    if manifest.get("schema_version") != 1:
+        errors.append("release_manifest.json: unsupported schema_version")
+    if manifest.get("release_id") != str(expected_report_date.date()):
+        errors.append("release_manifest.json: release_id does not match report date")
+    if manifest.get("report_date") != str(expected_report_date.date()):
+        errors.append("release_manifest.json: report_date does not match report date")
+    files = manifest.get("files")
+    expected_files = {name for name in OUTPUT_RULES}
+    if not isinstance(files, dict) or set(files) != expected_files:
+        errors.append("release_manifest.json: file inventory does not match generated outputs")
+        return
+    for name in expected_files:
+        record = files[name]
+        target = Path(output_dir) / name
+        expected_hash = record.get("sha256") if isinstance(record, dict) else None
+        expected_size = record.get("size_bytes") if isinstance(record, dict) else None
+        if not isinstance(expected_hash, str) or not target.is_file():
+            errors.append(f"release_manifest.json: invalid file record for {name}")
+            continue
+        if hashlib.sha256(target.read_bytes()).hexdigest() != expected_hash:
+            errors.append(f"release_manifest.json: hash mismatch for {name}")
+        if expected_size != target.stat().st_size:
+            errors.append(f"release_manifest.json: size mismatch for {name}")
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -1099,7 +1139,7 @@ def main(argv: list[str] | None = None) -> int:
 
         expected_report_date = report_date
 
-    errors = validate_outputs(args.output_dir, expected_report_date)
+    errors = validate_outputs(args.output_dir, expected_report_date, require_release_manifest=True)
     if errors:
         print("Output validation failed:", file=sys.stderr)
         for error in errors:

@@ -174,6 +174,7 @@ These CSV files are pre-computed for downstream visualization by [Bitcoin-Chart-
 | `drawdown_data.csv` | ATH drawdown cycles with days since ATH and percentage decline |
 | `cycle_low_data.csv` | Market cycle performance indexed from the lowest positive price observed inside each configured cycle window |
 | `chart_input_manifest.json` | Report date and SHA-256 hashes for the five CSV inputs consumed together by Chart Library |
+| `release_manifest.json` | Shared release ID, report date, generation time, and SHA-256/size records for every published CSV |
 | `halving_data.csv` | Performance indexed from each Bitcoin halving with a positive day-0 source price; the pre-price Genesis era is omitted |
 | `cagr_data.csv` | Rolling 2-year (730-row) and 4-year (1,460-row) CAGR values for the configured 13 downstream metrics, expressed in percentage points |
 

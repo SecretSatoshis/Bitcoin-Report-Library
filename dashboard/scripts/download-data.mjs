@@ -19,7 +19,9 @@ import {
   rmSync,
   statSync,
   readdirSync,
+  readFileSync,
 } from "node:fs";
+import { createHash } from "node:crypto";
 import { pipeline } from "node:stream/promises";
 import https from "node:https";
 import path from "node:path";
@@ -32,6 +34,7 @@ const REMOTE_BASE_URL =
   "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv";
 const LOCAL_CSV_DIR = path.resolve(__dirname, "../../csv");
 const OUT_DIR = path.resolve(__dirname, "../sources/bitcoin_report_library");
+const RELEASE_MANIFEST = "release_manifest.json";
 
 // Only the CSVs the dashboard actually queries. ohlc_data.csv and
 // report_ohlc_summary.csv were fetched and ingested on every build but are referenced
@@ -100,6 +103,36 @@ function httpsGet(url, redirectsLeft = MAX_REDIRECTS) {
     });
     req.on("error", reject);
   });
+}
+
+async function readRemoteJson(url) {
+  const response = await httpsGet(url);
+  const chunks = [];
+  for await (const chunk of response) chunks.push(chunk);
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+function loadManifest(payload) {
+  if (!payload || payload.schema_version !== 1
+      || typeof payload.release_id !== "string"
+      || payload.release_id !== payload.report_date
+      || !payload.files || typeof payload.files !== "object") {
+    throw new Error("invalid Report Library release manifest");
+  }
+  for (const file of CSV_FILES) {
+    const record = payload.files[file];
+    if (!record || typeof record.sha256 !== "string") {
+      throw new Error(`release manifest is missing ${file}`);
+    }
+  }
+  return payload;
+}
+
+function verifyManifestFile(file, manifest) {
+  const expected = manifest?.files?.[file]?.sha256;
+  if (!expected) return;
+  const digest = createHash("sha256").update(readFileSync(path.join(OUT_DIR, file))).digest("hex");
+  if (digest !== expected) throw new Error(`${file}: release manifest hash mismatch`);
 }
 
 async function downloadRemote(file) {
@@ -196,15 +229,39 @@ if (LOCAL_MODE) {
     process.exit(1);
   }
 
+  let releaseManifest = null;
+  try {
+    releaseManifest = loadManifest(JSON.parse(readFileSync(path.join(LOCAL_CSV_DIR, RELEASE_MANIFEST), "utf8")));
+  } catch (err) {
+    if (err.code !== "ENOENT") throw err;
+    console.warn("  ! no release manifest yet; using legacy local CSV validation");
+  }
+
   prune();
-  for (const file of CSV_FILES) copyLocal(file);
+  for (const file of CSV_FILES) {
+    copyLocal(file);
+    verifyManifestFile(file, releaseManifest);
+  }
 } else {
   prune();
   console.log(`\nDownloading from GitHub Pages: ${REMOTE_BASE_URL}\n`);
+  let releaseManifest = null;
+  try {
+    releaseManifest = loadManifest(await readRemoteJson(`${REMOTE_BASE_URL}/${RELEASE_MANIFEST}`));
+    console.log(`  ✓ release ${releaseManifest.release_id}`);
+  } catch (err) {
+    if (String(err.message).includes("HTTP 404")) {
+      console.warn("  ! no release manifest yet; using legacy remote CSV validation");
+    } else {
+      console.error(`  ✗ ${err.message}`);
+      process.exit(1);
+    }
+  }
   const failures = [];
   for (const file of CSV_FILES) {
     try {
       await downloadRemote(file);
+      verifyManifestFile(file, releaseManifest);
     } catch (err) {
       failures.push(err.message);
       console.error(`  ✗ ${err.message}`);

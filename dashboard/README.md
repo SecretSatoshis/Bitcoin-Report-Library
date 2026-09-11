@@ -132,6 +132,10 @@ The dashboard is published at [dashboard.secretsatoshis.com](https://dashboard.s
 
 The production build sequence is `npm ci → sync:remote → sources → build`, with the static `build/` folder served behind a CDN. The build finishes by replacing Evidence's hardcoded X publisher attribution with `@SecretSatoshis`; it fails if the upstream tag changes instead of silently publishing incorrect metadata. Because the hosting integration is external, verify those build settings in Cloudflare when changing the Node version or production command.
 
+`sync:local` and `sync:remote` use `csv/release_manifest.json` when available. They verify the
+dashboard inputs against the published release hashes before Evidence ingests them, while
+temporarily retaining legacy CSV-only validation for older releases during rollout.
+
 ## Key Files
 
 - `pages/index.md` — branded dashboard hero, report content, and SQL queries

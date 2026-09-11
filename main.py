@@ -365,5 +365,6 @@ model_coefficients.to_csv("csv/model_coefficients.csv", index=False)
 
 # Consumers verify all five chart inputs against this release before rendering.
 # The workflow validates the release before publishing its CSV directory.
-from chart_manifest import write_chart_input_manifest
+from chart_manifest import write_chart_input_manifest, write_release_manifest
 write_chart_input_manifest("csv", report_date)
+write_release_manifest("csv", report_date)
