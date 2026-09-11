@@ -4,28 +4,8 @@ import json
 from pathlib import Path
 from datetime import datetime, timezone
 
-CHART_INPUT_FILES = (
-    'master_metrics_data.csv.gz', 'drawdown_data.csv', 'cycle_low_data.csv',
-    'halving_data.csv', 'report_ohlc_summary.csv',
-)
-
 RELEASE_MANIFEST_NAME = 'release_manifest.json'
 RELEASE_MANIFEST_VERSION = 1
-
-
-def write_chart_input_manifest(output_dir, report_date):
-    output = Path(output_dir)
-    manifest = {
-        'version': 1,
-        'report_date': str(report_date)[:10],
-        'files': {name: hashlib.sha256((output / name).read_bytes()).hexdigest()
-                  for name in CHART_INPUT_FILES},
-    }
-    target = output / 'chart_input_manifest.json'
-    temporary = target.with_suffix('.json.tmp')
-    temporary.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
-    temporary.replace(target)
-    return manifest
 
 
 def write_release_manifest(output_dir, report_date):
@@ -38,7 +18,7 @@ def write_release_manifest(output_dir, report_date):
     output = Path(output_dir)
     files = {}
     for path in sorted(output.glob('*.csv*')):
-        if path.name in {RELEASE_MANIFEST_NAME, 'chart_input_manifest.json'}:
+        if path.name == RELEASE_MANIFEST_NAME:
             continue
         files[path.name] = {
             'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
