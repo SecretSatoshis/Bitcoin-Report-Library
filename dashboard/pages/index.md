@@ -15,7 +15,8 @@ og:
     <div class="dashboard-hero-copy">
       <p class="dashboard-eyebrow"><span class="brand-accent">//</span> Market Intelligence</p>
       <h1 id="dashboardHeroTitle">Bitcoin Market Dashboard<span class="brand-accent">.</span></h1>
-      <p class="dashboard-hero-sub">A live view of Bitcoin market performance, on-chain conditions, valuation, and network activity.</p>
+      <p class="dashboard-hero-sub">A daily view of Bitcoin market performance, on-chain conditions, valuation, and network activity.</p>
+      <p class="dashboard-hero-source">Explore daily Bitcoin market data and the models behind the analysis. <a href="https://secretsatoshis.github.io/Bitcoin-Report-Library/">View the source data.</a></p>
       <noscript>
         <p class="dashboard-hero-source">The tables and charts on this page are rendered in the browser and stay empty without JavaScript. Every figure they show is computed from an <a href="https://secretsatoshis.github.io/Bitcoin-Report-Library/">open Bitcoin data release</a>, published daily as CSV and readable directly.</p>
       </noscript>
@@ -446,7 +447,7 @@ _Headline metrics — market, on-chain, and sentiment._
 
 ## Performance
 
-_Returns vs Bitcoin across asset classes._
+_Compare Bitcoin and other assets’ returns across the same periods._
 
 ### Stock Market Index Performance
 
@@ -669,7 +670,7 @@ _Monthly returns by year._
 
 ## Seasonal Returns
 
-_Current MTD & YTD vs historical years._
+_Compare this month’s and this year’s price paths with historical years._
 
 <div class="newsletter-visual" data-newsletter-visual="seasonal-mtd">
 
@@ -727,15 +728,15 @@ _Current MTD & YTD vs historical years._
 
 ## Relative Valuation
 
-_Implied BTC price by asset market cap._
+_Bitcoin’s hypothetical price if its market cap matched each reference asset. These are comparison scenarios, not forecasts._
 
 <DataTable data={rel_val} rows=all rowShading=true>
   <Column id=Asset title="Asset" contentType=html />
   <Column id=market_cap title="Market Cap (USD)" fmt='$#,##0.00"T"' align=center />
-  <Column id=implied_price title="Implied (USD) Bitcoin Price" fmt=usd0 align=center />
+  <Column id=implied_price title="Hypothetical BTC Price (USD)" fmt=usd0 align=center />
   <Column
     id=implied_return
-    title="Implied (%) Return"
+    title="Change from Current BTC Price (%)"
     fmt='#,##0"%"'
     contentType=delta
     chip=true
@@ -743,7 +744,7 @@ _Implied BTC price by asset market cap._
   />
   <Column
     id=btc_pct_of_mcap
-    title="BTC % Of Asset Market Cap"
+    title="BTC / Asset Market Cap (%)"
     contentType=bar
     fmt='#,##0.0"%"'
     barColor="#F7931A"
