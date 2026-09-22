@@ -278,46 +278,55 @@ _Headline metrics — market, on-chain, and sentiment._
   $: mtdLatest = _buildLatestPoints(mtdPlot, 'day', mtdCurrentYear);
   $: ytdLatest = _buildLatestPoints(ytdPlot, 'day_of_year', ytdCurrentYear);
 
-  // ─── Bitcoin Price chart axis + outlook cases ────────────────────────
-  // Extend the x-axis to the end of the data's own year so there is space to the right
-  // of the last price point for the case annotations. Derived from the data, so on
-  // Jan 1 the axis rolls forward on its own instead of clamping new points off-canvas.
+  // Bitcoin price history is calculated in SQL before selecting a display range,
+  // so moving averages keep their full lookback at the left edge of every view.
+  let priceChartYears = 4;
   $: priceChartXMax = dataYearLabel
-    ? new Date(`${dataYearLabel}-12-31T00:00:00`)
+    ? new Date(`${dataYearLabel}-12-31T00:00:00Z`)
     : undefined;
-
-  // Keep the chart focused on the three scenario cases. Support and resistance levels
-  // remain available in price_outlook.csv, but their clustered labels obscure the models.
+  $: priceChartXMin = (() => {
+    if (!data_date?.[0]?.date_iso) return undefined;
+    const cutoff = new Date(`${data_date[0].date_iso}T00:00:00Z`);
+    cutoff.setUTCFullYear(cutoff.getUTCFullYear() - priceChartYears);
+    return cutoff;
+  })();
+  $: priceChartRows = (btc_with_models || []).filter(
+    row => !priceChartXMin || new Date(row.date) >= priceChartXMin
+  );
   $: outlookCaseLevels = (price_outlook || [])
     .filter(level => level.type === 'case')
     .slice()
-    .sort((a, b) => Number(b.price) - Number(a.price));
+    .sort((a, b) => Number(a.price) - Number(b.price));
 
-  // ─── Bitcoin Price chart current-values strip ────────────────────────
-  // BTC Price always first; remaining models sorted by ascending value.
   const _modelMeta = {
-    'BTC Price':           { color: '#F7931A', label: 'BTC Price' },
-    'Realized Price':      { color: '#2962FF', label: 'Realized' },
-    'STH Realized Price':  { color: '#E040FB', label: 'STH Realized' },
-    'LTH Realized Price':  { color: '#00A0B8', label: 'LTH Realized' },
-    '3x Realized Price':   { color: '#8B5E34', label: '3× Realized' },
+    'BTC Price':          { color: '#F7931A', label: 'BTC Price' },
+    'Realized Price':     { color: '#2962FF', label: 'Realized' },
+    'STH Realized Price': { color: '#E040FB', label: 'STH Realized' },
+    '3x Realized Price':  { color: '#8B5E34', label: '3× Realized' },
+    '3-month MA':         { color: '#7FDF83', label: '3-month MA' },
+    '1-year MA':          { color: '#FF8DA1', label: '1-year MA' },
+    '200-week MA':        { color: '#B3A4FF', label: '200-week MA' },
   };
-  $: modelStrip = (() => {
-    const rows = (btc_models_latest || [])
-      .filter(r => r.y != null && _modelMeta[r.series]);
-    if (!rows.length) return [];
-    const btc = rows.find(r => r.series === 'BTC Price');
-    const others = rows
-      .filter(r => r.series !== 'BTC Price')
-      .sort((a, b) => Number(a.y) - Number(b.y));
-    const ordered = btc ? [btc, ...others] : others;
-    return ordered.map(r => ({
-      key: r.series,
-      label: _modelMeta[r.series]?.label ?? r.series,
-      color: _modelMeta[r.series]?.color ?? '#ffffff',
-      value: r.label,
-    }));
-  })();
+  const priceModelKeys = Object.keys(_modelMeta);
+  let priceModelSelected = Object.fromEntries(priceModelKeys.map(key => [key, true]));
+  function togglePriceModel(key) {
+    priceModelSelected = { ...priceModelSelected, [key]: !priceModelSelected[key] };
+  }
+  $: priceChartOptions = {
+    xAxis: { min: priceChartXMin?.getTime(), max: priceChartXMax?.getTime() },
+    legend: { show: false, data: priceModelKeys, selected: priceModelSelected },
+    series: priceModelKeys.map((key, index) => ({
+      name: key,
+      itemStyle: { color: _modelMeta[key].color },
+      lineStyle: { color: _modelMeta[key].color, width: index === 0 ? 3 : 1.5, type: 'solid' },
+      emphasis: { lineStyle: { width: index === 0 ? 4 : 2.5 } },
+      z: index === 0 ? 5 : 2,
+    })),
+  };
+  $: modelStrip = priceModelKeys.flatMap(key => {
+    const row = (btc_models_latest || []).find(row => row.series === key && row.y != null);
+    return row ? [{ key, ..._modelMeta[key], value: row.label }] : [];
+  });
 </script>
 
 <Grid cols=3 gapSize=lg>
@@ -497,34 +506,38 @@ _Compare Bitcoin and other assets’ returns across the same periods._
 
 ## Bitcoin Price
 
-_Price vs on-chain valuation models._
+_Price vs on-chain valuation models and moving averages._
 
 ### Secret Satoshis {dataYearLabel} Price Outlook
 
 <div class="price-outlook-cases">
-  <Grid cols=3 gapSize=lg>
-  <div class="case-bear">
-    <BigValue data={price_outlook_cases} value=bear title="Bear Case" fmt=usd0 />
+{#each outlookCaseLevels as c (c.name)}
+  <div class="price-outlook-case" style="--case-color: {c.color}">
+    <span class="case-label">{c.name}</span>
+    <strong class="case-price">{_fmtUsd(c.price)}</strong>
   </div>
-  <div class="case-base">
-    <BigValue data={price_outlook_cases} value=base title="Base Case" fmt=usd0 />
+{/each}
+</div>
+
+<div class="price-chart-controls">
+  <span>Click a series below to show or hide it.</span>
+  <div class="price-chart-ranges" role="group" aria-label="Bitcoin price time range">
+    {#each [1, 4, 10] as years}
+      <button type="button" class:active={priceChartYears === years} aria-pressed={priceChartYears === years} on:click={() => priceChartYears = years}>{years}Y</button>
+    {/each}
   </div>
-  <div class="case-bull">
-    <BigValue data={price_outlook_cases} value=bull title="Bull Case" fmt=usd0 />
-  </div>
-  </Grid>
 </div>
 
 <div class="model-values-strip">
 {#each modelStrip as m (m.key)}
-  <div class="model-value" style="--c: {m.color}"><span class="dot"></span><span class="lbl">{m.label}</span><span class="val">{m.value}</span></div>
+  <button type="button" class="model-value" class:off={!priceModelSelected[m.key]} aria-pressed={priceModelSelected[m.key]} on:click={() => togglePriceModel(m.key)} style="--c: {m.color}"><span class="dot"></span><span class="lbl">{m.label}</span><span class="val">{m.value}</span></button>
 {/each}
 </div>
 
 <LineChart
-  data={btc_with_models}
+  data={priceChartRows}
   x=date
-  y={['BTC Price', 'Realized Price', 'STH Realized Price', 'LTH Realized Price', '3x Realized Price']}
+  y={priceModelKeys}
   xFmt="mmm yyyy"
   yAxisTitle="Price (USD)"
   yFmt=usd0
@@ -532,25 +545,7 @@ _Price vs on-chain valuation models._
   xType=time
   xMax={priceChartXMax}
   lineWidth=1
-  seriesColors={{
-    'BTC Price': '#F7931A',
-    'Btc Price': '#F7931A',
-    'Realized Price': '#2962FF',
-    'STH Realized Price': '#E040FB',
-    'Sth Realized Price': '#E040FB',
-    'LTH Realized Price': '#00A0B8',
-    'Lth Realized Price': '#00A0B8',
-    '3x Realized Price': '#8B5E34'
-  }}
-  echartsOptions={{
-    series: [
-      { lineStyle: { width: 3 }, emphasis: { lineStyle: { width: 4 } } },
-      { lineStyle: { width: 1 }, emphasis: { lineStyle: { width: 2 } } },
-      { lineStyle: { width: 1 }, emphasis: { lineStyle: { width: 2 } } },
-      { lineStyle: { width: 1 }, emphasis: { lineStyle: { width: 2 } } },
-      { lineStyle: { width: 1 }, emphasis: { lineStyle: { width: 2 } } }
-    ]
-  }}
+  echartsOptions={priceChartOptions}
   yGridlines=true
   xGridlines=false
   markers=false
@@ -558,9 +553,11 @@ _Price vs on-chain valuation models._
   legend=false
 >
   {#each outlookCaseLevels as c (c.name)}
-  <ReferenceLine data={[c]} y=price label=label hideValue=true labelPosition=aboveEnd lineColor={c.color} lineType=dashed lineWidth=2 />
+  <ReferenceLine data={[c]} y=price label=label hideValue=true labelPosition=aboveStart labelColor={c.color} lineColor={c.color} lineType=dashed lineWidth=1.5 />
   {/each}
 </LineChart>
+
+<p class="price-chart-methodology">Simple moving averages · 3-month = 90 daily closes · 1-year = 52 weeks / 364 daily closes · 200-week = 1,400 daily closes</p>
 
 </div>
 
@@ -995,36 +992,38 @@ order by
 ```
 
 ```sql btc_with_models
--- Canonical daily Bitcoin price joined with on-chain valuation models.
--- This uses the same BTC price source as snapshot/performance tables.
--- A trailing all-null ghost row at the end of the data's own year extends the x-axis
--- past the last price point so the case annotations have empty space on the right.
--- Derived from the data rather than hardcoded, so it rolls forward every January.
+-- Calculate full calendar-day lookbacks before trimming to the 10-year display
+-- history. Incomplete windows (including missing daily closes) remain null.
 with model_history as (
   select
     cast(date as date) as date,
     "BTC Price",
-    "STH Realized Price",
-    "LTH Realized Price",
     "Realized Price",
+    "STH Realized Price",
     "3x Realized Price"
   from bitcoin_report_library.onchain_price_models
 ),
-bounds as (
-  select
-    max(date) as max_date,
-    date_trunc('year', max(date)) + interval '1 year' - interval '1 day' as year_end
+moving_averages as (
+  select *,
+    case when count("BTC Price") over quarter_window = 90
+      then avg("BTC Price") over quarter_window end as "3-month MA",
+    case when count("BTC Price") over year_window = 364
+      then avg("BTC Price") over year_window end as "1-year MA",
+    case when count("BTC Price") over cycle_window = 1400
+      then avg("BTC Price") over cycle_window end as "200-week MA"
   from model_history
+  window
+    quarter_window as (order by date range between interval '89 days' preceding and current row),
+    year_window as (order by date range between interval '363 days' preceding and current row),
+    cycle_window as (order by date range between interval '1399 days' preceding and current row)
 )
-select * from model_history
-where date >= (select max_date from bounds) - interval '4' year
-union all
-select (select year_end from bounds), null, null, null, null, null
+select * from moving_averages
+where date >= (select max(date) from model_history) - interval '10 years'
 order by date
 ```
 
 ```sql btc_models_latest
--- Latest value of each price model for end-of-line annotations
+-- Latest value of each price model for the interactive legend
 with latest as (
   select *
   from ${btc_with_models}
@@ -1035,8 +1034,10 @@ with latest as (
 select 'BTC Price' as series, date as x, "BTC Price" as y, '$' || format('{:,.0f}', "BTC Price") as label from latest
 union all select 'Realized Price', date, "Realized Price", '$' || format('{:,.0f}', "Realized Price") from latest
 union all select 'STH Realized Price', date, "STH Realized Price", '$' || format('{:,.0f}', "STH Realized Price") from latest
-union all select 'LTH Realized Price', date, "LTH Realized Price", '$' || format('{:,.0f}', "LTH Realized Price") from latest
 union all select '3x Realized Price', date, "3x Realized Price", '$' || format('{:,.0f}', "3x Realized Price") from latest
+union all select '3-month MA', date, "3-month MA", '$' || format('{:,.0f}', "3-month MA") from latest
+union all select '1-year MA', date, "1-year MA", '$' || format('{:,.0f}', "1-year MA") from latest
+union all select '200-week MA', date, "200-week MA", '$' || format('{:,.0f}', "200-week MA") from latest
 ```
 
 ```sql price_outlook
@@ -1046,14 +1047,6 @@ select
   cast(price as double) as price,
   type,
   color
-from bitcoin_report_library.price_outlook
-```
-
-```sql price_outlook_cases
-select
-  max(case when label = 'Bear Case' then price end) as bear,
-  max(case when label = 'Base Case' then price end) as base,
-  max(case when label = 'Bull Case' then price end) as bull
 from bitcoin_report_library.price_outlook
 ```
 

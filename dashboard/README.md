@@ -90,8 +90,8 @@ capture contents/dimensions, and writes SHA-256 provenance to `visual-manifest.j
 Its immutable outputs are:
 
 - the Bitcoin Snapshot Market Data card row only;
-- the Bitcoin Price section with BTC, realized/STH/LTH/3x realized prices and the
-  bear/base/bull cases (electricity/power expense is excluded);
+- the Bitcoin Price section with BTC, realized/STH/3x realized prices, 3-month/1-year/200-week
+  moving averages and the bear/base/bull cases (electricity/power expense is excluded);
 - the Monthly Bitcoin Price Return Heatmap;
 - separate MTD and YTD seasonal-return charts for newsletter legibility.
 
@@ -147,3 +147,16 @@ temporarily retaining legacy CSV-only validation for older releases during rollo
 - `static/robots.txt` and `static/sitemap.xml` — crawler policy and canonical dashboard URL
 - `evidence.config.yaml` — Evidence plugins, theme, and color config
 - `app.css` — shared site-shell tokens and custom dashboard styling (cypherpunk dark theme, JetBrains Mono + Syne)
+
+## Bitcoin Price chart
+
+The price chart defaults to four years, with 1Y / 4Y / 10Y range buttons and an
+interactive current-values legend. It shows BTC price, realized price, STH realized
+price, 3x realized price, and three simple moving averages. Scenario labels sit at
+the left of their dashed horizontal lines; all historical series are solid.
+
+Moving averages use the canonical daily BTC close in `onchain_price_models.csv`:
+90 days (3-month), 364 days (1-year / 52 weeks), and 1,400 days (200-week). SQL
+calculates these over the full history before filtering the display range. A window
+with missing closes stays null. No additional CSV or wide master-metrics download
+is required. Newsletter exports retain the default four-year view and all series.

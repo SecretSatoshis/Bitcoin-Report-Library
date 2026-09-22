@@ -29,8 +29,8 @@ const VISUALS = [
     id: 'bitcoin-price',
     file: 'bitcoin-price.png',
     sourceUrl: 'https://dashboard.secretsatoshis.com/#bitcoin-price',
-    alt: 'Bitcoin price with realized-price models and Secret Satoshis bear, base, and bull cases.',
-    requiredText: ['Bitcoin Price', 'Bear Case', 'Base Case', 'Bull Case', 'STH Realized', 'LTH Realized', 'Realized'],
+    alt: 'Bitcoin price with realized-price models, 3-month, 1-year and 200-week moving averages, and Secret Satoshis bear, base, and bull cases.',
+    requiredText: ['Bitcoin Price', 'Bear Case', 'Base Case', 'Bull Case', 'STH Realized', 'Realized', '3× Realized', '3-month MA', '1-year MA', '200-week MA'],
     forbiddenText: ['Power Expense', 'Electricity'],
   },
   {
