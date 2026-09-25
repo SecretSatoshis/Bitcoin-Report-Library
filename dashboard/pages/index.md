@@ -321,6 +321,31 @@ _Headline metrics — market, on-chain, and sentiment._
       lineStyle: { color: _modelMeta[key].color, width: index === 0 ? 3 : 1.5, type: 'solid' },
       emphasis: { lineStyle: { width: index === 0 ? 4 : 2.5 } },
       z: index === 0 ? 5 : 2,
+      // Mark the outlook year's boundary across the full four-year plot height.
+      ...(index === 0 ? {
+        markLine: {
+          silent: true,
+          symbol: 'circle',
+          symbolSize: 0,
+          animation: false,
+          lineStyle: { color: '#b8b8c8', width: 1.5, type: 'dashed' },
+          label: {
+            show: true,
+            formatter: `${dataYearLabel} Start`,
+            position: 'insideEndBottom',
+            rotate: -90,
+            align: 'left',
+            color: '#e4e4ef',
+            fontFamily: 'JetBrains Mono',
+            fontSize: 11,
+            backgroundColor: 'rgba(8, 8, 12, 0.85)',
+            padding: [3, 5],
+          },
+          data: priceChartYears === 4 && dataYearLabel
+            ? [{ xAxis: new Date(`${dataYearLabel}-01-01T00:00:00Z`).getTime() }]
+            : [],
+        },
+      } : {}),
     })),
   };
   $: modelStrip = priceModelKeys.flatMap(key => {
@@ -458,6 +483,8 @@ _Headline metrics — market, on-chain, and sentiment._
 
 _Compare Bitcoin and other assets’ returns across the same periods._
 
+<div class="newsletter-visual" data-quarterly-visual="performance-indexes">
+
 ### Stock Market Index Performance
 
 <DataTable data={equity_perf} rows=all rowShading=true>
@@ -468,6 +495,10 @@ _Compare Bitcoin and other assets’ returns across the same periods._
   <Column id=return_ytd title="YTD Return" fmt='#,##0.00"%"' contentType=delta chip=true align=center />
   <Column id=return_90d title="90 Day Return" fmt='#,##0.00"%"' contentType=delta chip=true align=center />
 </DataTable>
+
+</div>
+
+<div class="newsletter-visual" data-quarterly-visual="performance-sectors">
 
 ### Sector Performance
 
@@ -480,6 +511,10 @@ _Compare Bitcoin and other assets’ returns across the same periods._
   <Column id=return_90d title="90 Day Return" fmt='#,##0.00"%"' contentType=delta chip=true align=center />
 </DataTable>
 
+</div>
+
+<div class="newsletter-visual" data-quarterly-visual="performance-macro">
+
 ### Macro Asset Class Performance
 
 <DataTable data={macro_perf} rows=all rowShading=true>
@@ -491,6 +526,10 @@ _Compare Bitcoin and other assets’ returns across the same periods._
   <Column id=return_90d title="90 Day Return" fmt='#,##0.00"%"' contentType=delta chip=true align=center />
 </DataTable>
 
+</div>
+
+<div class="newsletter-visual" data-quarterly-visual="performance-bitcoin">
+
 ### Bitcoin Industry Performance
 
 <DataTable data={bitcoin_industry_perf} rows=all rowShading=true>
@@ -501,6 +540,8 @@ _Compare Bitcoin and other assets’ returns across the same periods._
   <Column id=return_ytd title="YTD Return" fmt='#,##0.00"%"' contentType=delta chip=true align=center />
   <Column id=return_90d title="90 Day Return" fmt='#,##0.00"%"' contentType=delta chip=true align=center />
 </DataTable>
+
+</div>
 
 <div class="newsletter-visual" data-newsletter-visual="bitcoin-price">
 
@@ -723,6 +764,8 @@ _Compare this month’s and this year’s price paths with historical years._
 
 </div>
 
+<div class="newsletter-visual" data-quarterly-visual="relative-valuation">
+
 ## Relative Valuation
 
 _Bitcoin’s hypothetical price if its market cap matched each reference asset. These are comparison scenarios, not forecasts._
@@ -748,6 +791,8 @@ _Bitcoin’s hypothetical price if its market cap matched each reference asset. 
     align=right
   />
 </DataTable>
+
+</div>
 
 ## Network Fundamentals
 

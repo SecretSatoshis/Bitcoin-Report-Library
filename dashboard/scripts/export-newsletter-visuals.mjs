@@ -61,10 +61,31 @@ const VISUALS = [
   },
 ];
 
+const QUARTERLY_VISUALS = [
+  { ...VISUALS[1], id: 'price-outlook', file: 'price-outlook.png',
+    selector: '[data-newsletter-visual="bitcoin-price"]',
+    sourceUrl: 'https://dashboard.secretsatoshis.com/#secret-satoshis-datayearlabel-price-outlook' },
+  ...[
+    ['performance-indexes', 'Stock Market Index Performance'],
+    ['performance-sectors', 'Sector Performance'],
+    ['performance-macro', 'Macro Asset Class Performance'],
+    ['performance-bitcoin', 'Bitcoin Industry Performance'],
+  ].map(([id, title]) => ({ id, file: `${id}.png`,
+    selector: `[data-quarterly-visual="${id}"]`,
+    sourceUrl: 'https://dashboard.secretsatoshis.com/#performance',
+    alt: `${title} at the reporting cutoff, including year-to-date returns.`,
+    requiredText: [title, 'YTD Return'], forbiddenText: [] })),
+  { id: 'relative-valuation', file: 'relative-valuation.png', widthCssPx: 1280,
+    selector: '[data-quarterly-visual="relative-valuation"]',
+    sourceUrl: 'https://dashboard.secretsatoshis.com/#relative-valuation',
+    alt: 'Bitcoin market size beside monetary bases, precious metals, and selected companies.',
+    requiredText: ['Relative Valuation', 'Market Cap'], forbiddenText: [] },
+];
+
 function usage(message) {
   if (message) process.stderr.write(`ERROR: ${message}\n`);
   process.stderr.write(
-    'Usage: node scripts/export-newsletter-visuals.mjs --report-date YYYY-MM-DD --output-dir PATH [--build-dir PATH] [--chrome PATH]\n'
+    'Usage: node scripts/export-newsletter-visuals.mjs --report-date YYYY-MM-DD --output-dir PATH [--build-dir PATH] [--chrome PATH] [--profile weekly|quarterly]\n'
   );
   process.exit(2);
 }
@@ -83,7 +104,9 @@ function parseArgs(argv) {
     usage('--report-date must be YYYY-MM-DD');
   }
   if (!args['output-dir']) usage('--output-dir is required');
+  if (args.profile && !['weekly', 'quarterly'].includes(args.profile)) usage('invalid profile');
   return {
+    profile: args.profile || 'weekly',
     reportDate: args['report-date'],
     outputDir: resolve(args['output-dir']),
     buildDir: resolve(args['build-dir'] || DEFAULT_BUILD_DIR),
@@ -179,6 +202,7 @@ function publishFiles(temporaryDir, outputDir, filenames) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  const selectedVisuals = args.profile === 'quarterly' ? QUARTERLY_VISUALS : VISUALS;
   if (!existsSync(join(args.buildDir, 'index.html'))) {
     throw new Error(`dashboard build is missing: ${args.buildDir}`);
   }
@@ -186,7 +210,7 @@ async function main() {
     throw new Error(`Chrome executable is missing: ${args.chrome}`);
   }
   mkdirSync(args.outputDir, { recursive: true });
-  for (const visual of VISUALS) {
+  for (const visual of selectedVisuals) {
     if (existsSync(join(args.outputDir, visual.file))) {
       throw new Error(`refusing to overwrite ${join(args.outputDir, visual.file)}`);
     }
@@ -242,11 +266,14 @@ async function main() {
     if (pageErrors.length) throw new Error(`dashboard page errors: ${pageErrors.join('; ')}`);
 
     const files = [];
-    for (const visual of VISUALS) {
-      const selector = `[data-newsletter-visual="${visual.id}"]`;
+    for (const visual of selectedVisuals) {
+      const selector = visual.selector || `[data-newsletter-visual="${visual.id}"]`;
       const locator = page.locator(selector);
       const count = await locator.count();
       if (count !== 1) throw new Error(`${selector} expected exactly once, found ${count}`);
+      if (visual.widthCssPx) {
+        await locator.evaluate((element, width) => { element.style.width = `${width}px`; }, visual.widthCssPx);
+      }
       const text = (await locator.innerText()).replace(/\s+/g, ' ').trim();
       for (const required of visual.requiredText) {
         if (!text.toLocaleLowerCase('en-US').includes(required.toLocaleLowerCase('en-US'))) {
@@ -291,7 +318,7 @@ async function main() {
     const buildManifestPath = join(args.buildDir, 'data', 'manifest.json');
     const manifest = {
       schema_version: 1,
-      workflow: 'Secret Satoshis Weekly Newsletter Dashboard Visual Export',
+      workflow: `Secret Satoshis ${args.profile === 'quarterly' ? 'Quarterly' : 'Weekly'} Newsletter Dashboard Visual Export`,
       report_date: args.reportDate,
       generated_at: new Date().toISOString(),
       status: 'passed',

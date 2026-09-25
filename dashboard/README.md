@@ -160,3 +160,23 @@ Moving averages use the canonical daily BTC close in `onchain_price_models.csv`:
 calculates these over the full history before filtering the display range. A window
 with missing closes stays null. No additional CSV or wide master-metrics download
 is required. Newsletter exports retain the default four-year view and all series.
+
+## Quarterly newsletter exports
+
+Use the same built Dashboard and exporter with the quarterly profile:
+
+```bash
+npm run export:newsletter -- --profile quarterly --report-date YYYY-MM-DD --output-dir /absolute/new/export-directory
+```
+
+This exports six unchanged Dashboard views: the four-year price outlook (including the
+January 1 annual marker), Stock Market Index Performance, Sector Performance, Macro Asset
+Class Performance, Bitcoin Industry Performance, and Relative Valuation. The relative-value
+capture uses a wider canvas to fit its existing columns. The default weekly profile still
+exports its five established visuals. Both profiles validate the built data date, PNG bytes,
+dimensions, and exact output inventory; the quarterly pipeline also checks producer commits.
+
+Newsletter-Pipeline consumes a committed quarter-end Report Library release, adds the two
+savings images from the corresponding Investment Strategy export, and renders the existing
+Chart Library combined YTD reference from that same market release. These producer captures
+are six of the quarterly report's nine images, not a complete quarterly report bundle.
