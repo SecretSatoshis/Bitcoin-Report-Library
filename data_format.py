@@ -332,6 +332,10 @@ def get_brk_ohlc(index: str = "week1", start: str = "2017-01-01") -> pd.DataFram
         df = df.astype(float)
         from data_validation import validate_calendar
         validate_calendar(df.index, f"BRK {index} OHLC", step=7 if index == "week1" else 1)
+        if index == "day1":
+            # BRK's pre-market history is all-zero; internal invalid candles still fail.
+            nonzero = df.ne(0).any(axis=1)
+            df = df.loc[nonzero.idxmax():] if nonzero.any() else df.iloc[:0]
         assert_ohlc_usable(df, label=f"BRK {index} OHLC")
         return df
 

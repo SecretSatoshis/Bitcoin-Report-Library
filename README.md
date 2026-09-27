@@ -99,7 +99,7 @@ The pipeline executes in sequence:
 1. Fetches the configured on-chain and market series from the BRK API
 2. Retrieves market data from Yahoo Finance and CoinGecko
 3. Stores one CoinGecko Bitcoin-dominance observation for the completed UTC day
-4. Pulls weekly and recent daily OHLC data from BRK
+4. Pulls weekly and full available daily OHLC history from BRK
 5. Calculates derived metrics, mining signals, and valuation models (Metcalfe, power law, Hash Ribbons, Reserve Risk, MVRV, NVT, volatility, etc.)
 6. Runs performance analysis (7d, 90d, MTD, YTD, YOY changes)
 7. Generates report tables
@@ -273,6 +273,33 @@ counts, report-date disagreements, invalid cycle-low baselines, halving eras wit
 valid day-zero anchor, and inconsistent electricity, Metcalfe, power-law, or Hash Ribbon
 calculations.
 
+## Frozen chart candles
+
+The daily pipeline fetches BRK daily OHLC history, trims its leading all-zero
+pre-market era, and prepares chart data through the completed report date.
+`candle_data.py` exports `bitcoin_candles.csv.gz` (daily, Monday–Sunday weekly,
+and calendar-month OHLC with period/observation dates and completion flags),
+plus `weekly_metrics_data.csv.gz` and `monthly_metrics_data.csv.gz`. Metric
+snapshots select the exact final included daily row, preserving missing values
+and existing calculations. An initial partial historical week/month is omitted;
+the latest partial period is included through the report date.
+
+These files are part of the verified release manifest. Daily candle closes must
+match the master prices; missing daily observations and inconsistent candles
+fail the build. Chart Library performs no source gathering or OHLC aggregation.
+The existing `ohlc_data.csv` remains unchanged for its other consumers.
+
+
+## Dashboard presentation
+
+The dashboard price outlook uses the shared Chart Library renderer: weekly candles,
+a linear four-year view, historical events and the annual start marker. Scenario
+cards remain above the plot and its PNG export. The former Trading Range graphics
+have been removed from the dashboard; their producer CSVs remain available to other
+consumers. See [dashboard/README.md](dashboard/README.md) for local builds, renderer
+sync and frozen newsletter exports.
+
 ## License
 
-GPLv3
+GPLv3. The vendored TradingView renderer and bundled fonts retain their own license
+and notice files under `dashboard/static/shared-chart/assets/`.

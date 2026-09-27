@@ -77,9 +77,7 @@ if ohlc_data.index.tz is not None:
     ohlc_data.index = ohlc_data.index.tz_convert(None)
 data_format.assert_ohlc_usable(ohlc_data, label="Weekly BRK OHLC")
 
-daily_ohlc_start = (pd.to_datetime(report_date) - pd.Timedelta(days=14)).strftime(
-    "%Y-%m-%d"
-)
+daily_ohlc_start = "2009-01-03"
 daily_ohlc_data = data_format.get_brk_ohlc(index="day1", start=daily_ohlc_start)
 daily_ohlc_data.index = pd.to_datetime(daily_ohlc_data.index)
 if daily_ohlc_data.index.tz is not None:
@@ -313,6 +311,9 @@ eoy_model_data.to_csv("csv/eoy_model_data.csv", index=True)
 ## Master CSV - All calculated metrics after analysis (includes change calculations)
 ## Gzipped to reduce file size (~99MB raw → ~5-10MB compressed)
 report_data.to_csv("csv/master_metrics_data.csv.gz", index=True, compression="gzip")
+
+from candle_data import write_candle_tables
+write_candle_tables(daily_ohlc_data, report_data, report_date)
 
 ## Remove old uncompressed master if it exists (prevent stale 99MB file in repo)
 old_master = "csv/master_metrics_data.csv"

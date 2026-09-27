@@ -1,0 +1,16 @@
+{
+  "source": "Bitcoin-Chart-Library",
+  "files": {
+    "renderer.js": "9195cbfc58bb7407a57ae7293d99230ea036d935efc598040443ef2998261d53",
+    "chart.html": "18d0cd8c8b8d67456c8d82d2b411aa675f726a1cf88cea1d5f44ad7f82b3842f",
+    "chart.css": "2b07759b8fb7e680374aaadfeecf599cb5efdb2d1fb7337b26babe765e7ba895",
+    "site.css": "2010c7f2fced4ea101796010d30a3354eaff3ab53524090939103013c044ddd6"
+  },
+  "assets": {
+    "STYLE": "assets/chart.1694e7b6cb1abad7.css",
+    "RENDERER": "assets/renderer.9195cbfc58bb7407.js",
+    "RUNTIME": "assets/lightweight-charts.e21cc5caa0226ef3.js",
+    "LICENSE": "assets/LICENSE",
+    "NOTICEFILE": "assets/NOTICE"
+  }
+}

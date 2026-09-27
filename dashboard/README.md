@@ -148,19 +148,6 @@ temporarily retaining legacy CSV-only validation for older releases during rollo
 - `evidence.config.yaml` — Evidence plugins, theme, and color config
 - `app.css` — shared site-shell tokens and custom dashboard styling (cypherpunk dark theme, JetBrains Mono + Syne)
 
-## Bitcoin Price chart
-
-The price chart defaults to four years, with 1Y / 4Y / 10Y range buttons and an
-interactive current-values legend. It shows BTC price, realized price, STH realized
-price, 3x realized price, and three simple moving averages. Scenario labels sit at
-the left of their dashed horizontal lines; all historical series are solid.
-
-Moving averages use the canonical daily BTC close in `onchain_price_models.csv`:
-90 days (3-month), 364 days (1-year / 52 weeks), and 1,400 days (200-week). SQL
-calculates these over the full history before filtering the display range. A window
-with missing closes stays null. No additional CSV or wide master-metrics download
-is required. Newsletter exports retain the default four-year view and all series.
-
 ## Quarterly newsletter exports
 
 Use the same built Dashboard and exporter with the quarterly profile:
@@ -169,7 +156,7 @@ Use the same built Dashboard and exporter with the quarterly profile:
 npm run export:newsletter -- --profile quarterly --report-date YYYY-MM-DD --output-dir /absolute/new/export-directory
 ```
 
-This exports six unchanged Dashboard views: the four-year price outlook (including the
+This exports six Dashboard views: the four-year price outlook (including the
 January 1 annual marker), Stock Market Index Performance, Sector Performance, Macro Asset
 Class Performance, Bitcoin Industry Performance, and Relative Valuation. The relative-value
 capture uses a wider canvas to fit its existing columns. The default weekly profile still
@@ -180,3 +167,41 @@ Newsletter-Pipeline consumes a committed quarter-end Report Library release, add
 savings images from the corresponding Investment Strategy export, and renders the existing
 Chart Library combined YTD reference from that same market release. These producer captures
 are six of the quarterly report's nine images, not a complete quarterly report bundle.
+
+## Shared price-outlook chart
+
+The price-outlook section uses the Chart Library's shared Lightweight Charts
+renderer, theme, legend, range/scale controls, candles and PNG compositor. Scenario
+cards stay above the chart; dashed scenario levels and the outlook-year marker
+remain inside it. The initial view is weekly candles over four years through the
+outlook year's end, with a linear scale and no gridlines. All shared historical events are included alongside the
+year-start marker. Scenario labels sit at the left behind the data.
+
+`components/PriceOutlookChart.svelte` adapts the dashboard's existing price/model
+query to the shared payload. Moving-average formulas are unchanged. Weekly and
+monthly line observations select the corresponding candle's final observation
+date; OHLC arrives already aggregated from the Report Library. Data sync verifies
+`bitcoin_candles.csv.gz` against the release manifest and decodes it for Evidence.
+
+Shared assets are vendored in `static/shared-chart/`, so dashboard builds and
+frozen newsletter captures do not depend on a live chart website or sibling
+checkout. `source-manifest.json` records the source hashes. To refresh the shared
+renderer after a Chart Library change, run from the Chart Library checkout:
+
+```bash
+.venv/bin/python scripts/sync-dashboard.py ../Bitcoin-Report-Library/dashboard/static/shared-chart
+```
+
+The newsletter capture waits for the iframe's chart-ready contract, verifies its
+report date, and includes its legend text in existing visual-manifest checks.
+
+The compact legend keeps Bitcoin first, then orders the model lines by their latest
+values. Right/Left scale labels, YTD / 1Y / 4Y / 10Y / All ranges, Show all, Remove all
+(retaining Bitcoin), isolation and event controls come from the shared renderer.
+Scenario text is compact on the dashboard and remains above the exported chart.
+
+The displayed moving averages retain 90-day, 364-day and 1,400-day windows on the
+canonical daily close from `onchain_price_models.csv`. SQL calculates over the full
+history before display filtering; a window with missing closes stays null. The
+Trading Range bucket graphics are no longer displayed or downloaded by the dashboard.
+Their upstream CSVs remain available for other Report Library consumers.

@@ -1079,6 +1079,13 @@ def validate_outputs(
 
     _validate_report_agreement(retained_frames, expected_report_date, errors)
     _validate_review_contracts(retained_frames, output_dir, expected_report_date, errors)
+    from candle_data import CANDLE_FILES, validate_candle_exports
+    if any((output_dir / name).exists() for name in CANDLE_FILES):
+        try:
+            master = pd.read_csv(output_dir / "master_metrics_data.csv.gz", index_col=0, parse_dates=True, low_memory=False)
+            validate_candle_exports(output_dir, master, expected_report_date)
+        except (ValueError, RuntimeError, KeyError, OSError, AssertionError) as exc:
+            errors.append(f"Chart candle exports: {exc}")
     _validate_release_manifest(output_dir, expected_report_date, errors, require_release_manifest)
     return errors
 
@@ -1102,6 +1109,12 @@ def _validate_release_manifest(output_dir, expected_report_date, errors, require
         errors.append("release_manifest.json: report_date does not match report date")
     files = manifest.get("files")
     expected_files = {name for name in OUTPUT_RULES}
+    # Older frozen releases are line-only; a new bundle must be complete and hashed.
+    from candle_data import CANDLE_FILES
+    if any((Path(output_dir) / name).exists() for name in CANDLE_FILES) or (
+        isinstance(files, dict) and any(name in files for name in CANDLE_FILES)
+    ):
+        expected_files.update(CANDLE_FILES)
     if not isinstance(files, dict) or set(files) != expected_files:
         errors.append("release_manifest.json: file inventory does not match generated outputs")
         return

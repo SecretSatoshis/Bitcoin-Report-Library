@@ -274,7 +274,19 @@ async function main() {
       if (visual.widthCssPx) {
         await locator.evaluate((element, width) => { element.style.width = `${width}px`; }, visual.widthCssPx);
       }
-      const text = (await locator.innerText()).replace(/\s+/g, ' ').trim();
+      let text = await locator.innerText();
+      const chartFrame = locator.locator('[data-price-outlook-frame]');
+      if(await chartFrame.count()){
+        const handle=await chartFrame.elementHandle(), embedded=await handle.contentFrame();
+        await embedded.waitForFunction(()=>window.SecretSatoshisChart?.ready);
+        const chartDate=await embedded.evaluate(async()=>{const chart=await SecretSatoshisChart.ready;return chart.payload.reportDate;});
+        if(chartDate!==args.reportDate)throw new Error('Price outlook iframe cutoff mismatch');
+        // Present the complete seven-series legend in newsletter captures.
+        await embedded.addStyleTag({content:'.toolbar{display:none!important}#legend{max-height:none!important}.plot-wrap{height:660px;min-height:660px}'});
+        await embedded.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+        text += ' '+await embedded.locator('body').innerText();
+      }
+      text=text.replace(/\s+/g, ' ').trim();
       for (const required of visual.requiredText) {
         if (!text.toLocaleLowerCase('en-US').includes(required.toLocaleLowerCase('en-US'))) {
           throw new Error(`${visual.id} is missing required text: ${required}`);

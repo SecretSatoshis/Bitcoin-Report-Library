@@ -20,7 +20,9 @@ import {
   statSync,
   readdirSync,
   readFileSync,
+  writeFileSync,
 } from "node:fs";
+import { gunzipSync } from "node:zlib";
 import { createHash } from "node:crypto";
 import { pipeline } from "node:stream/promises";
 import https from "node:https";
@@ -46,13 +48,12 @@ const CSV_FILES = [
   "performance_table.csv",
   "monthly_heatmap_data.csv",
   "relative_value_comparison.csv",
-  "1k_bucket_table.csv",
-  "5k_bucket_table.csv",
   "roi_table.csv",
   "onchain_price_models.csv",
   "mtd_returns_history.csv",
   "ytd_returns_history.csv",
   "price_outlook.csv",
+  "bitcoin_candles.csv.gz",
 ];
 
 mkdirSync(OUT_DIR, { recursive: true });
@@ -61,7 +62,7 @@ mkdirSync(OUT_DIR, { recursive: true });
 // it being copied — without this it lingers in sources/ and Evidence keeps ingesting it
 // into the build forever.
 function prune() {
-  const keep = new Set(CSV_FILES);
+  const keep = new Set([...CSV_FILES, "bitcoin_candles.csv"]);
   for (const entry of readdirSync(OUT_DIR)) {
     if (entry.endsWith(".csv") && !keep.has(entry)) {
       rmSync(path.join(OUT_DIR, entry), { force: true });
@@ -279,5 +280,10 @@ if (LOCAL_MODE) {
     process.exit(1);
   }
 }
+
+// Evidence ingests the narrow candle table, never the wide master snapshots.
+writeFileSync(path.join(OUT_DIR, "bitcoin_candles.csv"), gunzipSync(readFileSync(path.join(OUT_DIR, "bitcoin_candles.csv.gz"))));
+// The Evidence CSV plugin scans gzip files too; leave only the decoded table.
+rmSync(path.join(OUT_DIR, "bitcoin_candles.csv.gz"));
 
 console.log("\nDone. Next: npm run sources && npm run dev\n");

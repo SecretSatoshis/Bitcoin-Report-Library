@@ -45,6 +45,7 @@ _Headline metrics — market, on-chain, and sentiment._
 ### Market Data
 
 <script>
+  import PriceOutlookChart from '$lib/PriceOutlookChart.svelte';
   // Trend-based sparkline colors: green if metric grew over the window, red if it shrank.
   // Data is sorted DESC so row 0 is "today" — pct_change there reflects the full window.
   const POS = '#00FF88';
@@ -278,80 +279,10 @@ _Headline metrics — market, on-chain, and sentiment._
   $: mtdLatest = _buildLatestPoints(mtdPlot, 'day', mtdCurrentYear);
   $: ytdLatest = _buildLatestPoints(ytdPlot, 'day_of_year', ytdCurrentYear);
 
-  // Bitcoin price history is calculated in SQL before selecting a display range,
-  // so moving averages keep their full lookback at the left edge of every view.
-  let priceChartYears = 4;
-  $: priceChartXMax = dataYearLabel
-    ? new Date(`${dataYearLabel}-12-31T00:00:00Z`)
-    : undefined;
-  $: priceChartXMin = (() => {
-    if (!data_date?.[0]?.date_iso) return undefined;
-    const cutoff = new Date(`${data_date[0].date_iso}T00:00:00Z`);
-    cutoff.setUTCFullYear(cutoff.getUTCFullYear() - priceChartYears);
-    return cutoff;
-  })();
-  $: priceChartRows = (btc_with_models || []).filter(
-    row => !priceChartXMin || new Date(row.date) >= priceChartXMin
-  );
   $: outlookCaseLevels = (price_outlook || [])
     .filter(level => level.type === 'case')
     .slice()
     .sort((a, b) => Number(a.price) - Number(b.price));
-
-  const _modelMeta = {
-    'BTC Price':          { color: '#F7931A', label: 'BTC Price' },
-    'Realized Price':     { color: '#2962FF', label: 'Realized' },
-    'STH Realized Price': { color: '#E040FB', label: 'STH Realized' },
-    '3x Realized Price':  { color: '#8B5E34', label: '3× Realized' },
-    '3-month MA':         { color: '#7FDF83', label: '3-month MA' },
-    '1-year MA':          { color: '#FF8DA1', label: '1-year MA' },
-    '200-week MA':        { color: '#B3A4FF', label: '200-week MA' },
-  };
-  const priceModelKeys = Object.keys(_modelMeta);
-  let priceModelSelected = Object.fromEntries(priceModelKeys.map(key => [key, true]));
-  function togglePriceModel(key) {
-    priceModelSelected = { ...priceModelSelected, [key]: !priceModelSelected[key] };
-  }
-  $: priceChartOptions = {
-    xAxis: { min: priceChartXMin?.getTime(), max: priceChartXMax?.getTime() },
-    legend: { show: false, data: priceModelKeys, selected: priceModelSelected },
-    series: priceModelKeys.map((key, index) => ({
-      name: key,
-      itemStyle: { color: _modelMeta[key].color },
-      lineStyle: { color: _modelMeta[key].color, width: index === 0 ? 3 : 1.5, type: 'solid' },
-      emphasis: { lineStyle: { width: index === 0 ? 4 : 2.5 } },
-      z: index === 0 ? 5 : 2,
-      // Mark the outlook year's boundary across the full four-year plot height.
-      ...(index === 0 ? {
-        markLine: {
-          silent: true,
-          symbol: 'circle',
-          symbolSize: 0,
-          animation: false,
-          lineStyle: { color: '#b8b8c8', width: 1.5, type: 'dashed' },
-          label: {
-            show: true,
-            formatter: `${dataYearLabel} Start`,
-            position: 'insideEndBottom',
-            rotate: -90,
-            align: 'left',
-            color: '#e4e4ef',
-            fontFamily: 'JetBrains Mono',
-            fontSize: 11,
-            backgroundColor: 'rgba(8, 8, 12, 0.85)',
-            padding: [3, 5],
-          },
-          data: priceChartYears === 4 && dataYearLabel
-            ? [{ xAxis: new Date(`${dataYearLabel}-01-01T00:00:00Z`).getTime() }]
-            : [],
-        },
-      } : {}),
-    })),
-  };
-  $: modelStrip = priceModelKeys.flatMap(key => {
-    const row = (btc_models_latest || []).find(row => row.series === key && row.y != null);
-    return row ? [{ key, ..._modelMeta[key], value: row.label }] : [];
-  });
 </script>
 
 <Grid cols=3 gapSize=lg>
@@ -560,97 +491,11 @@ _Price vs on-chain valuation models and moving averages._
 {/each}
 </div>
 
-<div class="price-chart-controls">
-  <span>Click a series below to show or hide it.</span>
-  <div class="price-chart-ranges" role="group" aria-label="Bitcoin price time range">
-    {#each [1, 4, 10] as years}
-      <button type="button" class:active={priceChartYears === years} aria-pressed={priceChartYears === years} on:click={() => priceChartYears = years}>{years}Y</button>
-    {/each}
-  </div>
-</div>
-
-<div class="model-values-strip">
-{#each modelStrip as m (m.key)}
-  <button type="button" class="model-value" class:off={!priceModelSelected[m.key]} aria-pressed={priceModelSelected[m.key]} on:click={() => togglePriceModel(m.key)} style="--c: {m.color}"><span class="dot"></span><span class="lbl">{m.label}</span><span class="val">{m.value}</span></button>
-{/each}
-</div>
-
-<LineChart
-  data={priceChartRows}
-  x=date
-  y={priceModelKeys}
-  xFmt="mmm yyyy"
-  yAxisTitle="Price (USD)"
-  yFmt=usd0
-  yMin={0}
-  xType=time
-  xMax={priceChartXMax}
-  lineWidth=1
-  echartsOptions={priceChartOptions}
-  yGridlines=true
-  xGridlines=false
-  markers=false
-  chartAreaHeight={500}
-  legend=false
->
-  {#each outlookCaseLevels as c (c.name)}
-  <ReferenceLine data={[c]} y=price label=label hideValue=true labelPosition=aboveStart labelColor={c.color} lineColor={c.color} lineType=dashed lineWidth=1.5 />
-  {/each}
-</LineChart>
+<PriceOutlookChart rows={btc_with_models} candles={price_candles} cases={outlookCaseLevels} reportDate={data_date?.[0]?.date_iso ?? ''} />
 
 <p class="price-chart-methodology">Simple moving averages · 3-month = 90 daily closes · 1-year = 52 weeks / 364 daily closes · 200-week = 1,400 daily closes</p>
 
 </div>
-
-## Trading Range
-
-_Days spent at each price level._
-
-<Grid cols=2 gapSize=lg>
-
-<Group>
-
-### Days at Price ($1K Buckets)
-
-<BarChart
-  data={bucket_1k}
-  x="Price Range ($)"
-  y={['Current', 'Other']}
-  swapXY=true
-  seriesColors={{ Current: '#F7931A', Other: '#2a2a42' }}
-  xAxisTitle=""
-  yAxisTitle="Days"
-  sort=false
-  legend=false
-  labels=true
-  labelPosition=outside
-  stackTotalLabel=false
-/>
-
-</Group>
-
-<Group>
-
-### Days at Price ($5K Buckets)
-
-<BarChart
-  data={bucket_5k}
-  x="Price Range ($)"
-  y={['Current', 'Other']}
-  swapXY=true
-  seriesColors={{ Current: '#F7931A', Other: '#2a2a42' }}
-  xAxisTitle=""
-  yAxisTitle="Days"
-  sort=false
-  legend=false
-  labels=true
-  labelPosition=outside
-  stackTotalLabel=false
-/>
-
-</Group>
-
-</Grid>
 
 <div class="newsletter-visual" data-newsletter-visual="monthly-return-heatmap">
 
@@ -1037,8 +882,8 @@ order by
 ```
 
 ```sql btc_with_models
--- Calculate full calendar-day lookbacks before trimming to the 10-year display
--- history. Incomplete windows (including missing daily closes) remain null.
+-- Keep full history and original calendar-day moving-average calculations.
+-- Incomplete windows (including missing daily closes) remain null.
 with model_history as (
   select
     cast(date as date) as date,
@@ -1063,26 +908,12 @@ moving_averages as (
     cycle_window as (order by date range between interval '1399 days' preceding and current row)
 )
 select * from moving_averages
-where date >= (select max(date) from model_history) - interval '10 years'
 order by date
 ```
 
-```sql btc_models_latest
--- Latest value of each price model for the interactive legend
-with latest as (
-  select *
-  from ${btc_with_models}
-  where "BTC Price" is not null
-  order by date desc
-  limit 1
-)
-select 'BTC Price' as series, date as x, "BTC Price" as y, '$' || format('{:,.0f}', "BTC Price") as label from latest
-union all select 'Realized Price', date, "Realized Price", '$' || format('{:,.0f}', "Realized Price") from latest
-union all select 'STH Realized Price', date, "STH Realized Price", '$' || format('{:,.0f}', "STH Realized Price") from latest
-union all select '3x Realized Price', date, "3x Realized Price", '$' || format('{:,.0f}', "3x Realized Price") from latest
-union all select '3-month MA', date, "3-month MA", '$' || format('{:,.0f}', "3-month MA") from latest
-union all select '1-year MA', date, "1-year MA", '$' || format('{:,.0f}', "1-year MA") from latest
-union all select '200-week MA', date, "200-week MA", '$' || format('{:,.0f}', "200-week MA") from latest
+```sql price_candles
+select * from bitcoin_report_library.bitcoin_candles
+order by interval, period_start
 ```
 
 ```sql price_outlook
@@ -1154,46 +985,6 @@ select
   Yearly
 from years
 order by yr desc
-```
-
-```sql bucket_1k
--- $1K buckets within ±$12K of the current Bitcoin price.
--- Parse the lower bound from labels like "$77K-$78K" by stripping $/K from
--- the first half of the string, then filter to the window around current price.
-with parsed as (
-  select
-    "Price Range ($)",
-    Count,
-    "Current Price",
-    cast(replace(replace(split_part("Price Range ($)", '-', 1), '$', ''), 'K', '') as integer) * 1000 as low_bound
-  from bitcoin_report_library."1k_bucket_table"
-)
-select
-  "Price Range ($)",
-  case when "Current Price" >= low_bound and "Current Price" < low_bound + 1000 then Count end as Current,
-  case when "Current Price" >= low_bound and "Current Price" < low_bound + 1000 then null else Count end as Other
-from parsed
-where low_bound between "Current Price" - 12000 and "Current Price" + 12000
-```
-
-```sql bucket_5k
--- All $5K price buckets in order from low to high.
--- Excludes the $0K-$5K and $5K-$10K buckets (BTC's early years) since their huge count
--- compresses all other bars and ruins the visual scale.
-with parsed as (
-  select
-    "Price Range ($)",
-    Count,
-    "Current Price",
-    cast(replace(replace(split_part("Price Range ($)", '-', 1), '$', ''), 'K', '') as integer) * 1000 as low_bound
-  from bitcoin_report_library."5k_bucket_table"
-  where "Price Range ($)" not in ('$0K-$5K', '$5K-$10K')
-)
-select
-  "Price Range ($)",
-  case when "Current Price" >= low_bound and "Current Price" < low_bound + 5000 then Count end as Current,
-  case when "Current Price" >= low_bound and "Current Price" < low_bound + 5000 then null else Count end as Other
-from parsed
 ```
 
 ```sql roi_data
