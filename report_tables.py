@@ -1017,11 +1017,11 @@ def monthly_heatmap(data, report_date=None, export_csv=True):
 
 def calculate_ohlc(ohlc_data, output_file="csv/ohlc_data.csv"):
     """
-    Saves BRK weekly OHLC data to CSV.
+    Saves weekly OHLC data to CSV.
 
-    BRK week1 rows are week-start labels and include the latest available
-    current-week candle. For an open candle, Close represents the latest
-    available price, not a finalized weekly close.
+    Rows are Monday week-start labels aggregated from daily BRK candles through
+    the report date (candle_data.weekly_ohlc). The open week's Close is the
+    report-date close, not a finalized weekly close.
 
     Parameters:
     ohlc_data (pd.DataFrame): DataFrame with DatetimeIndex and columns: 'Open', 'High', 'Low', 'Close'.
@@ -1034,7 +1034,7 @@ def calculate_ohlc(ohlc_data, output_file="csv/ohlc_data.csv"):
         - High: Highest price during the week
         - Low: Lowest price during the week
         - Close: Last close price of the week
-        Index is BRK week-start date labels.
+        Index is Monday week-start date labels.
     """
     required_columns = ["Open", "High", "Low", "Close"]
     if ohlc_data is None or ohlc_data.empty:

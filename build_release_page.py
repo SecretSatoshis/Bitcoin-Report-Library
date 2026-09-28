@@ -8,6 +8,7 @@ derived from the CSVs on disk — no hardcoded dates.
 from __future__ import annotations
 
 import csv
+import gzip
 import html
 import json
 import re
@@ -22,25 +23,62 @@ CODE_LICENSE = "https://www.gnu.org/licenses/gpl-3.0.html"
 SOCIAL_IMAGE = f"{SITE}/assets/images/social-card.jpg"
 SOCIAL_ALT = "Secret Satoshis — AI-Native Bitcoin Market Intelligence"
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+MANIFEST = CSV_DIR / "release_manifest.json"
 
 
-def describe(path: Path) -> dict:
-    """Row count, column count and real date coverage, read from the file."""
-    with path.open(encoding="utf-8", errors="replace") as handle:
-        rows = list(csv.reader(handle))
-    header, body = (rows[0], rows[1:]) if rows else ([], [])
-    # Some compact summary tables place their date after metric columns (for
-    # example roi_table.csv uses its third column). Search every cell so the
-    # public per-file coverage cannot silently become incomplete when a CSV's
-    # column order changes.
-    dates = [c.strip() for r in body for c in r if DATE.fullmatch(c.strip())]
+def is_gzip(path: Path) -> bool:
+    return path.name.endswith(".csv.gz")
+
+
+def release_files() -> list[Path]:
+    """Every published CSV, plain or gzipped (the master and candle files are .csv.gz)."""
+    return sorted([*CSV_DIR.glob("*.csv"), *CSV_DIR.glob("*.csv.gz")])
+
+
+def release_date() -> str | None:
+    """The report date main.py recorded for this release, if a manifest exists."""
+    try:
+        return json.loads(MANIFEST.read_text(encoding="utf-8"))["report_date"]
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def describe(path: Path, cutoff: str | None = None) -> dict:
+    """Row count, column count and real date coverage, streamed from the file.
+
+    Coverage never extends past ``cutoff`` (the release date): candle files carry the
+    scheduled end of an open week or month, which is not an observation.
+    """
+    opener = gzip.open if is_gzip(path) else open
+    header, rows, first, last = [], 0, None, None
+    with opener(path, "rt", encoding="utf-8", errors="replace", newline="") as handle:
+        reader = csv.reader(handle)
+        header = next(reader, [])
+        for row in reader:
+            rows += 1
+            # Some compact summary tables place their date after metric columns (for
+            # example roi_table.csv uses its third column). Search every cell so the
+            # public per-file coverage cannot silently become incomplete when a CSV's
+            # column order changes.
+            for cell in row:
+                value = cell.strip()
+                if len(value) != 10 or not DATE.fullmatch(value):
+                    continue
+                if cutoff is not None and value > cutoff:
+                    continue
+                if first is None or value < first:
+                    first = value
+                if last is None or value > last:
+                    last = value
+    stem = path.name.removesuffix(".gz").removesuffix(".csv")
     return {
         "name": path.name,
-        "label": path.stem.replace("_", " ").replace("brk ", "BRK ").strip().capitalize(),
+        "label": stem.replace("_", " ").replace("brk ", "BRK ").strip().capitalize(),
+        "format": "application/gzip" if is_gzip(path) else "text/csv",
         "columns": len(header),
-        "rows": len(body),
-        "first": min(dates) if dates else None,
-        "last": max(dates) if dates else None,
+        "rows": rows,
+        "first": first,
+        "last": last,
         "size": path.stat().st_size,
     }
 
@@ -50,10 +88,11 @@ def human_size(n: int) -> str:
 
 
 def collect() -> tuple[list[dict], str, str]:
-    files = [describe(p) for p in sorted(CSV_DIR.glob("*.csv"))]
+    cutoff = release_date()
+    files = [describe(p, cutoff) for p in release_files()]
     dated = [f for f in files if f["first"]]
     first = min(f["first"] for f in dated) if dated else ""
-    last = max(f["last"] for f in dated) if dated else ""
+    last = cutoff or (max(f["last"] for f in dated) if dated else "")
     return files, first, last
 
 
@@ -85,7 +124,7 @@ def structured(files: list[dict], first: str, last: str) -> dict:
         "distribution": [
             {
                 "@type": "DataDownload",
-                "encodingFormat": "text/csv",
+                "encodingFormat": f["format"],
                 "contentUrl": f"{BASE}/csv/{f['name']}",
                 "name": f["label"],
             }

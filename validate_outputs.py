@@ -12,6 +12,13 @@ import sys
 import numpy as np
 import pandas as pd
 
+# Local configuration only; importing data_definitions performs no I/O.
+from data_definitions import ELECTRICITY_TARIFFS_USD_PER_KWH, report_date as CLOCK_REPORT_DATE
+
+TARIFF_COLUMNS = [
+    f"Power Expense (${tariff:.2f}/kWh)" for tariff in ELECTRICITY_TARIFFS_USD_PER_KWH
+]
+
 
 @dataclass(frozen=True)
 class RowBounds:
@@ -76,11 +83,7 @@ REQUIRED_COLUMNS = {
         "Subsidy (BTC)",
         "Fees (BTC)",
         "Miner Revenue (BTC)",
-        "Power Expense ($0.03/kWh)",
-        "Power Expense ($0.04/kWh)",
-        "Power Expense ($0.05/kWh)",
-        "Power Expense ($0.06/kWh)",
-        "Power Expense ($0.07/kWh)",
+        *TARIFF_COLUMNS,
         "Power-Only Break-Even Tariff ($/kWh)",
         "Legacy PUE/Subsidy-Only Cost",
         "Bitcoin Production Cost",
@@ -284,7 +287,11 @@ def _validate_dated_output(
 INDEX_CUTOFF_OUTPUTS = {
     "master_metrics_data.csv.gz": "time",
     "cagr_data.csv": "time",
+    "brk_onchain_raw.csv": "timestamp",
 }
+
+# Index columns stored as epoch numbers rather than date strings.
+INDEX_CUTOFF_UNITS = {"brk_onchain_raw.csv": "s"}
 
 
 def _validate_index_cutoff(
@@ -293,6 +300,7 @@ def _validate_index_cutoff(
     column: str,
     expected_report_date: pd.Timestamp,
     errors: list[str],
+    unit: str | None = None,
 ) -> None:
     """Assert a large dated export ends exactly on the report date."""
     path = output_dir / filename
@@ -304,13 +312,17 @@ def _validate_index_cutoff(
         errors.append(f"{filename}: cannot read {column!r} ({exc})")
         return
 
-    dates = pd.to_datetime(index, errors="coerce").dt.normalize()
-    if dates.isna().any():
+    if unit is None:
+        parsed = pd.to_datetime(index, errors="coerce")
+    else:
+        parsed = pd.to_datetime(pd.to_numeric(index, errors="coerce"), unit=unit)
+    if parsed.isna().any():
         errors.append(f"{filename}: {column!r} contains invalid or missing dates")
         return
+    dates = parsed.dt.normalize()
     from data_validation import validate_calendar
     try:
-        validate_calendar(pd.DatetimeIndex(index), filename)
+        validate_calendar(pd.DatetimeIndex(parsed), filename)
     except (RuntimeError, ValueError) as exc:
         errors.append(str(exc))
     if dates.max() != expected_report_date:
@@ -604,8 +616,8 @@ def _validate_electricity_scenarios(
         "Miner Revenue (BTC)",
         "Power-Only Break-Even Tariff ($/kWh)",
     ]
-    tariffs = (0.03, 0.04, 0.05, 0.06, 0.07)
-    tariff_columns = [f"Power Expense (${tariff:.2f}/kWh)" for tariff in tariffs]
+    tariffs = ELECTRICITY_TARIFFS_USD_PER_KWH
+    tariff_columns = TARIFF_COLUMNS
     if not set(numeric_columns + tariff_columns).issubset(frame.columns):
         return
 
@@ -966,6 +978,13 @@ def _validate_review_contracts(frames, output_dir, report_date, errors):
             weekly = weekly.set_index("Time")
             validate_candles(weekly, "ohlc_data.csv")
             validate_calendar(weekly.index, "ohlc_data.csv", step=7)
+            # The newest candle is the report week's, never a week the cutoff has not reached.
+            report_week = report_date - pd.Timedelta(days=report_date.weekday())
+            if pd.Timestamp(weekly.index.max()) != report_week:
+                raise ValueError(
+                    f"ohlc_data.csv: latest week is {weekly.index.max()}, expected "
+                    f"{report_week.date()}"
+                )
         except (ValueError, RuntimeError, KeyError) as exc:
             errors.append(str(exc))
     summary = frames.get("report_ohlc_summary.csv")
@@ -1074,7 +1093,12 @@ def validate_outputs(
 
     for filename, column in INDEX_CUTOFF_OUTPUTS.items():
         _validate_index_cutoff(
-            output_dir, filename, column, expected_report_date, errors
+            output_dir,
+            filename,
+            column,
+            expected_report_date,
+            errors,
+            unit=INDEX_CUTOFF_UNITS.get(filename),
         )
 
     _validate_report_agreement(retained_frames, expected_report_date, errors)
@@ -1137,9 +1161,35 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", default="csv", help="Generated CSV directory")
     parser.add_argument(
         "--report-date",
-        help="Expected YYYY-MM-DD cutoff (defaults to data_definitions.report_date)",
+        help="Expected YYYY-MM-DD cutoff (defaults to the release manifest's report_date)",
     )
     return parser.parse_args(argv)
+
+
+# A release may be validated at most this many days after the clock's report date, so a
+# run that crosses UTC midnight still validates while a leftover manifest does not.
+MANIFEST_MAX_LAG_DAYS = 1
+
+
+def _manifest_report_date(output_dir: str | Path, clock_report_date) -> tuple[str | None, str | None]:
+    """Return (report_date, error) from the release manifest main.py wrote.
+
+    The pipeline's report date is fixed when main.py starts; recomputing it from the wall
+    clock here would expect the next day whenever generation crosses UTC midnight.
+    """
+    path = Path(output_dir) / "release_manifest.json"
+    try:
+        report_date = json.loads(path.read_text(encoding="utf-8"))["report_date"]
+        manifest_date = pd.to_datetime(report_date).normalize()
+    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+        return None, f"release_manifest.json: cannot read report_date ({exc})"
+    lag_days = (pd.to_datetime(clock_report_date).normalize() - manifest_date).days
+    if not 0 <= lag_days <= MANIFEST_MAX_LAG_DAYS:
+        return None, (
+            f"release_manifest.json: report_date {manifest_date.date()} is not a current "
+            f"release (clock report date {pd.to_datetime(clock_report_date).date()})"
+        )
+    return str(manifest_date.date()), None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1147,10 +1197,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.report_date:
         expected_report_date = args.report_date
     else:
-        # Local configuration only; importing data_definitions performs no I/O.
-        from data_definitions import report_date
-
-        expected_report_date = report_date
+        expected_report_date, error = _manifest_report_date(
+            args.output_dir, CLOCK_REPORT_DATE
+        )
+        if error:
+            print("Output validation failed:", file=sys.stderr)
+            print(f"- {error}", file=sys.stderr)
+            return 1
 
     errors = validate_outputs(args.output_dir, expected_report_date, require_release_manifest=True)
     if errors:

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bitcoin Data Release | Secret Satoshis</title>
-<meta name="description" content="The daily Secret Satoshis Bitcoin data release: 27 CSV files covering price, supply, mining, network activity and valuation, regenerated each day by an open pipeline.">
+<meta name="description" content="The daily Secret Satoshis Bitcoin data release: 31 CSV files covering price, supply, mining, network activity and valuation, regenerated each day by an open pipeline.">
 <link rel="canonical" href="https://secretsatoshis.github.io/Bitcoin-Report-Library/">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta name="theme-color" content="#08080c">
@@ -13,7 +13,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Secret Satoshis">
 <meta property="og:title" content="Bitcoin Data Release | Secret Satoshis">
-<meta property="og:description" content="The daily Secret Satoshis Bitcoin data release: 27 CSV files covering price, supply, mining, network activity and valuation, regenerated each day by an open pipeline.">
+<meta property="og:description" content="The daily Secret Satoshis Bitcoin data release: 31 CSV files covering price, supply, mining, network activity and valuation, regenerated each day by an open pipeline.">
 <meta property="og:url" content="https://secretsatoshis.github.io/Bitcoin-Report-Library/">
 <meta property="og:image" content="https://secretsatoshis.com/assets/images/social-card.jpg">
 <meta property="og:image:alt" content="Secret Satoshis — AI-Native Bitcoin Market Intelligence">
@@ -27,8 +27,8 @@
   "description": "A daily Bitcoin market and on-chain data release covering price, market capitalisation, supply, mining, network activity, valuation models and multi-asset performance comparisons. Published as CSV and regenerated each day by an open pipeline.",
   "url": "https://secretsatoshis.github.io/Bitcoin-Report-Library/",
   "isAccessibleForFree": true,
-  "dateModified": "2026-09-28",
-  "temporalCoverage": "2010-01-01/2026-09-28",
+  "dateModified": "2026-09-27",
+  "temporalCoverage": "2010-01-01/2026-09-27",
   "keywords": [
     "Bitcoin",
     "on-chain data",
@@ -59,6 +59,12 @@
       "encodingFormat": "text/csv",
       "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/5k_bucket_table.csv",
       "name": "5k bucket table"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "application/gzip",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/bitcoin_candles.csv.gz",
+      "name": "Bitcoin candles"
     },
     {
       "@type": "DataDownload",
@@ -116,6 +122,12 @@
     },
     {
       "@type": "DataDownload",
+      "encodingFormat": "application/gzip",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/master_metrics_data.csv.gz",
+      "name": "Master metrics data"
+    },
+    {
+      "@type": "DataDownload",
       "encodingFormat": "text/csv",
       "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/model_coefficients.csv",
       "name": "Model coefficients"
@@ -125,6 +137,12 @@
       "encodingFormat": "text/csv",
       "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/monthly_heatmap_data.csv",
       "name": "Monthly heatmap data"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "application/gzip",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/monthly_metrics_data.csv.gz",
+      "name": "Monthly metrics data"
     },
     {
       "@type": "DataDownload",
@@ -200,6 +218,12 @@
     },
     {
       "@type": "DataDownload",
+      "encodingFormat": "application/gzip",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/weekly_metrics_data.csv.gz",
+      "name": "Weekly metrics data"
+    },
+    {
+      "@type": "DataDownload",
       "encodingFormat": "text/csv",
       "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/ytd_return_comparison.csv",
       "name": "Ytd return comparison"
@@ -241,7 +265,7 @@
     <p class="eyebrow"><span>//</span> Open Data</p>
     <h1>Bitcoin Data Release</h1>
     <p>
-      The daily Secret Satoshis Bitcoin data release. 27 CSV files covering price, market
+      The daily Secret Satoshis Bitcoin data release. 31 CSV files covering price, market
       capitalisation, supply, mining, network activity, valuation models and multi-asset
       performance, regenerated each day by an open pipeline and read directly by
       <a href="https://dashboard.secretsatoshis.com/">the Market Dashboard</a>,
@@ -249,7 +273,7 @@
       <a href="https://secretsatoshis.com/">secretsatoshis.com</a>.
     </p>
     <p>
-      Coverage runs <strong>2010-01-01</strong> to <strong>2026-09-28</strong>. The code that produces
+      Coverage runs <strong>2010-01-01</strong> to <strong>2026-09-27</strong>. The code that produces
       these files is public at
       <a href="https://github.com/SecretSatoshis/Bitcoin-Report-Library">Bitcoin-Report-Library</a> and licensed GPL-3.0; the market data
       it ingests is third-party and keeps the terms of its upstream publishers. Nothing here is
@@ -276,6 +300,13 @@
           <td class="num">25</td>
           <td class="num">4</td>
           <td class="num">1 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/bitcoin_candles.csv.gz">Bitcoin candles</a><br><code>bitcoin_candles.csv.gz</code></td>
+          <td>2010-08-16 → 2026-09-27</td>
+          <td class="num">6,921</td>
+          <td class="num">9</td>
+          <td class="num">131 KB</td>
         </tr>
         <tr>
           <td class="f"><a href="csv/bitcoin_dominance_history.csv">Bitcoin dominance history</a><br><code>bitcoin_dominance_history.csv</code></td>
@@ -341,6 +372,13 @@
           <td class="num">151 KB</td>
         </tr>
         <tr>
+          <td class="f"><a href="csv/master_metrics_data.csv.gz">Master metrics data</a><br><code>master_metrics_data.csv.gz</code></td>
+          <td>2010-01-01 → 2026-09-27</td>
+          <td class="num">6,114</td>
+          <td class="num">567</td>
+          <td class="num">20.2 MB</td>
+        </tr>
+        <tr>
           <td class="f"><a href="csv/model_coefficients.csv">Model coefficients</a><br><code>model_coefficients.csv</code></td>
           <td>2026-09-27 → 2026-09-27</td>
           <td class="num">6</td>
@@ -353,6 +391,13 @@
           <td class="num">18</td>
           <td class="num">14</td>
           <td class="num">4 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/monthly_metrics_data.csv.gz">Monthly metrics data</a><br><code>monthly_metrics_data.csv.gz</code></td>
+          <td>2010-09-01 → 2026-09-01</td>
+          <td class="num">193</td>
+          <td class="num">567</td>
+          <td class="num">748 KB</td>
         </tr>
         <tr>
           <td class="f"><a href="csv/mtd_return_comparison.csv">Mtd return comparison</a><br><code>mtd_return_comparison.csv</code></td>
@@ -377,7 +422,7 @@
         </tr>
         <tr>
           <td class="f"><a href="csv/ohlc_data.csv">Ohlc data</a><br><code>ohlc_data.csv</code></td>
-          <td>2016-12-26 → 2026-09-28</td>
+          <td>2016-12-26 → 2026-09-21</td>
           <td class="num">510</td>
           <td class="num">5</td>
           <td class="num">23 KB</td>
@@ -439,6 +484,13 @@
           <td class="num">0 KB</td>
         </tr>
         <tr>
+          <td class="f"><a href="csv/weekly_metrics_data.csv.gz">Weekly metrics data</a><br><code>weekly_metrics_data.csv.gz</code></td>
+          <td>2010-08-16 → 2026-09-21</td>
+          <td class="num">841</td>
+          <td class="num">567</td>
+          <td class="num">3.1 MB</td>
+        </tr>
+        <tr>
           <td class="f"><a href="csv/ytd_return_comparison.csv">Ytd return comparison</a><br><code>ytd_return_comparison.csv</code></td>
           <td>—</td>
           <td class="num">2</td>
@@ -457,7 +509,7 @@
     </div>
 
     <footer>
-      Updated 2026-09-28. Created by <a href="https://treybrunson.com/">Trey Brunson</a>.
+      Updated 2026-09-27. Created by <a href="https://treybrunson.com/">Trey Brunson</a>.
       Don't trust. Verify.
     </footer>
   </div>

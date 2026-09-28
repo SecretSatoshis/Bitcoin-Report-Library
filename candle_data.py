@@ -9,7 +9,8 @@ from data_validation import validate_calendar, validate_candles
 CANDLE_FILES = ('bitcoin_candles.csv.gz', 'weekly_metrics_data.csv.gz', 'monthly_metrics_data.csv.gz')
 
 
-def build_candle_tables(daily, master, report_date):
+def _cutoff_daily_candles(daily, report_date, label):
+    """Daily candles through the report date, from the first priced day, validated."""
     cutoff = pd.Timestamp(report_date).normalize()
     daily = daily.copy()
     daily.index = pd.to_datetime(daily.index)
@@ -17,29 +18,57 @@ def build_candle_tables(daily, master, report_date):
     # BRK represents the pre-market era as all-zero candles. Never hide later gaps.
     nonzero = daily[['Open', 'High', 'Low', 'Close']].ne(0).any(axis=1)
     daily = daily.loc[nonzero.idxmax():] if nonzero.any() else daily.iloc[:0]
-    validate_candles(daily, 'Chart daily candles')
-    validate_calendar(daily.index, 'Chart daily candles')
-    if daily.index[-1] != cutoff or cutoff not in master.index:
+    validate_candles(daily, label)
+    validate_calendar(daily.index, label)
+    if daily.index[-1] != cutoff:
+        raise ValueError(f'{label} must reach the report date')
+    return daily
+
+
+def period_candles(daily, interval, frequency):
+    """Aggregate validated daily candles into one record per calendar period."""
+    records = []
+    for period, rows in daily.groupby(daily.index.to_period(frequency)):
+        start, end = period.start_time.normalize(), period.end_time.normalize()
+        # The initial incomplete historical bucket has no true period open.
+        if rows.index[0] != start:
+            continue
+        observed = rows.index[-1]
+        records.append({'interval': interval, 'period_start': start, 'period_end': end,
+                        'observation_date': observed, 'complete': observed == end,
+                        'Open': rows.Open.iloc[0], 'High': rows.High.max(),
+                        'Low': rows.Low.min(), 'Close': rows.Close.iloc[-1]})
+    result = pd.DataFrame(records)
+    if result.empty:
+        raise ValueError(f'No {interval} candle history')
+    return result
+
+
+def weekly_ohlc(daily, report_date, start=None):
+    """Monday-start weekly OHLC through the report date, indexed by week start ("Time").
+
+    The open week's Close is the report-date close, never a later partial-day price.
+    ``start`` keeps every week that ends on or after it, so the week containing it is kept.
+    """
+    daily = _cutoff_daily_candles(daily, report_date, 'Weekly OHLC source candles')
+    weeks = period_candles(daily, 'weekly', 'W-SUN')
+    if start is not None:
+        weeks = weeks.loc[weeks.period_end >= pd.Timestamp(start)]
+    result = weeks.set_index(pd.DatetimeIndex(weeks.period_start, name='Time'))
+    return result[['Open', 'High', 'Low', 'Close']]
+
+
+def build_candle_tables(daily, master, report_date):
+    cutoff = pd.Timestamp(report_date).normalize()
+    daily = _cutoff_daily_candles(daily, report_date, 'Chart daily candles')
+    if cutoff not in master.index:
         raise ValueError('Chart candles and master must reach the report date')
     closes = pd.to_numeric(master['price_close'].reindex(daily.index), errors='coerce')
     if not np.allclose(daily.Close, closes, rtol=1e-9, atol=1e-8):
         raise ValueError('Daily candle closes disagree with master prices')
     tables, candles = {}, []
     for interval, frequency, filename in [('daily', 'D', None), ('weekly', 'W-SUN', CANDLE_FILES[1]), ('monthly', 'M', CANDLE_FILES[2])]:
-        records = []
-        for period, rows in daily.groupby(daily.index.to_period(frequency)):
-            start, end = period.start_time.normalize(), period.end_time.normalize()
-            # The initial incomplete historical bucket has no true period open.
-            if rows.index[0] != start:
-                continue
-            observed = rows.index[-1]
-            records.append({'interval': interval, 'period_start': start, 'period_end': end,
-                            'observation_date': observed, 'complete': observed == end,
-                            'Open': rows.Open.iloc[0], 'High': rows.High.max(),
-                            'Low': rows.Low.min(), 'Close': rows.Close.iloc[-1]})
-        result = pd.DataFrame(records)
-        if result.empty:
-            raise ValueError(f'No {interval} candle history')
+        result = period_candles(daily, interval, frequency)
         candles.append(result)
         if filename:
             # Select exact rows, not groupby.last(), which skips null observations.

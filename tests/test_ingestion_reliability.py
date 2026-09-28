@@ -43,7 +43,7 @@ class IngestionReliabilityTests(unittest.TestCase):
 
         empty = FakeResponse(json_data={"data": []})
         with patch.object(data_format.requests, "get", side_effect=[empty, empty]):
-            with self.assertRaisesRegex(RuntimeError, "returned no week1 OHLC"):
+            with self.assertRaisesRegex(RuntimeError, "returned no day1 OHLC"):
                 data_format.get_brk_ohlc()
 
     def test_ohlc_writers_do_not_replace_existing_files_with_empty_data(self):
@@ -183,10 +183,39 @@ class IngestionReliabilityTests(unittest.TestCase):
         ), patch.object(data_format.time, "sleep"):
             result = data_format.get_crypto_data(["ethereum"]).set_index("time")
 
-        self.assertEqual(result.loc["2024-01-06", "ethereum_close"], 2_000.0)
-        self.assertTrue(pd.isna(result.loc["2024-01-07", "ethereum_close"]))
-        self.assertEqual(result.loc["2024-01-06", marker], pd.Timestamp("2024-01-01"))
-        self.assertTrue(pd.isna(result.loc["2024-01-07", marker]))
+        # The 2024-01-01 00:00 UTC point is the close of 2023-12-31.
+        self.assertEqual(result.loc["2023-12-31", "ethereum_close"], 2_000.0)
+        self.assertEqual(result.loc["2024-01-05", "ethereum_close"], 2_000.0)
+        self.assertTrue(pd.isna(result.loc["2024-01-06", "ethereum_close"]))
+        self.assertEqual(result.loc["2024-01-05", marker], pd.Timestamp("2023-12-31"))
+        self.assertTrue(pd.isna(result.loc["2024-01-06", marker]))
+
+    def test_coingecko_points_are_labelled_by_the_day_they_close(self):
+        midnight_ms = 1_704_067_200_000  # 2024-01-01 00:00 UTC
+        intraday_ms = midnight_ms + 14 * 3_600_000  # 2024-01-01 14:00 UTC
+        labels = data_format._coingecko_close_dates([midnight_ms, intraday_ms])
+        self.assertEqual(
+            labels.tolist(),
+            [pd.Timestamp("2023-12-31"), pd.Timestamp("2024-01-01")],
+        )
+
+    def test_dominance_retries_a_rate_limit(self):
+        limited = FakeResponse(status_code=429)
+        success = FakeResponse(
+            json_data={
+                "data": {
+                    "market_cap_percentage": {"btc": 57.5},
+                    "updated_at": 1_704_067_200,
+                }
+            }
+        )
+        with patch.object(
+            data_format.requests, "get", side_effect=[limited, success]
+        ) as get, patch.object(data_format.time, "sleep") as sleep:
+            result = data_format.get_bitcoin_dominance()
+        self.assertEqual(get.call_count, 2)
+        sleep.assert_called_once_with(data_format.COINGECKO_INITIAL_BACKOFF_SECONDS)
+        self.assertEqual(result["bitcoin_dominance"].iloc[0], 57.5)
 
     def test_market_fill_honors_total_source_age_for_prices_and_market_caps(self):
         index = pd.date_range("2024-01-01", periods=10, freq="D")
@@ -476,21 +505,83 @@ class IngestionReliabilityTests(unittest.TestCase):
             pd.Timestamp("2024-01-01"),
         )
 
-    def test_rolling_correlations_do_not_pad_stale_prices(self):
-        index = pd.date_range("2024-01-01", periods=4, freq="D")
+    def test_correlations_pair_returns_over_the_assets_trading_days(self):
+        index = pd.date_range("2024-01-01", periods=40, freq="D")  # Monday start
+        rng = np.random.default_rng(7)
+        btc = pd.Series(100 * np.cumprod(1 + rng.normal(0, 0.03, len(index))), index=index)
+        # SPY tracks BTC's move since its previous trading day exactly, but only
+        # trades Monday-Friday.
+        trading = index[index.dayofweek < 5]
+        spy = btc.loc[trading] / 10
+        marker = data_format._source_observation_column("SPY_close")
+        raw = pd.DataFrame({"price_close": btc, "SPY_close": spy}, index=index)
+        raw[marker] = pd.Series(trading, index=trading).reindex(index)
+        # Mimic the bounded ingestion fill that carries Friday into the weekend.
+        raw[["SPY_close", marker]] = raw[["SPY_close", marker]].ffill(limit=5)
+
+        observed = data_format.observed_market_values(raw, ["price_close", "SPY_close"])
+        self.assertTrue(observed.loc[index.dayofweek >= 5, "SPY_close"].isna().all())
+
+        result = data_format.create_btc_correlation_data(
+            index[-1], {"etfs": ["SPY"]}, observed, periods=[30]
+        )["price_close_30_days"]
+        self.assertAlmostEqual(result.loc["price_close", "SPY_close"], 1.0)
+        self.assertEqual(result.loc["price_close", "price_close"], 1.0)
+
+        # The forward-filled frame would have scored well below 1.
+        padded = data_format.create_btc_correlation_data(
+            index[-1], {"etfs": ["SPY"]}, raw[["price_close", "SPY_close"]], periods=[30]
+        )["price_close_30_days"]
+        self.assertLess(padded.loc["price_close", "SPY_close"], 0.95)
+
+    def test_correlations_are_nan_for_stale_or_short_histories(self):
+        index = pd.date_range("2024-01-01", periods=40, freq="D")
         prices = pd.DataFrame(
             {
-                "price_close": [100.0, 101.0, 102.0, 103.0],
-                "SPY_close": [100.0, np.nan, 120.0, 132.0],
+                "price_close": np.linspace(100.0, 140.0, len(index)),
+                "OLD_close": np.linspace(10.0, 14.0, len(index)),
+                "NEW_close": np.linspace(10.0, 14.0, len(index)),
             },
             index=index,
         )
+        prices.loc[index[-10:], "OLD_close"] = np.nan  # stopped trading 10 days ago
+        prices.loc[index[:25], "NEW_close"] = np.nan  # only 15 days of history
 
-        correlation = data_format.calculate_rolling_correlations(prices, [2])[2]
+        result = data_format.create_btc_correlation_data(
+            index[-1], {"stocks": ["OLD", "NEW"]}, prices, periods=[30]
+        )["price_close_30_days"]
+        self.assertTrue(pd.isna(result.loc["price_close", "OLD_close"]))
+        self.assertTrue(pd.isna(result.loc["price_close", "NEW_close"]))
 
-        self.assertTrue(
-            pd.isna(correlation.loc[index[-1]].loc["price_close", "SPY_close"])
+    def test_raw_brk_csv_stops_at_the_cutoff(self):
+        csv_text = (
+            "timestamp,price_close\n"
+            "1704067200,42000\n"  # 2024-01-01
+            "1704153600,43000\n"  # 2024-01-02 (partial day)
         )
+        with tempfile.TemporaryDirectory() as directory, patch.object(
+            data_format, "BRK_METRICS", ["timestamp", "price_close"]
+        ), patch.object(
+            data_format.requests, "get", return_value=FakeResponse(text=csv_text)
+        ):
+            out_path = Path(directory) / "raw.csv"
+            frame = data_format.get_brk_onchain(
+                "2024-01-01", out_path=str(out_path), verbose=False,
+                cutoff_date="2024-01-01",
+            )
+            saved = out_path.read_text(encoding="utf-8").strip().splitlines()
+        self.assertEqual(saved, ["timestamp,price_close", "1704067200,42000"])
+        self.assertEqual(len(frame), 2)
+
+    def test_onchain_freshness_requires_the_report_date_row(self):
+        index = pd.date_range("2024-01-01", periods=5, freq="D")
+        data = pd.DataFrame(
+            {metric: 1.0 for metric in data_format.REQUIRED_ONCHAIN_METRICS},
+            index=index,
+        )
+        data_format.assert_onchain_freshness(data, index[-1])
+        with self.assertRaisesRegex(RuntimeError, "stale"):
+            data_format.assert_onchain_freshness(data, index[-1] + pd.Timedelta(days=1))
 
 
 if __name__ == "__main__":

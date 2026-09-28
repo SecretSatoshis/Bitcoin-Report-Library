@@ -63,6 +63,9 @@ data = data_format.get_data(
 ## filling those would turn a missing or malformed BRK response into a silent repeat of
 ## yesterday's values, so they are validated instead.
 data_format.warn_on_stale_market_data(data, report_date)
+## Correlations need each asset's real trading days, so capture them before the fill
+## turns weekends and holidays into carried-forward closes.
+correlation_df = data_format.observed_market_values(data, correlation_data)
 data = data_format.forward_fill_market_data(data)
 data_format.assert_onchain_freshness(data, report_date)
 data_format.assert_no_internal_onchain_gaps(data, report_date)
@@ -70,19 +73,19 @@ data_format.assert_reference_data_fresh(report_date)
 data_format.assert_price_outlook_current(report_date)
 data_format.warn_on_stale_miner_efficiency(data, report_date)
 
-## BRK OHLC data
-ohlc_data = data_format.get_brk_ohlc(index="week1", start="2017-01-01")
-ohlc_data.index = pd.to_datetime(ohlc_data.index)
-if ohlc_data.index.tz is not None:
-    ohlc_data.index = ohlc_data.index.tz_convert(None)
-data_format.assert_ohlc_usable(ohlc_data, label="Weekly BRK OHLC")
-
+## BRK OHLC data — daily candles are the single source; weekly candles are aggregated
+## from them so the open week is cut off at the report date like every other export.
 daily_ohlc_start = "2009-01-03"
 daily_ohlc_data = data_format.get_brk_ohlc(index="day1", start=daily_ohlc_start)
 daily_ohlc_data.index = pd.to_datetime(daily_ohlc_data.index)
 if daily_ohlc_data.index.tz is not None:
     daily_ohlc_data.index = daily_ohlc_data.index.tz_convert(None)
 data_format.assert_ohlc_usable(daily_ohlc_data, label="Daily BRK OHLC")
+
+from candle_data import weekly_ohlc
+WEEKLY_OHLC_START = "2017-01-01"
+ohlc_data = weekly_ohlc(daily_ohlc_data, report_date, start=WEEKLY_OHLC_START)
+data_format.assert_ohlc_usable(ohlc_data, label="Weekly OHLC")
 
 # Calculate Custom Metrics
 data = data_format.calculate_custom_on_chain_metrics(data)
@@ -132,10 +135,7 @@ report_data = report_data.merge(
     cagr_results[available_cagr], left_index=True, right_index=True, how="left"
 )
 
-## Create Correlation Data (renamed to avoid variable collision)
-correlation_df = data[correlation_data]
-
-## Create Bitcoin Correlation Data
+## Create Bitcoin Correlation Data (correlation_df was captured before the fill)
 correlation_results = data_format.create_btc_correlation_data(
     report_date, tickers, correlation_df
 )

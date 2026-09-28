@@ -84,7 +84,9 @@ class CumulativeOnchainGapTests(unittest.TestCase):
 
     def frame(self) -> pd.DataFrame:
         index = pd.date_range("2024-01-01", periods=30, freq="D")
-        return pd.DataFrame({"coinbase_sum_24h_usd": 1.0}, index=index)
+        return pd.DataFrame(
+            {"coinbase_sum_24h_usd": 1.0, "supply": 19_000_000.0}, index=index
+        )
 
     def test_complete_series_passes(self):
         data_format.assert_no_internal_onchain_gaps(self.frame(), "2024-01-30")
@@ -96,6 +98,12 @@ class CumulativeOnchainGapTests(unittest.TestCase):
             data_format.assert_no_internal_onchain_gaps(frame, "2024-01-30")
         self.assertIn("internal gap", str(ctx.exception))
         self.assertIn("2024-01-11", str(ctx.exception))
+
+    def test_internal_supply_gap_raises(self):
+        frame = self.frame()
+        frame.iloc[12, 1] = np.nan
+        with self.assertRaisesRegex(RuntimeError, "supply has an internal gap"):
+            data_format.assert_no_internal_onchain_gaps(frame, "2024-01-30")
 
     def test_leading_nulls_are_allowed(self):
         frame = self.frame()

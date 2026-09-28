@@ -6,7 +6,9 @@ from unittest.mock import patch
 from contextlib import ExitStack
 import numpy as np
 import pandas as pd
+import json
 import data_format as ingest
+from candle_data import weekly_ohlc
 import report_tables as tables
 import validate_outputs as release
 from data_validation import validate_calendar
@@ -126,3 +128,49 @@ class ReviewFixTests(unittest.TestCase):
             release._validate_review_contracts({'fundamentals_table.csv': fundamentals}, output, dates[-1], errors)
         self.assertTrue(any('complete' in error for error in errors))
         self.assertTrue(any('fundamentals_table.csv' in error for error in errors))
+
+
+class SecondReviewFixTests(unittest.TestCase):
+    def test_cagr_uses_calendar_years_across_leap_days(self):
+        dates = pd.date_range('2020-01-01', '2024-03-01')
+        values = pd.DataFrame({'price_close': np.arange(1.0, len(dates) + 1)}, index=dates)
+        cagr = ingest.calculate_rolling_cagr_for_all_columns(values, 4)
+        start = values.loc['2020-03-01', 'price_close']
+        end = values.loc['2024-03-01', 'price_close']
+        expected = ((end / start) ** 0.25 - 1) * 100
+        self.assertAlmostEqual(cagr.loc['2024-03-01', 'price_close_4_Year_CAGR'], expected)
+
+    def test_weekly_ohlc_is_cut_off_at_the_report_date(self):
+        dates = pd.date_range('2024-01-01', '2024-01-17')  # Monday start
+        close = np.arange(100.0, 100.0 + len(dates))
+        daily = pd.DataFrame({'Open': close, 'High': close + 5, 'Low': close - 5,
+                              'Close': close}, index=dates)
+        weekly = weekly_ohlc(daily, '2024-01-16', start='2024-01-03')
+        self.assertEqual(weekly.index.name, 'Time')
+        self.assertEqual(list(weekly.index), list(pd.to_datetime(['2024-01-01', '2024-01-08', '2024-01-15'])))
+        # The open week closes on the report date, not on the later partial day.
+        self.assertEqual(weekly['Close'].iloc[-1], daily.loc['2024-01-16', 'Close'])
+        with self.assertRaisesRegex(ValueError, 'report date'):
+            weekly_ohlc(daily, '2024-01-20')
+
+    def test_validator_reads_the_report_date_from_the_manifest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'release_manifest.json'
+            path.write_text(json.dumps({'report_date': '2026-09-26'}))
+            # Generation crossed UTC midnight: the clock now says 09-27.
+            self.assertEqual(release._manifest_report_date(directory, '2026-09-27'), ('2026-09-26', None))
+            date, error = release._manifest_report_date(directory, '2026-09-29')
+            self.assertIsNone(date)
+            self.assertIn('not a current release', error)
+            path.unlink()
+            self.assertIsNone(release._manifest_report_date(directory, '2026-09-27')[0])
+
+    def test_release_rejects_a_raw_brk_row_after_the_report_date(self):
+        stamps = (pd.date_range('2024-01-01', periods=5) - pd.Timestamp(0)) // pd.Timedelta(seconds=1)
+        with tempfile.TemporaryDirectory() as directory:
+            pd.DataFrame({'timestamp': stamps, 'price_close': 1.0}).to_csv(
+                Path(directory) / 'brk_onchain_raw.csv', index=False)
+            errors = []
+            release._validate_index_cutoff(Path(directory), 'brk_onchain_raw.csv', 'timestamp',
+                                           pd.Timestamp('2024-01-04'), errors, unit='s')
+        self.assertTrue(any('2024-01-05' in error for error in errors))

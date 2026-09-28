@@ -93,6 +93,53 @@ def _source_observation_column(value_column: str) -> str:
     return f"{_SOURCE_OBSERVATION_DATE_PREFIX}{value_column}"
 
 
+# CoinGecko's free tier rate-limits aggressively. Every CoinGecko call shares one bounded
+# retry policy so a single 429 cannot abort the release (dominance is release-blocking).
+COINGECKO_MAX_ATTEMPTS = 3
+COINGECKO_INITIAL_BACKOFF_SECONDS = 5
+
+
+def _get_json_with_retry(
+    url: str,
+    params: Optional[dict] = None,
+    max_attempts: int = COINGECKO_MAX_ATTEMPTS,
+    initial_backoff_seconds: float = COINGECKO_INITIAL_BACKOFF_SECONDS,
+):
+    """GET a JSON payload, retrying rate limits, 5xx responses and connection errors.
+
+    Other HTTP errors are raised immediately. The final failure is re-raised so callers
+    keep their existing error handling.
+    """
+    delay = initial_backoff_seconds
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = requests.get(url, params=params, timeout=API_TIMEOUT)
+            response.raise_for_status()
+            return response.json()
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else None
+            transient = status == 429 or (status is not None and 500 <= status <= 599)
+            if not transient or attempt >= max_attempts:
+                raise
+        except (requests.ConnectionError, requests.Timeout):
+            if attempt >= max_attempts:
+                raise
+        time.sleep(delay)
+        delay *= 2
+
+
+def _coingecko_close_dates(timestamps_ms) -> pd.Series:
+    """Label CoinGecko daily points with the UTC day they close.
+
+    Daily ``market_chart`` points are stamped at 00:00 UTC, so the value at day D
+    midnight is the close of D-1 — the same convention as BRK's ``price_close``, which
+    labels a day by its own close. The trailing intraday point (the live price) stays on
+    its own, in-progress day and is removed by the report-date cutoff.
+    """
+    times = pd.to_datetime(pd.Series(timestamps_ms), unit="ms")
+    return (times - pd.Timedelta(milliseconds=1)).dt.normalize()
+
+
 # Get Data
 
 
@@ -140,10 +187,7 @@ def get_bitcoin_dominance() -> pd.DataFrame:
     """
     url = "https://api.coingecko.com/api/v3/global"
     try:
-        response = requests.get(url, timeout=API_TIMEOUT)
-        response.raise_for_status()
-
-        data = response.json()
+        data = _get_json_with_retry(url)
         bitcoin_dominance = data["data"]["market_cap_percentage"]["btc"]
         timestamp = pd.to_datetime(data["data"]["updated_at"], unit="s", utc=True)
 
@@ -283,12 +327,15 @@ def assert_ohlc_usable(ohlc_data: pd.DataFrame, label: str = "OHLC") -> None:
     validate_candles(ohlc_data, label)
 
 
-def get_brk_ohlc(index: str = "week1", start: str = "2017-01-01") -> pd.DataFrame:
+def get_brk_ohlc(index: str = "day1", start: str = "2009-01-03") -> pd.DataFrame:
     """
     Fetch historical Bitcoin OHLC data from BRK.
 
+    The pipeline fetches daily candles only; weekly and monthly candles are aggregated
+    from them (candle_data.period_candles) so every period is cut off at the report date.
+
     Parameters:
-    index (str): BRK index to fetch, such as "week1" or "day1".
+    index (str): BRK index to fetch, such as "day1" or "week1".
     start (str): Start date for the series query.
 
     Returns:
@@ -356,12 +403,11 @@ def get_btc_trade_volume_14d() -> pd.DataFrame:
     params = {"vs_currency": "usd", "days": "14", "interval": "daily"}
 
     try:
-        response = requests.get(url, params=params, timeout=API_TIMEOUT)
-        response.raise_for_status()
-
-        volume_data = response.json()["total_volumes"]
+        volume_data = _get_json_with_retry(url, params=params)["total_volumes"]
         df = pd.DataFrame(volume_data, columns=["time", "btc_trading_volume"])
-        df["time"] = pd.to_datetime(df["time"], unit="ms")
+        # The 00:00 UTC point is the 24h volume of the day that just closed.
+        df["time"] = _coingecko_close_dates(df["time"])
+        df = df.drop_duplicates(subset=["time"], keep="last")
 
         return df
 
@@ -384,73 +430,47 @@ def get_crypto_data(ticker_list: list) -> pd.DataFrame:
     pd.DataFrame: DataFrame containing merged close prices, volumes, and market caps.
     """
     data_frames = []  # Collect all DataFrames for efficient concatenation
-    max_retries = 3  # Bound optional-source failures within the workflow budget
-    initial_retry_delay = 5  # Initial delay in seconds for retry attempts
 
     for ticker in ticker_list:
-        success = False
-        retries = 0
-        retry_delay = initial_retry_delay
+        try:
+            url = f"https://api.coingecko.com/api/v3/coins/{ticker}/market_chart"
+            params = {"vs_currency": "usd", "days": "365", "interval": "daily"}
+            json_data = _get_json_with_retry(url, params=params)
 
-        while not success and retries < max_retries:
-            try:
-                # Define API endpoint and parameters
-                url = f"https://api.coingecko.com/api/v3/coins/{ticker}/market_chart"
-                params = {"vs_currency": "usd", "days": "365", "interval": "daily"}
-                response = requests.get(url, params=params, timeout=API_TIMEOUT)
-                response.raise_for_status()
+            # Parse JSON response into DataFrames
+            prices = pd.DataFrame(
+                json_data["prices"], columns=["time", f"{ticker}_close"]
+            )
+            volumes = pd.DataFrame(
+                json_data["total_volumes"], columns=["time", f"{ticker}_volume"]
+            )
+            market_caps = pd.DataFrame(
+                json_data["market_caps"], columns=["time", f"{ticker}_market_cap"]
+            )
 
-                # Parse JSON response into DataFrames
-                json_data = response.json()
-                prices = pd.DataFrame(
-                    json_data["prices"], columns=["time", f"{ticker}_close"]
-                )
-                volumes = pd.DataFrame(
-                    json_data["total_volumes"], columns=["time", f"{ticker}_volume"]
-                )
-                market_caps = pd.DataFrame(
-                    json_data["market_caps"], columns=["time", f"{ticker}_market_cap"]
-                )
+            # Label each point by the UTC day it closes so it aligns with BRK's
+            # price_close for the same date.
+            for frame in (prices, volumes, market_caps):
+                frame["time"] = _coingecko_close_dates(frame["time"])
 
-                # Convert timestamps to datetime
-                prices["time"] = pd.to_datetime(prices["time"], unit="ms")
-                volumes["time"] = pd.to_datetime(volumes["time"], unit="ms")
-                market_caps["time"] = pd.to_datetime(market_caps["time"], unit="ms")
+            # Merge DataFrames on the 'time' column
+            merged_data = pd.merge(prices, volumes, on="time")
+            merged_data = pd.merge(merged_data, market_caps, on="time")
+            merged_data = merged_data.drop_duplicates(subset=["time"], keep="last")
+            merged_data.set_index("time", inplace=True)
 
-                # Merge DataFrames on the 'time' column
-                merged_data = pd.merge(prices, volumes, on="time")
-                merged_data = pd.merge(merged_data, market_caps, on="time")
-                merged_data.set_index("time", inplace=True)
+            # Retain the true API observation date through daily reindexing. Without
+            # this marker, a second fill after merging could mistake a repeated value
+            # for a fresh observation and extend it beyond the configured age limit.
+            for value_column in list(merged_data.columns):
+                source_dates = pd.Series(
+                    merged_data.index, index=merged_data.index
+                ).where(merged_data[value_column].notna())
+                merged_data[_source_observation_column(value_column)] = source_dates
 
-                # Retain the true API observation date through daily reindexing. Without
-                # this marker, a second fill after merging could mistake a repeated value
-                # for a fresh observation and extend it beyond the configured age limit.
-                for value_column in list(merged_data.columns):
-                    source_dates = pd.Series(
-                        merged_data.index, index=merged_data.index
-                    ).where(merged_data[value_column].notna())
-                    merged_data[_source_observation_column(value_column)] = source_dates
-
-                # Collect the merged data
-                data_frames.append(merged_data)
-
-                success = True  # Set success flag to True after successful data fetch
-
-            except requests.HTTPError as http_err:
-                if http_err.response.status_code == 429:
-                    retries += 1
-                    if retries < max_retries:
-                        time.sleep(retry_delay)
-                        retry_delay *= 2
-                else:
-                    print(f"HTTP error for {ticker}: {http_err}")
-                    break  # Break the loop for non-429 HTTP errors
-            except Exception as err:
-                print(f"An error occurred for {ticker}: {err}")
-                break
-
-        if not success:
-            print(f"Failed to fetch data for {ticker} after {max_retries} retries.")
+            data_frames.append(merged_data)
+        except Exception as err:
+            print(f"Failed to fetch data for {ticker}: {err}")
 
         # Delay between requests to avoid hitting API rate limits
         time.sleep(1)
@@ -1218,10 +1238,15 @@ def get_brk_onchain(
     save_csv: bool = True,
     out_path: str = "csv/brk_onchain_raw.csv",
     verbose: bool = True,
+    cutoff_date=None,
 ) -> pd.DataFrame:
     """
     Pull BRK metrics, align by timestamp (included in every chunk), optionally save raw CSV,
     then return a pandas DataFrame with a 'time' column using native BRK field names.
+
+    ``cutoff_date`` limits the saved raw CSV to rows on or before that UTC day. BRK also
+    returns the partial, in-progress day, whose 24h aggregates must not be published. The
+    returned frame is not truncated; main.py applies the cutoff to its own exports.
     """
 
     metric_list = BRK_METRICS[:]  # copy
@@ -1282,17 +1307,22 @@ def get_brk_onchain(
         print(f"[BRK] cols: {ordered_cols}")
 
     # build a single CSV (date derived later in your pipeline; we keep time + metrics)
-    lines = []
-    lines.append(",".join(ordered_cols))
+    header_line = ",".join(ordered_cols)
+    row_lines = []
     for ts in sorted(data, key=lambda x: int(float(x))):
         row = [data[ts].get(c, "") for c in ordered_cols]
-        lines.append(",".join(map(str, row)))
-    merged_csv = "\n".join(lines)
+        row_lines.append((int(float(ts)), ",".join(map(str, row))))
+    merged_csv = "\n".join([header_line] + [line for _, line in row_lines])
 
     if save_csv:
+        published = row_lines
+        if cutoff_date is not None:
+            cutoff_end = pd.to_datetime(cutoff_date).normalize() + pd.Timedelta(days=1)
+            cutoff_seconds = int(cutoff_end.timestamp())
+            published = [(ts, line) for ts, line in row_lines if ts < cutoff_seconds]
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         with open(out_path, "w", newline="") as f:
-            f.write(merged_csv + "\n")
+            f.write("\n".join([header_line] + [line for _, line in published]) + "\n")
         if verbose:
             print(f"[BRK] saved raw CSV -> {out_path}")
 
@@ -1356,7 +1386,7 @@ REQUIRED_ONCHAIN_METRICS = [
 def _ordinary_market_columns(data: pd.DataFrame) -> list:
     """Return externally observed non-miner series subject to the short fill budget."""
     onchain_columns = {metric for metric in BRK_METRICS if metric != "timestamp"}
-    excluded = onchain_columns | set(MINER_EFFICIENCY_COLUMNS) | {"block_reward"}
+    excluded = onchain_columns | set(MINER_EFFICIENCY_COLUMNS)
     return [
         column
         for column in data.columns
@@ -1615,8 +1645,10 @@ def assert_onchain_freshness(data: pd.DataFrame, report_date, metrics=None) -> N
             "Upstream fetch returned nothing usable."
         )
 
+    # Every report table reads the exact report-date row, so any lag must fail here with
+    # the real cause rather than later as a KeyError or a "missing fundamental".
     as_of = available.max()
-    if (report_date - as_of).days > 1:
+    if as_of != report_date:
         raise RuntimeError(
             f"On-chain data is stale: latest row is {as_of.date()}, report date is "
             f"{report_date.date()}. Refusing to publish a report on stale data."
@@ -1638,6 +1670,10 @@ def assert_onchain_freshness(data: pd.DataFrame, report_date, metrics=None) -> N
 # permanently shifts every subsequent total, and the resulting curve looks entirely
 # plausible, so it has to be caught at ingest rather than eyeballed downstream.
 CUMULATIVE_ONCHAIN_INPUTS = ["coinbase_sum_24h_usd"]
+
+# Series that every `*_btc_price` and per-coin metric divides by. They are never filled,
+# so a hole must fail ingest rather than publish a gap (or, worse, a repeated value).
+GAP_CHECKED_ONCHAIN_INPUTS = CUMULATIVE_ONCHAIN_INPUTS + ["supply"]
 
 
 def assert_price_outlook_current(report_date, outlook_year: int = PRICE_OUTLOOK_YEAR) -> None:
@@ -1705,17 +1741,18 @@ def assert_no_internal_onchain_gaps(
     data: pd.DataFrame, report_date, columns=None
 ) -> None:
     """
-    Verify cumulative on-chain inputs have no holes between first and last observation.
+    Verify gap-checked on-chain inputs have no holes between first and last observation.
 
     Leading nulls before a series begins are expected and contribute zero. A gap *inside*
     the observed range is not recoverable by zero-filling: `RevAllTimeUSD` and every
     thermocap series derived from it would be understated for all later dates with no
-    visible artefact.
+    visible artefact. `supply` is checked for the same reason: it is never filled, and
+    every per-coin price series divides by it.
 
     Raises:
     RuntimeError: If any monitored column has an internal gap on or before the report date.
     """
-    columns = columns or CUMULATIVE_ONCHAIN_INPUTS
+    columns = columns or GAP_CHECKED_ONCHAIN_INPUTS
     report_date = pd.to_datetime(report_date).normalize()
     from data_validation import validate_calendar
     validate_calendar(data.index, "On-chain data")
@@ -1741,9 +1778,9 @@ def assert_no_internal_onchain_gaps(
 
     if problems:
         raise RuntimeError(
-            "Cumulative on-chain inputs are incomplete: "
+            "Gap-checked on-chain inputs are incomplete: "
             + "; ".join(problems)
-            + ". Refusing to publish rather than zero-filling a running total."
+            + ". Refusing to publish rather than filling a running total or divisor."
         )
 
 
@@ -1783,7 +1820,7 @@ def get_data(
                     dominance is aligned to report_date instead of the fetch timestamp.
     """
     # Fetch data
-    coindata = get_brk_onchain(start_date)
+    coindata = get_brk_onchain(start_date, cutoff_date=report_date)
     prices = get_price(tickers, start_date)
     marketcaps = get_marketcap(tickers, start_date)
     fear_greed_index = get_fear_and_greed_index()
@@ -1867,10 +1904,6 @@ def get_data(
         data = data.loc[:, ~data.columns.duplicated()]
     if data.index.duplicated().any():
         data = data[~data.index.duplicated()]
-
-    # Hayes needs per-block subsidy in BTC/block. Infer it from Bitcoin's
-    # deterministic halving schedule rather than external data.
-    data["block_reward"] = _bitcoin_block_subsidy_from_time(data.index)
 
     return data
 
@@ -2190,23 +2223,16 @@ def calculate_btc_price_to_surpass_metal_categories(
     Returns:
     pd.DataFrame: DataFrame with added columns for BTC prices needed to surpass metal categories.
     """
-    # Ensure 'supply' is forward filled to avoid NaN values
-    data["supply"] = data["supply"].ffill()
-
-    # Early return if 'supply' for the latest row is zero or NaN to avoid division by zero
-    if data["supply"].iloc[-1] == 0 or pd.isna(data["supply"].iloc[-1]):
-        print(
-            "Warning: 'supply' is zero or NaN for the latest row. Skipping calculations."
-        )
-        return data
+    # On-chain supply is never filled: `assert_no_internal_onchain_gaps` guarantees it has
+    # no interior holes, and any row without a positive supply publishes NaN rather than a
+    # value divided by a copied-forward or zero supply.
+    supply = data["supply"].where(data["supply"] > 0)
 
     new_columns = {}  # Use a dictionary to store new columns
 
     # Calculating BTC prices required to match or surpass gold market cap
     gold_marketcap_billion_usd = data["gold_marketcap_billion_usd"].iloc[-1]
-    new_columns["gold_marketcap_btc_price"] = (
-        gold_marketcap_billion_usd / data["supply"]
-    )
+    new_columns["gold_marketcap_btc_price"] = gold_marketcap_billion_usd / supply
 
     # Iterating through gold supply breakdown to calculate BTC prices for specific categories
     for _, row in gold_supply_breakdown.iterrows():
@@ -2214,13 +2240,11 @@ def calculate_btc_price_to_surpass_metal_categories(
         percentage_of_market = row["Percentage Of Market"] / 100.0
         new_columns[f"gold_{category}_marketcap_btc_price"] = (
             gold_marketcap_billion_usd * percentage_of_market
-        ) / data["supply"]
+        ) / supply
 
     # Silver market cap calculations
     silver_marketcap_billion_usd = data["silver_marketcap_billion_usd"].iloc[-1]
-    new_columns["silver_marketcap_btc_price"] = (
-        silver_marketcap_billion_usd / data["supply"]
-    )
+    new_columns["silver_marketcap_btc_price"] = silver_marketcap_billion_usd / supply
 
     # Convert the dictionary to a DataFrame and concatenate it with the original DataFrame
     new_columns_df = pd.DataFrame(new_columns, index=data.index)
@@ -2504,7 +2528,8 @@ def electric_price_models(data):
     # forward-filled daily from the Google Sheet.
     efficiency_j_gh = data["cm_efficiency_j_gh"]
 
-    # Hayes uses deterministic protocol subsidy inferred from halving dates.
+    # Hayes uses deterministic protocol subsidy inferred from halving dates. This is the
+    # only place block_reward is derived.
     data["block_reward"] = _bitcoin_block_subsidy_from_time(data.index)
 
     # H/s ÷ 1e9 gives GH/s; multiplying by J/GH gives J/s (watts).
@@ -2615,12 +2640,17 @@ def calculate_rolling_cagr_for_all_columns(data, years):
     Returns:
     pd.DataFrame: DataFrame containing the calculated CAGR for each column.
     """
+    if not isinstance(data.index, pd.DatetimeIndex):
+        raise ValueError("Data index must be a DatetimeIndex.")
+
     # Ensure that all data is numeric by coercing non-numeric values to NaN
     data = data.apply(pd.to_numeric, errors="coerce")
 
-    # Calculate the start value for CAGR by shifting data backward by the number of years in days
-    days_per_year = 365
-    start_value = data.shift(int(years * days_per_year))
+    # Look up the same calendar date `years` earlier, as calculate_yoy_change does. A
+    # fixed 365-day row shift ignores leap days, so a "4 Year" window spans 1,460 days
+    # instead of 1,461. DateOffset maps February 29 to February 28 in a common year.
+    start_value = data.reindex(data.index - pd.DateOffset(years=years))
+    start_value.index = data.index
 
     # Replace zero start values with NaN to avoid ZeroDivisionError
     # (CAGR from zero is mathematically undefined)
@@ -2911,101 +2941,118 @@ def run_data_analysis(data: pd.DataFrame, start_date: str, periods: Optional[lis
 # Create Market Statistics
 
 
-def calculate_rolling_correlations(data, periods):
+CORRELATION_PERIODS = [7, 30, 90, 365]
+
+# Fewest paired returns a window may hold and still publish a correlation.
+MIN_CORRELATION_RETURNS = 3
+
+
+def observed_market_values(data: pd.DataFrame, columns: list) -> pd.DataFrame:
+    """Return `columns` with every value that was not a real source observation masked.
+
+    Market fetchers bridge weekends and holidays with bounded fills and record each value's
+    true observation date in a temporary marker column. Keeping only rows whose marker
+    equals the row's own date recovers the asset's actual trading days, so a carried-forward
+    Friday close cannot pose as a flat Saturday. Columns without a marker (on-chain series
+    such as ``price_close``) are returned unchanged. Must run before
+    ``forward_fill_market_data`` removes the markers.
     """
-    Calculates rolling return correlations for specified periods.
+    frame = data.reindex(columns=columns).copy()
+    row_dates = pd.Series(_normalized_index(data), index=data.index)
+    for column in columns:
+        marker_column = _source_observation_column(column)
+        if marker_column not in data.columns:
+            continue
+        source_dates = pd.to_datetime(data[marker_column], errors="coerce").dt.normalize()
+        frame[column] = frame[column].where(source_dates.eq(row_dates))
+    return frame
 
-    Parameters:
-    data (pd.DataFrame): DataFrame containing historical daily price data for assets as columns.
-    periods (list): List of integers representing rolling window sizes in days.
 
-    Returns:
-    dict: Dictionary where keys are periods and values are DataFrames of rolling correlations.
+def _paired_return_correlation(btc, asset, as_of, period):
+    """Correlate BTC and one asset over returns measured between the asset's own observations.
+
+    Both returns in each pair span the same interval (e.g. Friday to Monday for an equity),
+    so weekends neither add fake zero returns nor misalign the Monday move. The window must
+    be fully covered and the asset must have traded recently; otherwise the result is NaN.
     """
-    # Never let pct_change silently pad NaNs left by the bounded ingestion fills. Doing
-    # so would recreate a zero return for stale assets and contaminate correlations.
-    returns = data.pct_change(fill_method=None)
+    pair = pd.concat([btc, asset], axis=1).loc[:as_of].dropna()
+    if pair.empty:
+        return np.nan
+    window_start = as_of - pd.Timedelta(days=period)
+    stale_before = as_of - pd.Timedelta(days=MARKET_DATA_MAX_FFILL_DAYS)
+    if pair.index[0] > window_start or pair.index[-1] < stale_before:
+        return np.nan
 
-    # Initialize a dictionary to store rolling correlations for each period
-    correlations = {}
-    for period in periods:
-        # Calculate rolling correlation of returns
-        correlations[period] = returns.rolling(window=period).corr()
-
-    return correlations
+    returns = (
+        pair.pct_change(fill_method=None)
+        .replace([np.inf, -np.inf], np.nan)
+        .loc[lambda frame: frame.index > window_start]
+        .dropna()
+    )
+    if len(returns) < MIN_CORRELATION_RETURNS:
+        return np.nan
+    return returns.iloc[:, 0].corr(returns.iloc[:, 1])
 
 
 # Calculate Custom Datasets
 
 
-def create_btc_correlation_data(report_date, tickers, correlations_data):
+def create_btc_correlation_data(
+    report_date, tickers, correlations_data, periods=CORRELATION_PERIODS
+):
     """
-    Calculate Bitcoin's rolling correlation coefficients with all tracked assets for a specific date.
+    Calculate Bitcoin's return correlation with every tracked asset as of the report date.
 
-    This function computes Bitcoin's price correlation with stocks, ETFs, commodities, forex, and
-    altcoins across four rolling windows (7, 30, 90, 365 days). Correlations are used in performance
-    tables to show which assets move together with Bitcoin. Values range from -1 (perfect negative
-    correlation) to +1 (perfect positive correlation).
-
-    The function handles missing data gracefully by using the nearest available date if the exact
-    report_date is not in the dataset (useful for weekends/holidays).
+    For each asset, returns are measured between consecutive dates on which the asset has a
+    real observation, and BTC's return is measured over exactly the same span. Windows are
+    calendar-day lookbacks (7, 30, 90, 365 days) ending at the as-of date, which is the
+    report date or, if absent, the latest earlier row.
 
     Parameters:
-    report_date (str or pd.Timestamp): Target date for correlation snapshot in 'YYYY-MM-DD' format.
-                                       If date not available, uses nearest prior date.
-    tickers (dict): Asset ticker dictionary from data_definitions.py with structure:
-                    {"stocks": [...], "etfs": [...], "indices": [...], "commodities": [...],
-                     "forex": [...], "crypto": [...]}.
-    correlations_data (pd.DataFrame): DataFrame with DatetimeIndex containing price_close (Bitcoin)
-                                      and {ticker}_close columns for all assets. Typically filtered
-                                      to correlation_data columns from data_definitions.py.
+    report_date (str or pd.Timestamp): As-of date for the correlation snapshot.
+    tickers (dict): Asset ticker dictionary from data_definitions.py.
+    correlations_data (pd.DataFrame): DatetimeIndex frame with price_close and {ticker}_close
+                                      columns holding only real observations — use
+                                      ``observed_market_values`` before forward-filling.
 
     Returns:
-    dict: Dictionary with keys: "price_close_7_days", "price_close_30_days", "price_close_90_days",
-          "price_close_365_days". Each value is a one-row pandas DataFrame with:
-          - Index: Asset column names ({ticker}_close)
-          - Values: Correlation coefficient with Bitcoin (-1 to +1)
-          Missing data returns NaN. Bitcoin's correlation with itself is always 1.0.
+    dict: Keys "price_close_{period}_days". Each value is a one-row DataFrame indexed
+          ["price_close"] with one column per asset ({ticker}_close); values run -1 to +1
+          and are NaN when the window lacks coverage. Bitcoin's own correlation is 1.0.
     """
     report_date = pd.to_datetime(report_date)
     all_tickers = [ticker for ticker_list in tickers.values() for ticker in ticker_list]
     ticker_list_with_suffix = ["price_close"] + [
         f"{ticker}_close" for ticker in all_tickers
     ]
+    ticker_list_with_suffix = list(dict.fromkeys(ticker_list_with_suffix))
 
     filtered_data = correlations_data.reindex(columns=ticker_list_with_suffix).dropna(
         subset=["price_close"]
     )
+    filtered_data = filtered_data.apply(pd.to_numeric, errors="coerce").sort_index()
 
-    if filtered_data.empty:
-        empty_corr = pd.DataFrame(index=["price_close"], columns=ticker_list_with_suffix, dtype=float)
-        return {f"price_close_{p}_days": empty_corr for p in [7, 30, 90, 365]}
-
-    correlations = calculate_rolling_correlations(
-        filtered_data, periods=[7, 30, 90, 365]
-    )
-    if report_date in filtered_data.index:
-        closest_date = report_date
-    else:
-        prior_dates = filtered_data.index[filtered_data.index <= report_date]
-        closest_date = (
-            prior_dates.max() if len(prior_dates) else filtered_data.index.min()
+    btc_correlations = {
+        f"price_close_{p}_days": pd.DataFrame(
+            index=["price_close"], columns=ticker_list_with_suffix, dtype=float
         )
+        for p in periods
+    }
+    available = filtered_data.index[filtered_data.index <= report_date]
+    if len(available) == 0:
+        return btc_correlations
+    as_of = available.max()
 
-    btc_correlations = {}
-    for period in [7, 30, 90, 365]:
-        corr_df = correlations[period]
-        try:
-            if report_date in corr_df.index:
-                btc_correlations[f"price_close_{period}_days"] = corr_df.loc[
-                    report_date
-                ].loc[["price_close"]]
-            else:
-                btc_correlations[f"price_close_{period}_days"] = corr_df.loc[
-                    closest_date
-                ].loc[["price_close"]]
-        except KeyError:
-            btc_correlations[f"price_close_{period}_days"] = pd.DataFrame(index=["price_close"], columns=ticker_list_with_suffix, dtype=float)
+    btc = filtered_data["price_close"]
+    for period in periods:
+        result = btc_correlations[f"price_close_{period}_days"]
+        for column in ticker_list_with_suffix:
+            if column == "price_close":
+                result.loc["price_close", column] = 1.0
+                continue
+            result.loc["price_close", column] = _paired_return_correlation(
+                btc, filtered_data[column], as_of, period
+            )
 
     return btc_correlations
 

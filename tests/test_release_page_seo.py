@@ -7,7 +7,6 @@ stale date or an invalid Dataset field fails the build rather than shipping.
 
 from __future__ import annotations
 
-import csv
 import json
 import re
 import unittest
@@ -17,19 +16,16 @@ ROOT = Path(__file__).resolve().parents[1]
 INDEX = ROOT / "index.html"
 SITEMAP = ROOT / "sitemap.xml"
 BASE = "https://secretsatoshis.github.io/Bitcoin-Report-Library"
-DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 def latest_csv_date() -> str:
-    latest = ""
-    for path in (ROOT / "csv").glob("*.csv"):
-        with path.open(encoding="utf-8", errors="replace") as handle:
-            for row in csv.reader(handle):
-                for cell in row:
-                    value = cell.strip()
-                    if DATE.fullmatch(value) and value > latest:
-                        latest = value
-    return latest
+    """The release's report date, as recorded by main.py in the manifest.
+
+    The newest date string in any CSV is not the release date: an open week or month can
+    carry a label past the report date, which once dated the page a day into the future.
+    """
+    manifest = ROOT / "csv" / "release_manifest.json"
+    return json.loads(manifest.read_text(encoding="utf-8"))["report_date"]
 
 
 @unittest.skipUnless(INDEX.is_file(), "release page not generated yet")
@@ -52,7 +48,11 @@ class ReleasePageSeoTests(unittest.TestCase):
         self.assertEqual(self.data["temporalCoverage"].split("/")[1], self.latest)
 
     def test_every_csv_is_listed_once(self) -> None:
-        names = {p.name for p in (ROOT / "csv").glob("*.csv")}
+        names = {
+            p.name
+            for pattern in ("*.csv", "*.csv.gz")
+            for p in (ROOT / "csv").glob(pattern)
+        }
         urls = [d["contentUrl"] for d in self.data["distribution"]]
         self.assertEqual(len(urls), len(set(urls)))
         self.assertEqual({u.rsplit("/", 1)[-1] for u in urls}, names)
