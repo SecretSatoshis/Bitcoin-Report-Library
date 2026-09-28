@@ -31,6 +31,9 @@ Bitcoin-Report-Library/
 ├── data_format.py       # Data access and feature engineering
 ├── report_tables.py     # Table generation and formatting
 ├── data_definitions.py  # Configuration and constants
+├── candle_data.py       # Daily/weekly/monthly candles and period metric snapshots
+├── data_validation.py   # Shared calendar and candle contracts
+├── chart_manifest.py    # Writes the hashed release manifest
 ├── validate_outputs.py  # Local publication checks used by CI
 ├── build_release_page.py # Generates the public data landing page and sitemap
 ├── index.html           # Generated public data-release landing page
@@ -49,6 +52,10 @@ Bitcoin-Report-Library/
 | `data_format.py` | Fetches raw data from APIs, normalizes timestamps, engineers features, calculates derived metrics, computes cycle analysis (drawdowns, halvings, cycle lows) |
 | `report_tables.py` | Builds tabular outputs: fundamentals, ROI, performance comparisons, valuations, heatmaps, OHLC |
 | `data_definitions.py` | Central configuration: tickers, API settings, reference data, metric templates, constants |
+| `candle_data.py` | Aggregates BRK daily candles into weekly and monthly periods through the report date, including `ohlc_data.csv` and the frozen chart candle files |
+| `data_validation.py` | Shared contracts: complete daily/weekly calendars and valid OHLC candles |
+| `chart_manifest.py` | Writes `release_manifest.json` (report date plus SHA-256 and size of every published CSV) after all exports finish |
+| `validate_outputs.py` | Re-checks the finished release against the report date recorded in the manifest before CI publishes it |
 | `build_release_page.py` | Reads the completed CSV release and regenerates its crawlable landing page, Dataset structured data, file inventory, and sitemap |
 
 ### Data Flow
@@ -99,7 +106,7 @@ The pipeline executes in sequence:
 1. Fetches the configured on-chain and market series from the BRK API
 2. Retrieves market data from Yahoo Finance and CoinGecko
 3. Stores one CoinGecko Bitcoin-dominance observation for the completed UTC day
-4. Pulls weekly and full available daily OHLC history from BRK
+4. Pulls full daily OHLC history from BRK; weekly and monthly candles are aggregated from it through the report date
 5. Calculates derived metrics, mining signals, and valuation models (Metcalfe, power law, Hash Ribbons, Reserve Risk, MVRV, NVT, volatility, etc.)
 6. Runs performance analysis (7d, 90d, MTD, YTD, YOY changes)
 7. Generates report tables
@@ -117,9 +124,13 @@ visualization. Run this pipeline first when Chart Library is configured with a l
 |--------|-----------|----------|
 | **BRK (Bitview) API** | On-chain metrics, difficulty, supply data | `bitview.space/api` |
 | **Yahoo Finance** | Equities, ETFs, indices, commodities, forex | `yfinance` library |
-| **CoinGecko** | Altcoin prices, market caps, and the latest available BTC-dominance snapshot | Public API |
+| **CoinGecko** | Altcoin prices, market caps, and the latest available BTC-dominance snapshot | Public API (rate limits and 5xx responses are retried with backoff) |
 | **Alternative.me** | Fear & Greed Index | Public API |
 | **Google Sheets** | Miner efficiency data | CSV export |
+
+CoinGecko stamps each daily point at 00:00 UTC, which is the close of the previous day.
+The pipeline labels those points by the day they close, so altcoin prices and volumes
+line up with BRK's `price_close` for the same date.
 
 ## Configuration
 
@@ -133,7 +144,7 @@ All configuration is centralized in `data_definitions.py`:
 
 ## Outputs
 
-All data outputs are written to `csv/` and served from the GitHub Pages base path `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/` for remote consumption by downstream projects. The repository root publishes a generated data-release landing page and sitemap whose dates, coverage, file counts, and download links are derived from the same completed CSV release.
+All data outputs are written to `csv/` and served from the GitHub Pages base path `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/` for remote consumption by downstream projects. The repository root publishes a generated data-release landing page and sitemap covering every `.csv` and `.csv.gz` file; the release date comes from `release_manifest.json`, and file coverage, counts, and download links are read from the same completed release.
 
 The master metrics dataset is exported as gzipped CSV (`.csv.gz`) to keep the file under GitHub's size limits. `pd.read_csv()` reads `.csv.gz` files natively — no manual decompression needed.
 
@@ -145,7 +156,7 @@ The master metrics dataset is exported as gzipped CSV (`.csv.gz`) to keep the fi
 | `fundamentals_table.csv` | Network performance, security, economics, valuation metrics |
 | `summary_table.csv` | Labeled summary metrics with `Metric`, `Value`, and `Category` columns |
 | `bitcoin_dominance_history.csv` | Persistent daily CoinGecko BTC-dominance observations using the latest snapshot available to each run; each report-date row is immutable |
-| `performance_table.csv` | Multi-asset performance comparison |
+| `performance_table.csv` | Multi-asset performance comparison. The 90-day BTC correlation pairs each asset's returns between its own trading days with BTC's return over the same span, so weekends and holidays add no artificial zero returns |
 | `mtd_return_comparison.csv` | Month-to-date return from the latest positive close before the month began, plus the historical median projection |
 | `ytd_return_comparison.csv` | Year-to-date return from the latest positive close before January 1, plus the historical median projection |
 | `relative_value_comparison.csv` | Relative valuation metrics |
@@ -154,7 +165,7 @@ The master metrics dataset is exported as gzipped CSV (`.csv.gz`) to keep the fi
 | `5k_bucket_table.csv` | Positive-price trading-day distribution in $5,000 buckets, capped at `report_date` |
 | `1k_bucket_table.csv` | Positive-price trading-day distribution in $1,000 buckets, capped at `report_date` |
 | `monthly_heatmap_data.csv` | Monthly/yearly returns measured from the latest positive prior-period close |
-| `ohlc_data.csv` | BRK weekly OHLC price data using week-start labels |
+| `ohlc_data.csv` | Weekly OHLC from 2017, aggregated from BRK daily candles and labeled by Monday week start; the open week closes on `report_date` |
 | `report_ohlc_summary.csv` | Report-date daily OHLC plus week-to-date context capped at the report date |
 | `summary_history.csv` | 31 daily endpoints spanning 30 calendar days for dashboard sparklines + exact 30d deltas |
 | `onchain_price_models.csv` | Daily valuation models (Metcalfe, power law, Realized, STH/LTH Realized, canonical $0.05/kWh power expense, and 3× Realized) joined to BTC price through `report_date` |
@@ -175,13 +186,13 @@ These CSV files are pre-computed for downstream visualization by [Bitcoin-Chart-
 | `cycle_low_data.csv` | Market cycle performance indexed from the lowest positive price observed inside each configured cycle window |
 | `release_manifest.json` | Shared release ID, report date, generation time, and SHA-256/size records for every published CSV |
 | `halving_data.csv` | Performance indexed from each Bitcoin halving with a positive day-0 source price; the pre-price Genesis era is omitted |
-| `cagr_data.csv` | Rolling 2-year (730-row) and 4-year (1,460-row) CAGR values for the configured 13 downstream metrics, expressed in percentage points |
+| `cagr_data.csv` | Rolling 2-year and 4-year CAGR values for the configured 13 downstream metrics, measured from the same calendar date 2 or 4 years earlier (leap days included) and expressed in percentage points |
 
 ### Raw Data
 
 | File | Description |
 |------|-------------|
-| `brk_onchain_raw.csv` | Raw BRK API on-chain data before transformations |
+| `brk_onchain_raw.csv` | Raw BRK API on-chain data before transformations, through `report_date` (the in-progress UTC day is excluded) |
 
 ## Dashboard
 
@@ -199,9 +210,11 @@ output-validation suites, rebuilds the public release page and sitemap, and comm
 validated CSV and public release outputs. That publication supplies the dashboard and
 the downstream Chart Library refresh.
 
-The run fails closed if a cumulative on-chain input contains an internal gap, a
-hand-maintained reference dataset exceeds its reviewed-age budget, or a large dated
-export extends past the completed report date. Model coefficients are published with
+The run fails closed if BRK has no on-chain row for the exact report date, miner
+revenue or supply contains an internal gap (neither is ever forward-filled), a
+hand-maintained reference dataset exceeds its reviewed-age budget, or a dated export
+(including the raw BRK file and the latest weekly candle) extends past the completed
+report date. Model coefficients are published with
 each release so fitted valuation series remain reproducible.
 
 Bitcoin dominance is a required report-date input. The pipeline stores the latest usable
@@ -233,6 +246,10 @@ uv run --no-sync python main.py
 uv run --no-sync python validate_outputs.py
 uv run --no-sync python build_release_page.py
 ```
+
+`validate_outputs.py` validates against the report date recorded in
+`csv/release_manifest.json`, so a run that finishes after UTC midnight still validates
+the day it built. Pass `--report-date YYYY-MM-DD` to check a specific release.
 
 `main.py` contacts the configured live APIs and rewrites files in `csv/`. To view the
 existing local CSVs without refreshing them first, skip the three release commands above.
@@ -287,7 +304,8 @@ the latest partial period is included through the report date.
 These files are part of the verified release manifest. Daily candle closes must
 match the master prices; missing daily observations and inconsistent candles
 fail the build. Chart Library performs no source gathering or OHLC aggregation.
-The existing `ohlc_data.csv` remains unchanged for its other consumers.
+`ohlc_data.csv` keeps its existing schema for its other consumers but is now built
+from the same daily candles, so both weekly exports agree.
 
 
 ## Dashboard presentation
