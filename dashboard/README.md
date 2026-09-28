@@ -37,6 +37,11 @@ updating `package-lock.json`; otherwise `npm ci` keeps local and production inst
 All dashboard packages are build-time dependencies: the deployed output is static. The
 current Evidence release still pins Svelte 4 and Vite 5, so `npm audit --omit=dev` is the
 production-exposure check until Evidence publishes a compatible toolchain upgrade.
+The advisories that remain open for those pinned packages concern the development server
+and test tooling (Vite, esbuild, Vitest), or cross-site scripting through untrusted
+content (Svelte and SvelteKit server rendering, ECharts). The deployed pages are
+prerendered from this repository's own CSV release, with no user-supplied content. Patch
+advisories that are fixable within the pinned majors with `npm update <package>`.
 
 Use `npm run sync:remote` to pull published CSVs from GitHub Pages instead of local report outputs.
 
