@@ -203,12 +203,14 @@ The `dashboard/` subfolder is an [Evidence.dev](https://evidence.dev) BI-as-code
 
 ## Daily Refresh
 
-The scheduled GitHub Actions workflow starts at **00:30 UTC**, shortly after the UTC
-day closes and safely after the New York market close. It refreshes the source data,
+The GitHub Actions workflow is scheduled for **00:30 UTC**, shortly after the UTC day
+closes and safely after the New York market close. GitHub starts scheduled workflows
+late, so in practice runs have begun around 05:15–05:45 UTC. It refreshes the source data,
 records the completed day's Bitcoin-dominance observation, runs the regression and
 output-validation suites, rebuilds the public release page and sitemap, and commits the
 validated CSV and public release outputs. That publication supplies the dashboard and
-the downstream Chart Library refresh.
+the downstream Chart Library, which checks hourly for a new release rather than
+assuming a fixed time.
 
 The run fails closed if BRK has no on-chain row for the exact report date, miner
 revenue or supply contains an internal gap (neither is ever forward-filled), a
