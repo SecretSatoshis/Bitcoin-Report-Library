@@ -9,7 +9,7 @@
       "size_bytes": 775
     },
     "bitcoin_candles.csv.gz": {
-      "sha256": "e911a1ec252ee0e6bd2219c2c020aaca7487c3e2b7985bb98709b4af53c431da",
+      "sha256": "553fea052e182a68b4ce40db54af09a69d45158f0241bd52d3b02148f09739b6",
       "size_bytes": 134143
     },
     "bitcoin_dominance_history.csv": {
@@ -17,12 +17,12 @@
       "size_bytes": 1915
     },
     "brk_onchain_raw.csv": {
-      "sha256": "d22e59b60409c468f08ff23e4a5ce0d86e13bb1eef91a17212a3ae57f006bd09",
-      "size_bytes": 5608283
+      "sha256": "08cf2c0524ce1bdfac20d36d6ea274269af7b2c5ae7495ca1c6633f2f4abcd0b",
+      "size_bytes": 5607299
     },
     "cagr_data.csv": {
-      "sha256": "b949f8eb5a4657d81dd6126279ae260eaabdccbe283b95c24dc3cba108393892",
-      "size_bytes": 2314989
+      "sha256": "481e3d7587d7497d784684680dafcf94dcb53ce247f904fa93c9afae88fb6da6",
+      "size_bytes": 2314949
     },
     "cycle_low_data.csv": {
       "sha256": "164b9ba35e52906e8fa1028f410cd725d3d20cb39547238b2bdd383a38431aba",
@@ -37,8 +37,8 @@
       "size_bytes": 1630322
     },
     "eoy_model_data.csv": {
-      "sha256": "80e949d99136341379008200510312f1b811219172355e7b158704c9cd737b78",
-      "size_bytes": 1296255
+      "sha256": "e6fa92dcc6f3646c8ce8c31452d6ff3c5bd6bf72a6ea78024aa9a56693277cdb",
+      "size_bytes": 1296305
     },
     "fundamentals_table.csv": {
       "sha256": "d287bb4f883b1f17f99a3b10045c3f31497ce95f32aefdd0f395b99dc986c036",
@@ -49,8 +49,8 @@
       "size_bytes": 154588
     },
     "master_metrics_data.csv.gz": {
-      "sha256": "d1bdfbd70d6ce346f510dbe27dbad241580445c7f09e909834f95a6b1241e00d",
-      "size_bytes": 21133315
+      "sha256": "f817a4f3b4629b7dcd0b8faa62a241b703d0a8830533c536e1fd08c493ab06b1",
+      "size_bytes": 21129972
     },
     "model_coefficients.csv": {
       "sha256": "67eadeabc6dabc9d2e780377f918390f344104644234ccf0c0fb8ed644bd3409",
@@ -61,8 +61,8 @@
       "size_bytes": 4521
     },
     "monthly_metrics_data.csv.gz": {
-      "sha256": "f6f6a6492a7365b35652e6a46eb11b9277ea887de6be3682f2b1cee011e7590c",
-      "size_bytes": 765606
+      "sha256": "bc4b9af6718e17d17e267da06b04436bfcbbf5cbf4cc2731ac251bcf7ef7ccdb",
+      "size_bytes": 765786
     },
     "mtd_return_comparison.csv": {
       "sha256": "adc9d973562c331d7c474179db6670fc5b3207c857d541c3571215d089dd5360",
@@ -77,23 +77,23 @@
       "size_bytes": 2562366
     },
     "ohlc_data.csv": {
-      "sha256": "4ee9d02e9229b0c981acfb325689f342757ba72840ff8b0f5262f9a5880aeaff",
-      "size_bytes": 23206
+      "sha256": "09c99b596a986f0506e97f1fe15232b58e7b2b3ce306f0d45648b576e62f787d",
+      "size_bytes": 23159
     },
     "onchain_price_models.csv": {
       "sha256": "47140ab2fb0280fafa5b625b79675b1bb11985ab1f44567110d05000cbbbb91e",
       "size_bytes": 647499
     },
     "performance_table.csv": {
-      "sha256": "c9a66923a87e3d1954d4a1f2af4d5c560885ca0804e0a77d07f95b7a9da84cb5",
-      "size_bytes": 3394
+      "sha256": "43a07abe2d4e7b0be46977216e594e6804fdf0afc26b0a530921b25cd46ff8f0",
+      "size_bytes": 3392
     },
     "price_outlook.csv": {
       "sha256": "bef26252a26c887a62abc0d287aa6aee78e92bd42df451dc8dc89360bad925fe",
       "size_bytes": 527
     },
     "relative_value_comparison.csv": {
-      "sha256": "0aa53846189c3aa32cb5128688b56d75158cbb62ace682c245683217c876db4c",
+      "sha256": "002523953e3e345f0d3781d3111928cc1d7fe3760a354fe6557c020cb1136bef",
       "size_bytes": 1437
     },
     "report_ohlc_summary.csv": {
@@ -113,8 +113,8 @@
       "size_bytes": 509
     },
     "weekly_metrics_data.csv.gz": {
-      "sha256": "f89f7a3e246d8588283e7052780d839d37168dad2bb9deaa0c633d00e00057b9",
-      "size_bytes": 3291634
+      "sha256": "3ac92e860d7b956b6eec8e786c7c20e0be3c2fcde808b4d23d5dd3f41499e899",
+      "size_bytes": 3292050
     },
     "ytd_return_comparison.csv": {
       "sha256": "f546b6d652140332cb63b7b6250d7aff2040f1e90ad2129e5c0540fb550f9859",
@@ -125,7 +125,7 @@
       "size_bytes": 98220
     }
   },
-  "generated_at": "2026-09-28T05:44:38+00:00",
+  "generated_at": "2026-09-28T14:32:32+00:00",
   "release_id": "2026-09-27",
   "report_date": "2026-09-27",
   "schema_version": 1
