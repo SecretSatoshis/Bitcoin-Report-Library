@@ -175,10 +175,10 @@ capture uses a wider canvas to fit its existing columns. The default weekly prof
 exports its five established visuals. Both profiles validate the built data date, PNG bytes,
 dimensions, and exact output inventory; the quarterly pipeline also checks producer commits.
 
-Newsletter-Pipeline consumes a committed quarter-end Report Library release, adds the two
-savings images from the corresponding Investment Strategy export, and renders the existing
-Chart Library combined YTD reference from that same market release. These producer captures
-are six of the quarterly report's nine images, not a complete quarterly report bundle.
+A quarterly report pairs these six captures from one committed quarter-end release with
+the savings images from the matching Investment Strategy export and a frozen Chart Library
+YTD chart from the same release. The exporter produces only the Dashboard's six; it is not
+a complete quarterly report bundle.
 
 ## Shared price-outlook chart
 
