@@ -876,6 +876,13 @@ body.newsletter-export-mode [data-newsletter-visual="monthly-return-heatmap"] ta
 	min-width: 64rem;
 }
 
+/* Fixed-position chrome would be painted over any capture taller than the viewport
+   (the price outlook is), so it has no place in an exported visual. */
+body.newsletter-export-mode .brand-site-nav,
+body.newsletter-export-mode .brand-skip-link {
+	display: none;
+}
+
 
 @media print {
 	html {

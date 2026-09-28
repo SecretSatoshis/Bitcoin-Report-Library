@@ -6,7 +6,9 @@
   export let candles = [];
   export let cases = [];
   export let reportDate = '';
-  let frame, frameReady = false, height = 920;
+  // The forecast year published with the case levels (price_outlook.csv outlook_year).
+  export let outlookYear = '';
+  let frame, frameReady = false, height = 920, payload = null, error = '';
   const metrics = [
     ['price_close','BTC Price','Bitcoin Price'],
     ['realized_price','Realized Price','Realized Price'],
@@ -28,10 +30,11 @@
     return result;
   }
   function buildPayload() {
+    // Inputs still loading: not an error, just nothing to draw yet.
     if(!rows?.length || !candles?.length || !cases?.length || !reportDate)return null;
     const history=rows.filter(r=>iso(r.date)<=reportDate), x=history.map(r=>iso(r.date));
-    if(x.at(-1)!==reportDate)return null;
-    const year=reportDate.slice(0,4),end=year+'-12-31';
+    if(x.at(-1)!==reportDate)throw new Error(`price history ends ${x.at(-1) ?? 'before any data'}, not on the report date ${reportDate}`);
+    const year=String(outlookYear||reportDate.slice(0,4)),end=year+'-12-31';
     const series=metrics.map(([id,key,name])=>({id,name,axis:'right',role:id==='price_close'?'highlight':'normal',
       color:colors[id],lineWidth:id==='price_close'?3:2,lineStyle:'solid',opacity:1,start:0,values:history.map(r=>number(r[key]))}));
     // Keep the legend stable while hovering; rank models by report-date value.
@@ -52,7 +55,7 @@
       if(!source.length)continue;
       const periods=source.map(r=>({time:iso(r.period_start),periodEnd:iso(r.period_end),observationDate:iso(r.observation_date),
         complete:r.complete===true||String(r.complete).toLowerCase()==='true',open:Number(r.Open),high:Number(r.High),low:Number(r.Low),close:Number(r.Close)}));
-      if(periods.at(-1).observationDate!==reportDate)throw new Error('Outlook candles do not match dashboard report date');
+      if(periods.at(-1).observationDate!==reportDate)throw new Error(`${interval} candles end ${periods.at(-1).observationDate}, not on the report date ${reportDate}`);
       const dates=periods.map(c=>c.time),calendar=[...dates,...futureCalendar(dates.at(-1),end,interval)];
       const selected=series.map(s=>({...s,values:periods.map(c=>s.values[byDate.get(c.observationDate)]??null)}));
       const periodEvents=events.flatMap(event=>{const candle=periods.find(c=>c.time<=event.date&&c.observationDate>=event.date);return candle?[{...event,date:candle.time,originalDate:event.date}]:[];});
@@ -68,7 +71,13 @@
   onMount(() => {
     if (frame?.contentDocument?.readyState === 'complete') frameReady = true;
   });
-  $: payload = (rows,candles,cases,reportDate,buildPayload());
+  // Inconsistent inputs become a visible error instead of an endless loading spinner, and
+  // the newsletter exporter fails on the same marker instead of waiting for a timeout.
+  function computePayload() {
+    try { return { payload: buildPayload(), error: '' }; }
+    catch (err) { return { payload: null, error: err.message }; }
+  }
+  $: ({ payload, error } = (rows,candles,cases,reportDate,outlookYear,computePayload()));
   $: if(frameReady && payload)frame.contentWindow.postMessage({type:'ss-chart-init',payload},window.location.origin);
   function receive(event){
     if(event.source!==frame?.contentWindow||event.origin!==window.location.origin)return;
@@ -78,7 +87,11 @@
 </script>
 
 <svelte:window on:message={receive} />
+{#if error}
+  <p class="price-outlook-error" role="alert" data-price-outlook-error>Price outlook unavailable: {error}.</p>
+{/if}
 <iframe bind:this={frame} on:load={() => frameReady = true} src="/shared-chart/frame.html" title="Interactive Bitcoin price outlook" class="price-outlook-frame" style:height="{height}px" data-price-outlook-frame></iframe>
 <style>
+  .price-outlook-error{margin:0 0 12px;padding:10px 14px;border:1px solid #FF3B30;color:#FF3B30;font-size:13px}
   .price-outlook-frame{display:block;width:100%;border:0;background:#08080c;min-height:700px;color-scheme:dark}
 </style>

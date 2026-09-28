@@ -279,6 +279,11 @@ _Headline metrics — market, on-chain, and sentiment._
   $: mtdLatest = _buildLatestPoints(mtdPlot, 'day', mtdCurrentYear);
   $: ytdLatest = _buildLatestPoints(ytdPlot, 'day_of_year', ytdCurrentYear);
 
+  // The outlook year travels with the levels in price_outlook.csv. Label the forecast
+  // with that year, never the data year, so last year's levels cannot pass as current.
+  $: outlookYear = price_outlook?.length ? String(price_outlook[0].outlook_year) : '';
+  $: outlookYearMismatch = Boolean(outlookYear && dataYearLabel && outlookYear !== dataYearLabel);
+
   $: outlookCaseLevels = (price_outlook || [])
     .filter(level => level.type === 'case')
     .slice()
@@ -398,7 +403,7 @@ _Headline metrics — market, on-chain, and sentiment._
     data={btc_sentiment}
     value=sentiment
     title="Fear & Greed"
-    description="Fear & Greed classification (0–100)."
+    description="Fear & Greed Index classification (Extreme Fear to Extreme Greed)."
   />
   <BigValue
     data={btc_valuation}
@@ -480,7 +485,13 @@ _Compare Bitcoin and other assets’ returns across the same periods._
 
 _Price vs on-chain valuation models and moving averages._
 
-### Secret Satoshis {dataYearLabel} Price Outlook
+<!-- Raw heading so the anchor is stable: a markdown heading's id is slugged from the
+     unevaluated expression text, which produced #secret-satoshis-datayearlabel-price-outlook. -->
+<h3 class="markdown" id="price-outlook">Secret Satoshis {outlookYear} Price Outlook</h3>
+
+{#if outlookYearMismatch}
+<p class="price-chart-methodology" role="note">These levels are the {outlookYear} outlook; the data runs through {dataYearLabel}.</p>
+{/if}
 
 <div class="price-outlook-cases">
 {#each outlookCaseLevels as c (c.name)}
@@ -491,7 +502,7 @@ _Price vs on-chain valuation models and moving averages._
 {/each}
 </div>
 
-<PriceOutlookChart rows={btc_with_models} candles={price_candles} cases={outlookCaseLevels} reportDate={data_date?.[0]?.date_iso ?? ''} />
+<PriceOutlookChart rows={btc_with_models} candles={price_candles} cases={outlookCaseLevels} outlookYear={outlookYear} reportDate={data_date?.[0]?.date_iso ?? ''} />
 
 <p class="price-chart-methodology">Simple moving averages · 3-month = 90 daily closes · 1-year = 52 weeks / 364 daily closes · 200-week = 1,400 daily closes</p>
 
@@ -557,7 +568,7 @@ _Compare this month’s and this year’s price paths with historical years._
 
 <div class="newsletter-visual" data-newsletter-visual="seasonal-mtd">
 
-### Bitcoin {dataMonthName} MTD Returns Comparison
+<h3 class="markdown" id="mtd-returns-comparison">Bitcoin {dataMonthName} MTD Returns Comparison</h3>
 
 <LineChart
   data={mtdPlot}
@@ -584,7 +595,7 @@ _Compare this month’s and this year’s price paths with historical years._
 
 <div class="newsletter-visual" data-newsletter-visual="seasonal-ytd">
 
-### Bitcoin {dataYearLabel} YTD Returns Comparison
+<h3 class="markdown" id="ytd-returns-comparison">Bitcoin {dataYearLabel} YTD Returns Comparison</h3>
 
 <LineChart
   data={ytdPlot}
@@ -922,7 +933,8 @@ select
   label || ' - $' || format('{:,.0f}', cast(price as double)) as label,
   cast(price as double) as price,
   type,
-  color
+  color,
+  outlook_year
 from bitcoin_report_library.price_outlook
 ```
 

@@ -13,7 +13,8 @@ Source repo: `https://github.com/SecretSatoshis/Bitcoin-Report-Library`
 
 ## Requirements
 
-- Node.js 24 (the verified and pinned runtime in `.nvmrc`)
+- Node.js 24 — the verified runtime pinned in `.nvmrc`. `package.json` `engines`
+  accepts Node 22.13 through 24, but only Node 24 is tested.
 - npm 12 (pinned by `packageManager`)
 
 ## Setup
@@ -96,15 +97,20 @@ Its immutable outputs are:
 - separate MTD and YTD seasonal-return charts for newsletter legibility.
 
 The export-only layout is activated by the exporter and does not change the live
-Dashboard layout.
+Dashboard layout. If the price outlook shows its "Price outlook unavailable" error, the
+export fails with that message rather than capturing an empty chart.
 
 ## How It Works
 
 1. `npm run sync:local` copies the dashboard CSV subset from `../csv/`.
 2. `npm run sync:remote` downloads the same CSV subset from GitHub Pages.
-3. Evidence reads CSV files from `sources/bitcoin_report_library/`.
-4. `pages/index.md` defines the dashboard and SQL queries.
-5. `npm run build` writes the deployable static site to `build/`.
+3. Both modes stage the files in `.sync-staging/`, verify every file against the
+   release's `release_manifest.json`, decode `bitcoin_candles.csv.gz`, and only then
+   replace `sources/bitcoin_report_library/` in one step. A missing manifest, a hash
+   mismatch, or any failed file leaves the existing sources untouched.
+4. Evidence reads CSV files from `sources/bitcoin_report_library/`.
+5. `pages/index.md` defines the dashboard and SQL queries.
+6. `npm run build` writes the deployable static site to `build/`.
 
 ## Dashboard Data Scope
 
@@ -116,13 +122,12 @@ The sync script intentionally uses only the CSVs required by the dashboard:
 - `performance_table.csv`
 - `monthly_heatmap_data.csv`
 - `relative_value_comparison.csv`
-- `1k_bucket_table.csv`
-- `5k_bucket_table.csv`
 - `roi_table.csv`
 - `onchain_price_models.csv`
 - `mtd_returns_history.csv`
 - `ytd_returns_history.csv`
-- `price_outlook.csv`
+- `price_outlook.csv` (case levels plus their `outlook_year`, which labels the outlook)
+- `bitcoin_candles.csv.gz` (verified, then decoded to `bitcoin_candles.csv` for Evidence)
 
 Wide files such as `master_metrics_data.csv.gz` and `cagr_data.csv` are intentionally excluded because they can slow or hang Evidence CSV type inference.
 
@@ -130,16 +135,18 @@ Wide files such as `master_metrics_data.csv.gz` and `cagr_data.csv` are intentio
 
 The dashboard is published at [dashboard.secretsatoshis.com](https://dashboard.secretsatoshis.com). Its Cloudflare Pages Git integration is configured outside this repository to rebuild when relevant `dashboard/` or `csv/` changes reach `main`. The repository's daily data-refresh workflow runs at 00:30 UTC, shortly after the completed UTC day, then tests, regenerates, and validates the report before committing refreshed CSVs; that commit triggers the same-evening dashboard rebuild in New York.
 
-The production build sequence is `npm ci → sync:remote → sources → build`, with the static `build/` folder served behind a CDN. The build finishes by replacing Evidence's hardcoded X publisher attribution with `@SecretSatoshis`; it fails if the upstream tag changes instead of silently publishing incorrect metadata. Because the hosting integration is external, verify those build settings in Cloudflare when changing the Node version or production command.
+The production build sequence is `npm ci → sync:remote → sources → build`, with the static `build/` folder served behind a CDN. The commit that triggers the build is the same one GitHub Pages is still deploying, and Pages serves files with a 10-minute CDN cache. `sync:remote` therefore reads the release in the checked-out `../csv/release_manifest.json` and waits (up to 12 minutes) until Pages serves that release, requesting each file with a release-keyed query so a cached copy of an older file cannot be used. If Pages never catches up the build fails instead of deploying the previous day's data. Switching the Cloudflare build command to `sync:local` would remove the wait entirely, because the checkout already holds the triggering release. The build finishes by replacing Evidence's hardcoded X publisher attribution with `@SecretSatoshis`; it fails if the upstream tag changes instead of silently publishing incorrect metadata. Because the hosting integration is external, verify those build settings in Cloudflare when changing the Node version or production command.
 
-`sync:local` and `sync:remote` use `csv/release_manifest.json` when available. They verify the
-dashboard inputs against the published release hashes before Evidence ingests them, while
-temporarily retaining legacy CSV-only validation for older releases during rollout.
+`sync:local` and `sync:remote` both require `csv/release_manifest.json` and verify every
+dashboard input against its hashes before Evidence ingests them.
 
 ## Key Files
 
 - `pages/index.md` — branded dashboard hero, report content, and SQL queries
 - `pages/+layout.svelte` — shared Secret Satoshis navigation/footer around the Evidence layout
+- `components/PriceOutlookChart.svelte` — adapts the price/model query and candles to the shared chart payload; shows a visible error when its inputs do not reach the report date
+- `components/chart-colors.json` and `components/chart-events.json` — model line colors and historical events, written by the Chart Library's `sync-dashboard.py`
+- `static/shared-chart/` — vendored Chart Library renderer, frame page, and `source-manifest.json` hashes
 - `sources/bitcoin_report_library/connection.yaml` — CSV datasource config
 - `scripts/download-data.mjs` — local/remote CSV sync script
 - `scripts/export-newsletter-visuals.mjs` — deterministic Dashboard-to-newsletter PNG exporter
@@ -156,8 +163,8 @@ Use the same built Dashboard and exporter with the quarterly profile:
 npm run export:newsletter -- --profile quarterly --report-date YYYY-MM-DD --output-dir /absolute/new/export-directory
 ```
 
-This exports six Dashboard views: the four-year price outlook (including the
-January 1 annual marker), Stock Market Index Performance, Sector Performance, Macro Asset
+This exports six Dashboard views: the four-year price outlook (anchor `#price-outlook`,
+including the January 1 annual marker), Stock Market Index Performance, Sector Performance, Macro Asset
 Class Performance, Bitcoin Industry Performance, and Relative Valuation. The relative-value
 capture uses a wider canvas to fit its existing columns. The default weekly profile still
 exports its five established visuals. Both profiles validate the built data date, PNG bytes,

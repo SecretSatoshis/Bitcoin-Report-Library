@@ -8,6 +8,10 @@
  * Currently scoped to the CSVs the dashboard actually uses.
  * Wide files (master_metrics_data, cagr_data) are intentionally excluded —
  * they cause Evidence's CSV plugin to hang on type inference.
+ *
+ * Every sync stages one complete release, verifies every file against that release's
+ * manifest, and only then replaces the datasource folder in a single step. A failure at
+ * any point leaves the existing dashboard sources untouched.
  */
 
 import {
@@ -36,7 +40,18 @@ const REMOTE_BASE_URL =
   "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv";
 const LOCAL_CSV_DIR = path.resolve(__dirname, "../../csv");
 const OUT_DIR = path.resolve(__dirname, "../sources/bitcoin_report_library");
+// Outside sources/: Evidence treats every sources/* folder with a connection.yaml as a
+// datasource, so a leftover staging copy there would be ingested twice.
+const STAGING_DIR = path.resolve(__dirname, "../.sync-staging");
+const PREVIOUS_DIR = path.resolve(__dirname, "../.sync-previous");
 const RELEASE_MANIFEST = "release_manifest.json";
+const CANDLE_ARCHIVE = "bitcoin_candles.csv.gz";
+
+// GitHub Pages deploys a release about a minute after the commit that also triggers the
+// production dashboard build, then serves files with a 10-minute CDN cache. Remote sync
+// therefore waits until Pages serves at least the release contained in this checkout.
+const RELEASE_WAIT_MS = 12 * 60 * 1000;
+const RELEASE_POLL_MS = 15 * 1000;
 
 // Only the CSVs the dashboard actually queries. ohlc_data.csv and
 // report_ohlc_summary.csv were fetched and ingested on every build but are referenced
@@ -53,27 +68,14 @@ const CSV_FILES = [
   "mtd_returns_history.csv",
   "ytd_returns_history.csv",
   "price_outlook.csv",
-  "bitcoin_candles.csv.gz",
+  CANDLE_ARCHIVE,
 ];
-
-mkdirSync(OUT_DIR, { recursive: true });
-
-// Drop CSVs left behind by an earlier sync. Removing a file from CSV_FILES only stops
-// it being copied — without this it lingers in sources/ and Evidence keeps ingesting it
-// into the build forever.
-function prune() {
-  const keep = new Set([...CSV_FILES, "bitcoin_candles.csv"]);
-  for (const entry of readdirSync(OUT_DIR)) {
-    if (entry.endsWith(".csv") && !keep.has(entry)) {
-      rmSync(path.join(OUT_DIR, entry), { force: true });
-      console.log(`  ✗ pruned stale ${entry}`);
-    }
-  }
-}
 
 const REQUEST_TIMEOUT_MS = 20000;
 const MAX_ATTEMPTS = 3;
 const MAX_REDIRECTS = 5;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function httpsGet(url, redirectsLeft = MAX_REDIRECTS) {
   return new Promise((resolve, reject) => {
@@ -113,10 +115,13 @@ async function readRemoteJson(url) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
+// Every release carries a manifest. A missing or incomplete one fails the sync; it is
+// never a reason to skip hash verification.
 function loadManifest(payload) {
   if (!payload || payload.schema_version !== 1
       || typeof payload.release_id !== "string"
       || payload.release_id !== payload.report_date
+      || !/^\d{4}-\d{2}-\d{2}$/.test(payload.report_date)
       || !payload.files || typeof payload.files !== "object") {
     throw new Error("invalid Report Library release manifest");
   }
@@ -129,65 +134,22 @@ function loadManifest(payload) {
   return payload;
 }
 
-function verifyManifestFile(file, manifest) {
-  const expected = manifest?.files?.[file]?.sha256;
-  if (!expected) return;
-  const digest = createHash("sha256").update(readFileSync(path.join(OUT_DIR, file))).digest("hex");
-  if (digest !== expected) throw new Error(`${file}: release manifest hash mismatch`);
-}
-
-async function downloadRemote(file) {
-  const url = `${REMOTE_BASE_URL}/${file}`;
-  const dst = path.join(OUT_DIR, file);
-  const tmp = `${dst}.part`;
-
-  let lastError;
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    try {
-      const res = await httpsGet(url);
-      // Stream to a scratch file and only publish it on success. Writing straight to
-      // the destination leaves a truncated CSV behind when a transfer dies mid-stream,
-      // and a short file parses cleanly — the dashboard would build and deploy with
-      // silently missing rows.
-      await pipeline(res, createWriteStream(tmp));
-
-      const bytes = statSync(tmp).size;
-      if (bytes === 0) throw new Error("empty response body");
-
-      renameSync(tmp, dst);
-      console.log(`  ↓ ${file} (${bytes.toLocaleString()} bytes)`);
-      return;
-    } catch (err) {
-      lastError = err;
-      if (existsSync(tmp)) rmSync(tmp, { force: true });
-      if (attempt < MAX_ATTEMPTS) {
-        const backoff = 500 * 2 ** (attempt - 1);
-        console.warn(`  ⟳ ${file} attempt ${attempt} failed (${err.message}) — retrying in ${backoff}ms`);
-        await new Promise((r) => setTimeout(r, backoff));
-      }
-    }
-  }
-  throw new Error(`${file}: ${lastError.message}`);
-}
-
-function copyLocal(file) {
-  const src = path.join(LOCAL_CSV_DIR, file);
-  const dst = path.join(OUT_DIR, file);
-  const tmp = `${dst}.part`;
-
+function readLocalManifest() {
+  const manifestPath = path.join(LOCAL_CSV_DIR, RELEASE_MANIFEST);
   try {
-    // Match remote publication semantics: fully copy and validate a scratch file,
-    // then atomically replace the destination. A failed copy therefore cannot
-    // truncate a previously good dashboard source.
-    copyFileSync(src, tmp);
-    const bytes = statSync(tmp).size;
-    if (bytes === 0) throw new Error("empty source file");
-
-    renameSync(tmp, dst);
-    console.log(`  ✓ ${file} (${bytes.toLocaleString()} bytes)`);
+    return loadManifest(JSON.parse(readFileSync(manifestPath, "utf8")));
   } catch (err) {
-    if (existsSync(tmp)) rmSync(tmp, { force: true });
-    throw new Error(`${file}: ${err.message}`);
+    if (err.code === "ENOENT") {
+      throw new Error(`${RELEASE_MANIFEST} is missing from ${LOCAL_CSV_DIR}`);
+    }
+    throw err;
+  }
+}
+
+function verifyHash(file, filePath, manifest) {
+  const digest = createHash("sha256").update(readFileSync(filePath)).digest("hex");
+  if (digest !== manifest.files[file].sha256) {
+    throw new Error(`${file}: release manifest hash mismatch`);
   }
 }
 
@@ -215,75 +177,149 @@ function validateLocalInputs() {
   return failures;
 }
 
-if (LOCAL_MODE) {
+function stageLocal() {
   console.log(`\nSyncing from local Report Library: ${LOCAL_CSV_DIR}\n`);
-
-  // Validate the complete required set before pruning or publishing anything. This
-  // keeps the existing dashboard sources intact when a report run is incomplete.
   const failures = validateLocalInputs();
   if (failures.length) {
-    console.error(
+    throw new Error(
       `${failures.length} of ${CSV_FILES.length} local source files are invalid:\n` +
-        failures.map((f) => `  - ${f}`).join("\n") +
-        "\nRefusing to sync incomplete data; existing dashboard sources were left unchanged.\n"
+        failures.map((f) => `  - ${f}`).join("\n")
     );
-    process.exit(1);
   }
-
-  let releaseManifest = null;
-  try {
-    releaseManifest = loadManifest(JSON.parse(readFileSync(path.join(LOCAL_CSV_DIR, RELEASE_MANIFEST), "utf8")));
-  } catch (err) {
-    if (err.code !== "ENOENT") throw err;
-    console.warn("  ! no release manifest yet; using legacy local CSV validation");
-  }
-
-  prune();
+  const manifest = readLocalManifest();
   for (const file of CSV_FILES) {
-    copyLocal(file);
-    verifyManifestFile(file, releaseManifest);
+    const staged = path.join(STAGING_DIR, file);
+    copyFileSync(path.join(LOCAL_CSV_DIR, file), staged);
+    verifyHash(file, staged, manifest);
+    console.log(`  ✓ ${file} (${statSync(staged).size.toLocaleString()} bytes)`);
   }
-} else {
-  prune();
-  console.log(`\nDownloading from GitHub Pages: ${REMOTE_BASE_URL}\n`);
-  let releaseManifest = null;
+  return manifest;
+}
+
+// The release committed alongside this dashboard checkout, if the checkout has one.
+// Production builds clone the whole repository, so this is the release whose commit
+// triggered the build. A developer checkout may simply be older than Pages, which is fine.
+function checkoutReleaseDate() {
   try {
-    releaseManifest = loadManifest(await readRemoteJson(`${REMOTE_BASE_URL}/${RELEASE_MANIFEST}`));
-    console.log(`  ✓ release ${releaseManifest.release_id}`);
-  } catch (err) {
-    if (String(err.message).includes("HTTP 404")) {
-      console.warn("  ! no release manifest yet; using legacy remote CSV validation");
-    } else {
-      console.error(`  ✗ ${err.message}`);
-      process.exit(1);
+    return readLocalManifest().report_date;
+  } catch {
+    return null;
+  }
+}
+
+async function waitForRemoteRelease(minimumDate) {
+  const deadline = Date.now() + RELEASE_WAIT_MS;
+  for (;;) {
+    let manifest = null;
+    try {
+      // A unique query bypasses the CDN's cached copy of the manifest.
+      manifest = loadManifest(
+        await readRemoteJson(`${REMOTE_BASE_URL}/${RELEASE_MANIFEST}?t=${Date.now()}`)
+      );
+    } catch (err) {
+      if (Date.now() >= deadline) throw err;
+      console.warn(`  ⟳ release manifest unavailable (${err.message})`);
+    }
+    if (manifest && (!minimumDate || manifest.report_date >= minimumDate)) {
+      return manifest;
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `GitHub Pages still serves release ${manifest?.report_date ?? "none"}, but this ` +
+          `checkout contains ${minimumDate}; refusing to build stale data`
+      );
+    }
+    if (manifest) {
+      console.log(`  … Pages serves ${manifest.report_date}; waiting for ${minimumDate} to deploy`);
+    }
+    await sleep(RELEASE_POLL_MS);
+  }
+}
+
+async function downloadRemote(file, manifest) {
+  // Key the request to the release so a CDN copy of an older file cannot be served.
+  const url = `${REMOTE_BASE_URL}/${file}?release=${encodeURIComponent(manifest.release_id)}`;
+  const dst = path.join(STAGING_DIR, file);
+  const tmp = `${dst}.part`;
+
+  let lastError;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await httpsGet(url);
+      await pipeline(res, createWriteStream(tmp));
+      const bytes = statSync(tmp).size;
+      if (bytes === 0) throw new Error("empty response body");
+      verifyHash(file, tmp, manifest);
+      renameSync(tmp, dst);
+      console.log(`  ↓ ${file} (${bytes.toLocaleString()} bytes)`);
+      return;
+    } catch (err) {
+      lastError = err;
+      if (existsSync(tmp)) rmSync(tmp, { force: true });
+      if (attempt < MAX_ATTEMPTS) {
+        const backoff = 500 * 2 ** (attempt - 1);
+        console.warn(`  ⟳ ${file} attempt ${attempt} failed (${err.message}) — retrying in ${backoff}ms`);
+        await sleep(backoff);
+      }
     }
   }
+  throw new Error(`${file}: ${lastError.message}`);
+}
+
+async function stageRemote() {
+  console.log(`\nDownloading from GitHub Pages: ${REMOTE_BASE_URL}\n`);
+  const manifest = await waitForRemoteRelease(checkoutReleaseDate());
+  console.log(`  ✓ release ${manifest.release_id}`);
   const failures = [];
   for (const file of CSV_FILES) {
     try {
-      await downloadRemote(file);
-      verifyManifestFile(file, releaseManifest);
+      await downloadRemote(file, manifest);
     } catch (err) {
       failures.push(err.message);
       console.error(`  ✗ ${err.message}`);
     }
   }
-  // Fail the build rather than deploying a dashboard with missing datasets. A skipped
-  // CSV used to leave the previous build's file in place (or none at all), so the page
-  // shipped with stale or empty sections and a green checkmark.
   if (failures.length) {
-    console.error(
-      `\n${failures.length} of ${CSV_FILES.length} files could not be downloaded:\n` +
-        failures.map((f) => `  - ${f}`).join("\n") +
-        "\nRefusing to build with incomplete data.\n"
+    throw new Error(
+      `${failures.length} of ${CSV_FILES.length} files could not be downloaded:\n` +
+        failures.map((f) => `  - ${f}`).join("\n")
     );
-    process.exit(1);
   }
+  return manifest;
 }
 
-// Evidence ingests the narrow candle table, never the wide master snapshots.
-writeFileSync(path.join(OUT_DIR, "bitcoin_candles.csv"), gunzipSync(readFileSync(path.join(OUT_DIR, "bitcoin_candles.csv.gz"))));
-// The Evidence CSV plugin scans gzip files too; leave only the decoded table.
-rmSync(path.join(OUT_DIR, "bitcoin_candles.csv.gz"));
+// Replace the whole datasource folder in one step, so Evidence only ever sees one
+// complete, hash-verified release — never a mix of an old and a new one. Files dropped
+// from CSV_FILES disappear with the old folder instead of lingering in the build.
+function publishStaged() {
+  // Evidence ingests the narrow candle table, never the gzip archive or wide snapshots.
+  const archive = path.join(STAGING_DIR, CANDLE_ARCHIVE);
+  writeFileSync(path.join(STAGING_DIR, "bitcoin_candles.csv"), gunzipSync(readFileSync(archive)));
+  rmSync(archive);
 
-console.log("\nDone. Next: npm run sources && npm run dev\n");
+  // Carry the datasource configuration (connection.yaml) into the new folder.
+  if (existsSync(OUT_DIR)) {
+    for (const entry of readdirSync(OUT_DIR, { withFileTypes: true })) {
+      if (entry.isFile() && !/\.csv(\.gz)?$/.test(entry.name)) {
+        copyFileSync(path.join(OUT_DIR, entry.name), path.join(STAGING_DIR, entry.name));
+      }
+    }
+  }
+
+  rmSync(PREVIOUS_DIR, { recursive: true, force: true });
+  if (existsSync(OUT_DIR)) renameSync(OUT_DIR, PREVIOUS_DIR);
+  renameSync(STAGING_DIR, OUT_DIR);
+  rmSync(PREVIOUS_DIR, { recursive: true, force: true });
+}
+
+rmSync(STAGING_DIR, { recursive: true, force: true });
+mkdirSync(STAGING_DIR, { recursive: true });
+try {
+  const manifest = LOCAL_MODE ? stageLocal() : await stageRemote();
+  publishStaged();
+  console.log(`\nSynced release ${manifest.release_id}. Next: npm run sources && npm run dev\n`);
+} catch (err) {
+  rmSync(STAGING_DIR, { recursive: true, force: true });
+  console.error(`\n✗ ${err.message}\nRefusing to sync; existing dashboard sources were left unchanged.\n`);
+  process.exit(1);
+}

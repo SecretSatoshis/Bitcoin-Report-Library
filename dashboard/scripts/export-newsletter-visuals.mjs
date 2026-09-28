@@ -64,7 +64,7 @@ const VISUALS = [
 const QUARTERLY_VISUALS = [
   { ...VISUALS[1], id: 'price-outlook', file: 'price-outlook.png',
     selector: '[data-newsletter-visual="bitcoin-price"]',
-    sourceUrl: 'https://dashboard.secretsatoshis.com/#secret-satoshis-datayearlabel-price-outlook' },
+    sourceUrl: 'https://dashboard.secretsatoshis.com/#price-outlook' },
   ...[
     ['performance-indexes', 'Stock Market Index Performance'],
     ['performance-sectors', 'Sector Performance'],
@@ -276,6 +276,10 @@ async function main() {
       }
       let text = await locator.innerText();
       const chartFrame = locator.locator('[data-price-outlook-frame]');
+      const chartError = locator.locator('[data-price-outlook-error]');
+      if (await chartError.count()) {
+        throw new Error(`${visual.id}: ${(await chartError.innerText()).trim()}`);
+      }
       if(await chartFrame.count()){
         const handle=await chartFrame.elementHandle(), embedded=await handle.contentFrame();
         await embedded.waitForFunction(()=>window.SecretSatoshisChart?.ready);
