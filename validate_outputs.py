@@ -137,7 +137,7 @@ REQUIRED_COLUMNS = {
     "ohlc_data.csv": {"Time", "Open", "High", "Low", "Close"},
     "onchain_price_models.csv": {
         "date", "BTC Price", "Electricity Cost", "Metcalfe Value", "Power Law Price",
-        "3-month MA", "1-year MA", "200-week MA",
+        "50-day MA", "3-month MA", "200-day MA", "1-year MA", "200-week MA",
     },
     "performance_table.csv": {
         "Category", "Asset", "Price", "MTD Return (%)", "YTD Return (%)",
@@ -691,23 +691,29 @@ def _validate_electricity_scenarios(
 
 # The Dashboard price chart's simple moving averages, recomputed here independently:
 # calendar-day windows of daily closes, empty until every day in the window has a close.
-PRICE_CHART_MOVING_AVERAGE_DAYS = {"3-month MA": 90, "1-year MA": 364, "200-week MA": 1400}
+PRICE_MOVING_AVERAGE_DAYS = {
+    "50-day MA": 50,
+    "3-month MA": 90,
+    "200-day MA": 200,
+    "1-year MA": 364,
+    "200-week MA": 1400,
+}
 
 
-def _validate_price_chart_moving_averages(
+def _validate_price_moving_averages(
     frames: dict[str, pd.DataFrame],
     errors: list[str],
 ) -> None:
     filename = "onchain_price_models.csv"
     frame = frames.get(filename)
-    columns = {"date", "BTC Price", *PRICE_CHART_MOVING_AVERAGE_DAYS}
+    columns = {"date", "BTC Price", *PRICE_MOVING_AVERAGE_DAYS}
     if frame is None or frame.empty or not columns.issubset(frame.columns):
         return
     prices = pd.Series(
         pd.to_numeric(frame["BTC Price"], errors="coerce").to_numpy(),
         index=pd.to_datetime(frame["date"]),
     ).sort_index()
-    for column, days in PRICE_CHART_MOVING_AVERAGE_DAYS.items():
+    for column, days in PRICE_MOVING_AVERAGE_DAYS.items():
         window = prices.rolling(f"{days}D")
         expected = window.mean().where(window.count() == days).to_numpy()
         actual = pd.Series(
@@ -1000,7 +1006,7 @@ def _validate_report_agreement(
     _validate_cycle_contracts(frames, errors)
     _validate_electricity_scenarios(frames, expected_report_date, errors)
     _validate_network_models(frames, expected_report_date, errors)
-    _validate_price_chart_moving_averages(frames, errors)
+    _validate_price_moving_averages(frames, errors)
 
 
 def _validate_review_contracts(frames, output_dir, report_date, errors):

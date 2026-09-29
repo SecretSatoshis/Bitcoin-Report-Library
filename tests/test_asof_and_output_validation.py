@@ -337,7 +337,7 @@ class OutputValidationTests(unittest.TestCase):
             errors = validate_outputs(directory, "2024-02-15", rules=rules)
             self.assertTrue(any("$0.05/kWh" in error for error in errors))
 
-    def test_validator_recomputes_price_chart_moving_averages(self):
+    def test_validator_recomputes_price_moving_averages(self):
         rules = {"onchain_price_models.csv": RowBounds(1, 5_000)}
         with tempfile.TemporaryDirectory() as temp_dir:
             directory = Path(temp_dir)
@@ -352,17 +352,17 @@ class OutputValidationTests(unittest.TestCase):
                 index=pd.Index(dates, name="date"),
             )
             path = directory / "onchain_price_models.csv"
-            report_tables.add_price_chart_moving_averages(frame).to_csv(path)
+            report_tables.add_price_moving_averages(frame).to_csv(path)
 
             self.assertEqual(
                 validate_outputs(directory, "2024-02-15", rules=rules), []
             )
 
             published = pd.read_csv(path)
-            published.loc[len(published) - 1, "1-year MA"] += 1.0
+            published.loc[len(published) - 1, "200-day MA"] += 1.0
             published.to_csv(path, index=False)
             errors = validate_outputs(directory, "2024-02-15", rules=rules)
-            self.assertTrue(any("1-year MA" in error for error in errors))
+            self.assertTrue(any("200-day MA" in error for error in errors))
 
 
 if __name__ == "__main__":

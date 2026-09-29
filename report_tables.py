@@ -217,20 +217,24 @@ def _last_positive_before(price_series, boundary):
     return prior.iloc[-1] if not prior.empty else np.nan
 
 
-# Dashboard price-chart averages: simple means over calendar-day windows of daily
-# closes. A window missing any daily close stays empty rather than averaging fewer days.
-PRICE_CHART_MOVING_AVERAGES = {
+# Price moving averages: simple means over calendar-day windows of daily closes. A
+# window missing any daily close stays empty rather than averaging fewer days. The
+# 3-month, 1-year and 200-week averages are drawn on the Dashboard price chart; the
+# 50-day and 200-day averages are published for other consumers such as the newsletter.
+PRICE_MOVING_AVERAGES = {
+    "50-day MA": 50,
     "3-month MA": 90,
+    "200-day MA": 200,
     "1-year MA": 364,
     "200-week MA": 1400,
 }
 
 
-def add_price_chart_moving_averages(frame, price_column="BTC Price"):
-    """Return a copy of a date-indexed frame with the dashboard's moving averages."""
+def add_price_moving_averages(frame, price_column="BTC Price"):
+    """Return a copy of a date-indexed frame with the published price moving averages."""
     result = frame.copy()
     prices = pd.to_numeric(result[price_column], errors="coerce")
-    for column, days in PRICE_CHART_MOVING_AVERAGES.items():
+    for column, days in PRICE_MOVING_AVERAGES.items():
         window = prices.rolling(f"{days}D")
         result[column] = window.mean().where(window.count() == days)
     return result

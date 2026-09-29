@@ -217,6 +217,6 @@ columns of `onchain_price_models.csv`: 90-day, 364-day and 1,400-day calendar wi
 the canonical daily close, computed over the full history by the Report Library, and
 recomputed independently by `validate_outputs.py` before each release. A window with missing
 closes stays null. Other consumers read the same published columns, so any level they quote
-matches the chart. The Trading Range bucket graphics are no longer displayed or downloaded by
+matches the chart. The file also carries 50-day and 200-day averages, which the chart does not draw. The Trading Range bucket graphics are no longer displayed or downloaded by
 the dashboard.
 Their upstream CSVs remain available for other Report Library consumers.

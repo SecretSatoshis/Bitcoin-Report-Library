@@ -158,7 +158,7 @@ class ReportRegressionTests(unittest.TestCase):
         # Common-calendar days plus the explicit prior-year-close anchor at row 0.
         self.assertEqual(result["2020"].notna().sum(), 366)
 
-    def test_price_chart_moving_averages_use_complete_calendar_windows(self):
+    def test_price_moving_averages_use_complete_calendar_windows(self):
         dates = pd.date_range("2024-01-01", periods=1_500, freq="D")
         prices = pd.Series(np.arange(1.0, 1_501.0), index=dates)
         frame = pd.DataFrame({"BTC Price": prices})
@@ -166,8 +166,12 @@ class ReportRegressionTests(unittest.TestCase):
         gap = dates[1_450]
         frame = frame.drop(gap)
 
-        result = report_tables.add_price_chart_moving_averages(frame)
+        result = report_tables.add_price_moving_averages(frame)
 
+        self.assertTrue(np.isnan(result.loc[dates[48], "50-day MA"]))
+        self.assertEqual(result.loc[dates[49], "50-day MA"], prices.iloc[:50].mean())
+        self.assertTrue(np.isnan(result.loc[dates[198], "200-day MA"]))
+        self.assertEqual(result.loc[dates[199], "200-day MA"], prices.iloc[:200].mean())
         self.assertTrue(np.isnan(result.loc[dates[88], "3-month MA"]))
         self.assertEqual(result.loc[dates[89], "3-month MA"], prices.iloc[:90].mean())
         self.assertTrue(np.isnan(result.loc[dates[362], "1-year MA"]))
