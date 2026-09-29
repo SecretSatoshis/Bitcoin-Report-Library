@@ -73,7 +73,7 @@ report_tables.py  ──►  Generates formatted report tables
 csv/  ──►  All outputs exported as CSV
     │
     ├─►  Bitcoin-Chart-Library     (interactive HTML charts)
-    └─►  dashboard/  ──►  Evidence.dev  ──►  Cloudflare Pages
+    └─►  dashboard/  ──►  Evidence.dev  ──►  Vercel
                                               dashboard.secretsatoshis.com
 ```
 

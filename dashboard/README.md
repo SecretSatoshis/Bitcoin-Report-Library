@@ -138,9 +138,9 @@ Wide files such as `master_metrics_data.csv.gz` and `cagr_data.csv` are intentio
 
 ## Production Deploy
 
-The dashboard is published at [dashboard.secretsatoshis.com](https://dashboard.secretsatoshis.com). Its Cloudflare Pages Git integration is configured outside this repository to rebuild when relevant `dashboard/` or `csv/` changes reach `main`. The repository's daily data-refresh workflow is scheduled for 00:30 UTC, shortly after the completed UTC day, then tests, regenerates, and validates the report before committing refreshed CSVs; that commit triggers the dashboard rebuild. GitHub starts scheduled workflows late — recent runs began around 05:15–05:45 UTC (about 1–2 AM in New York) — so the dashboard usually updates overnight rather than the same evening.
+The dashboard is published at [dashboard.secretsatoshis.com](https://dashboard.secretsatoshis.com). It is deployed by a Vercel project whose Git integration is configured outside this repository and builds every push to `main`; each commit shows a Vercel deployment status. The repository's daily data-refresh workflow is scheduled for 00:30 UTC, shortly after the completed UTC day, then tests, regenerates, and validates the report before committing refreshed CSVs; that commit triggers the dashboard rebuild. GitHub starts scheduled workflows late — recent runs began around 05:15–05:45 UTC (about 1–2 AM in New York) — so the dashboard usually updates overnight rather than the same evening.
 
-The production build sequence is `npm ci → sync:remote → sources → build`, with the static `build/` folder served behind a CDN. The commit that triggers the build is the same one GitHub Pages is still deploying, and Pages serves files with a 10-minute CDN cache. `sync:remote` therefore reads the release in the checked-out `../csv/release_manifest.json` and waits (up to 12 minutes) until Pages serves that release, requesting each file with a release-keyed query so a cached copy of an older file cannot be used. If Pages never catches up the build fails instead of deploying the previous day's data. Switching the Cloudflare build command to `sync:local` would remove the wait entirely, because the checkout already holds the triggering release. The build finishes by replacing Evidence's hardcoded X publisher attribution with `@SecretSatoshis`; it fails if the upstream tag changes instead of silently publishing incorrect metadata. Because the hosting integration is external, verify those build settings in Cloudflare when changing the Node version or production command.
+The production build sequence is `npm ci → sync:remote → sources → build`, with the static `build/` folder served behind a CDN. The commit that triggers the build is the same one GitHub Pages is still deploying, and Pages serves files with a 10-minute CDN cache. `sync:remote` therefore reads the release in the checked-out `../csv/release_manifest.json` and waits (up to 12 minutes) until Pages serves that release, requesting each file with a release-keyed query so a cached copy of an older file cannot be used. A release counts as current only when its report date is newer, or the same date with a `generated_at` time at least as new: a manual rerun of a day that already had a scheduled release produces a second release for the same date, and the build must not accept the earlier copy. If Pages never catches up the build fails instead of deploying stale data. Switching the Vercel build command to `sync:local` would remove the wait entirely, because the checkout already holds the triggering release. The build finishes by replacing Evidence's hardcoded X publisher attribution with `@SecretSatoshis`; it fails if the upstream tag changes instead of silently publishing incorrect metadata. Because the hosting integration is external, verify those build settings in Vercel when changing the Node version or production command.
 
 `sync:local` and `sync:remote` both require `csv/release_manifest.json` and verify every
 dashboard input against its hashes before Evidence ingests them.
@@ -214,8 +214,9 @@ Scenario text is compact on the dashboard and remains above the exported chart.
 
 The displayed moving averages are the `3-month MA`, `1-year MA` and `200-week MA`
 columns of `onchain_price_models.csv`: 90-day, 364-day and 1,400-day calendar windows on
-the canonical daily close, computed over the full history by the Report Library. A window
-with missing closes stays null. The newsletter reads the same columns, so its levels
-always match the chart. The
-Trading Range bucket graphics are no longer displayed or downloaded by the dashboard.
+the canonical daily close, computed over the full history by the Report Library, and
+recomputed independently by `validate_outputs.py` before each release. A window with missing
+closes stays null. Other consumers read the same published columns, so any level they quote
+matches the chart. The Trading Range bucket graphics are no longer displayed or downloaded by
+the dashboard.
 Their upstream CSVs remain available for other Report Library consumers.
