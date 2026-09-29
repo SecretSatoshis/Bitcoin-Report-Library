@@ -190,7 +190,7 @@ outlook year's end, with a linear scale and no gridlines. All shared historical 
 year-start marker. Scenario labels sit at the left behind the data.
 
 `components/PriceOutlookChart.svelte` adapts the dashboard's existing price/model
-query to the shared payload. Moving-average formulas are unchanged. Weekly and
+query to the shared payload. Moving averages arrive precomputed in the CSV. Weekly and
 monthly line observations select the corresponding candle's final observation
 date; OHLC arrives already aggregated from the Report Library. Data sync verifies
 `bitcoin_candles.csv.gz` against the release manifest and decodes it for Evidence.
@@ -212,8 +212,10 @@ values. Right/Left scale labels, YTD / 1Y / 4Y / 10Y / All ranges, Show all, Rem
 (retaining Bitcoin), isolation and event controls come from the shared renderer.
 Scenario text is compact on the dashboard and remains above the exported chart.
 
-The displayed moving averages retain 90-day, 364-day and 1,400-day windows on the
-canonical daily close from `onchain_price_models.csv`. SQL calculates over the full
-history before display filtering; a window with missing closes stays null. The
+The displayed moving averages are the `3-month MA`, `1-year MA` and `200-week MA`
+columns of `onchain_price_models.csv`: 90-day, 364-day and 1,400-day calendar windows on
+the canonical daily close, computed over the full history by the Report Library. A window
+with missing closes stays null. The newsletter reads the same columns, so its levels
+always match the chart. The
 Trading Range bucket graphics are no longer displayed or downloaded by the dashboard.
 Their upstream CSVs remain available for other Report Library consumers.

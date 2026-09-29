@@ -893,32 +893,18 @@ order by
 ```
 
 ```sql btc_with_models
--- Keep full history and original calendar-day moving-average calculations.
--- Incomplete windows (including missing daily closes) remain null.
-with model_history as (
-  select
-    cast(date as date) as date,
-    "BTC Price",
-    "Realized Price",
-    "STH Realized Price",
-    "3x Realized Price"
-  from bitcoin_report_library.onchain_price_models
-),
-moving_averages as (
-  select *,
-    case when count("BTC Price") over quarter_window = 90
-      then avg("BTC Price") over quarter_window end as "3-month MA",
-    case when count("BTC Price") over year_window = 364
-      then avg("BTC Price") over year_window end as "1-year MA",
-    case when count("BTC Price") over cycle_window = 1400
-      then avg("BTC Price") over cycle_window end as "200-week MA"
-  from model_history
-  window
-    quarter_window as (order by date range between interval '89 days' preceding and current row),
-    year_window as (order by date range between interval '363 days' preceding and current row),
-    cycle_window as (order by date range between interval '1399 days' preceding and current row)
-)
-select * from moving_averages
+-- Moving averages come precomputed from the Report Library (calendar-day windows of
+-- daily closes; incomplete windows stay null), so the chart and newsletter share them.
+select
+  cast(date as date) as date,
+  "BTC Price",
+  "Realized Price",
+  "STH Realized Price",
+  "3x Realized Price",
+  "3-month MA",
+  "1-year MA",
+  "200-week MA"
+from bitcoin_report_library.onchain_price_models
 order by date
 ```
 
