@@ -217,6 +217,25 @@ def _last_positive_before(price_series, boundary):
     return prior.iloc[-1] if not prior.empty else np.nan
 
 
+# Dashboard price-chart averages: simple means over calendar-day windows of daily
+# closes. A window missing any daily close stays empty rather than averaging fewer days.
+PRICE_CHART_MOVING_AVERAGES = {
+    "3-month MA": 90,
+    "1-year MA": 364,
+    "200-week MA": 1400,
+}
+
+
+def add_price_chart_moving_averages(frame, price_column="BTC Price"):
+    """Return a copy of a date-indexed frame with the dashboard's moving averages."""
+    result = frame.copy()
+    prices = pd.to_numeric(result[price_column], errors="coerce")
+    for column, days in PRICE_CHART_MOVING_AVERAGES.items():
+        window = prices.rolling(f"{days}D")
+        result[column] = window.mean().where(window.count() == days)
+    return result
+
+
 def create_indexed_returns_history(
     price_series, report_date, period, min_year=2014
 ):

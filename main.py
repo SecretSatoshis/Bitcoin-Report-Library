@@ -244,7 +244,8 @@ ytd_history = report_tables.create_indexed_returns_history(
 ytd_history.to_csv("csv/ytd_returns_history.csv")
 
 
-## On-chain Price Models CSV - daily canonical BTC price + model values through report date
+## On-chain Price Models CSV - daily canonical BTC price + model values through report date,
+## plus the Dashboard price chart's 3-month, 1-year and 200-week moving averages
 ONCHAIN_PRICE_MODEL_COLS = {
     "price_close": "BTC Price",
     "Electricity_Cost": "Electricity Cost",
@@ -260,6 +261,7 @@ onchain_subset = (
 )
 onchain_subset["3x Realized Price"] = onchain_subset["realized_price"] * 3
 onchain_subset = onchain_subset.rename(columns=ONCHAIN_PRICE_MODEL_COLS)
+onchain_subset = report_tables.add_price_chart_moving_averages(onchain_subset)
 onchain_subset.index.name = "date"
 onchain_subset.to_csv("csv/onchain_price_models.csv")
 
