@@ -199,15 +199,31 @@ function stageLocal() {
 // The release committed alongside this dashboard checkout, if the checkout has one.
 // Production builds clone the whole repository, so this is the release whose commit
 // triggered the build. A developer checkout may simply be older than Pages, which is fine.
-function checkoutReleaseDate() {
+function checkoutRelease() {
   try {
-    return readLocalManifest().report_date;
+    const manifest = readLocalManifest();
+    return { report_date: manifest.report_date, generated_at: manifest.generated_at ?? "" };
   } catch {
     return null;
   }
 }
 
-async function waitForRemoteRelease(minimumDate) {
+// A report date can be released more than once (a manual rerun regenerates the same
+// day), so a release is only current when it is at least as new by date and, on the
+// same date, by generation time. Both are ISO strings that compare chronologically.
+function isAtLeast(remote, minimum) {
+  if (!minimum) return true;
+  if (remote.report_date !== minimum.report_date) {
+    return remote.report_date > minimum.report_date;
+  }
+  return (remote.generated_at ?? "") >= minimum.generated_at;
+}
+
+function describeRelease(release) {
+  return release ? `${release.report_date} (generated ${release.generated_at || "unknown"})` : "none";
+}
+
+async function waitForRemoteRelease(minimum) {
   const deadline = Date.now() + RELEASE_WAIT_MS;
   for (;;) {
     let manifest = null;
@@ -220,17 +236,19 @@ async function waitForRemoteRelease(minimumDate) {
       if (Date.now() >= deadline) throw err;
       console.warn(`  ⟳ release manifest unavailable (${err.message})`);
     }
-    if (manifest && (!minimumDate || manifest.report_date >= minimumDate)) {
+    if (manifest && isAtLeast(manifest, minimum)) {
       return manifest;
     }
     if (Date.now() >= deadline) {
       throw new Error(
-        `GitHub Pages still serves release ${manifest?.report_date ?? "none"}, but this ` +
-          `checkout contains ${minimumDate}; refusing to build stale data`
+        `GitHub Pages still serves release ${describeRelease(manifest)}, but this ` +
+          `checkout contains ${describeRelease(minimum)}; refusing to build stale data`
       );
     }
     if (manifest) {
-      console.log(`  … Pages serves ${manifest.report_date}; waiting for ${minimumDate} to deploy`);
+      console.log(
+        `  … Pages serves ${describeRelease(manifest)}; waiting for ${describeRelease(minimum)} to deploy`
+      );
     }
     await sleep(RELEASE_POLL_MS);
   }
@@ -268,7 +286,7 @@ async function downloadRemote(file, manifest) {
 
 async function stageRemote() {
   console.log(`\nDownloading from GitHub Pages: ${REMOTE_BASE_URL}\n`);
-  const manifest = await waitForRemoteRelease(checkoutReleaseDate());
+  const manifest = await waitForRemoteRelease(checkoutRelease());
   console.log(`  ✓ release ${manifest.release_id}`);
   const failures = [];
   for (const file of CSV_FILES) {
