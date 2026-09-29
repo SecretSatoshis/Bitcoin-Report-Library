@@ -13,11 +13,7 @@ import numpy as np
 import pandas as pd
 
 # Local configuration only; importing data_definitions performs no I/O.
-from data_definitions import ELECTRICITY_TARIFFS_USD_PER_KWH, report_date as CLOCK_REPORT_DATE
-
-TARIFF_COLUMNS = [
-    f"Power Expense (${tariff:.2f}/kWh)" for tariff in ELECTRICITY_TARIFFS_USD_PER_KWH
-]
+from data_definitions import report_date as CLOCK_REPORT_DATE
 
 
 @dataclass(frozen=True)
@@ -30,23 +26,16 @@ class RowBounds:
 # report tables. They catch truncation, header-only files, accidental duplication,
 # and runaway exports without coupling validation to today's exact history length.
 OUTPUT_RULES = {
-    "1k_bucket_table.csv": RowBounds(1, 10_000),
-    "5k_bucket_table.csv": RowBounds(1, 10_000),
     "bitcoin_dominance_history.csv": RowBounds(1, 100_000),
-    "brk_onchain_raw.csv": RowBounds(365, 100_000),
     "cagr_data.csv": RowBounds(365, 100_000),
     "cycle_low_data.csv": RowBounds(1, 100_000),
     "drawdown_data.csv": RowBounds(1, 100_000),
-    "electricity_cost_scenarios.csv": RowBounds(365, 100_000),
-    "eoy_model_data.csv": RowBounds(365, 100_000),
     "fundamentals_table.csv": RowBounds(1, 1_000),
     "halving_data.csv": RowBounds(1, 100_000),
     "master_metrics_data.csv.gz": RowBounds(365, 100_000),
-    "model_coefficients.csv": RowBounds(6, 6),
     "monthly_heatmap_data.csv": RowBounds(4, 1_000),
     "mtd_return_comparison.csv": RowBounds(2, 10),
     "mtd_returns_history.csv": RowBounds(29, 32),
-    "network_model_metrics.csv": RowBounds(365, 100_000),
     "ohlc_data.csv": RowBounds(52, 10_000),
     "onchain_price_models.csv": RowBounds(365, 100_000),
     "performance_table.csv": RowBounds(1, 1_000),
@@ -62,35 +51,12 @@ OUTPUT_RULES = {
 
 
 REQUIRED_COLUMNS = {
-    "1k_bucket_table.csv": {"Price Range ($)", "Count", "Current Price"},
-    "model_coefficients.csv": {
-        "coefficient", "value", "report_date", "fit_end_date",
-    },
-    "5k_bucket_table.csv": {"Price Range ($)", "Count", "Current Price"},
     "bitcoin_dominance_history.csv": {
         "date", "bitcoin_dominance", "source_updated_at",
     },
-    "brk_onchain_raw.csv": {"timestamp", "price_close"},
     "cagr_data.csv": {"time", "price_close_2_Year_CAGR", "price_close_4_Year_CAGR"},
     "cycle_low_data.csv": {"days_since_cycle_low", "index_value", "Cycle"},
     "drawdown_data.csv": {"days_since_ath", "drawdown_pct", "Cycle"},
-    "electricity_cost_scenarios.csv": {
-        "date",
-        "BTC Price",
-        "Fleet Efficiency (J/GH)",
-        "Network Power Draw (W)",
-        "Daily Electricity Consumption (kWh)",
-        "Subsidy (BTC)",
-        "Fees (BTC)",
-        "Miner Revenue (BTC)",
-        *TARIFF_COLUMNS,
-        "Power-Only Break-Even Tariff ($/kWh)",
-        "Legacy PUE/Subsidy-Only Cost",
-        "Bitcoin Production Cost",
-        "Hayes Network Price",
-        "Energy Value",
-    },
-    "eoy_model_data.csv": {"time", "price_close", "price_close_4_Year_CAGR"},
     "fundamentals_table.csv": {"Section", "Metric", "Current Value"},
     "halving_data.csv": {"days_since_halving", "index_value", "Era"},
     "master_metrics_data.csv.gz": {
@@ -105,35 +71,6 @@ REQUIRED_COLUMNS = {
         "Year", "End Price ($)", "Return (%)", "Report Date Return (%)",
     },
     "mtd_returns_history.csv": {"day", "Median", "Average"},
-    "network_model_metrics.csv": {
-        "date",
-        "BTC Price",
-        "Bitcoin Market Cap",
-        "Bitcoin Supply",
-        "Non-Zero Address Count",
-        "Addresses Holding 0.001+ BTC",
-        "Addresses Holding 0.01+ BTC",
-        "Addresses Holding 0.1+ BTC",
-        "Metcalfe Value (Any Balance)",
-        "Metcalfe Value (0.001+ BTC)",
-        "Metcalfe Value (0.01+ BTC)",
-        "Metcalfe Value (0.1+ BTC)",
-        "Metcalfe Scale (Any Balance)",
-        "Metcalfe Scale (0.001+ BTC)",
-        "Metcalfe Scale (0.01+ BTC)",
-        "Metcalfe Scale (0.1+ BTC)",
-        "BTC Price / Metcalfe Value",
-        "Power Law Price",
-        "BTC Price / Power Law Price",
-        "Days Since Genesis",
-        "Power Law Exponent",
-        "Power Law Scale",
-        "Hash Rate (H/s)",
-        "Hash Rate 30-Day MA (H/s)",
-        "Hash Rate 60-Day MA (H/s)",
-        "Hash Ribbon 30D / 60D",
-        "Hash Ribbon Capitulation",
-    },
     "ohlc_data.csv": {"Time", "Open", "High", "Low", "Close"},
     "onchain_price_models.csv": {
         "date", "BTC Price", "Electricity Cost", "Metcalfe Value", "Power Law Price",
@@ -169,18 +106,12 @@ SUMMARY_HISTORY_METRICS = {
 RETAINED_OUTPUTS = {
     "ohlc_data.csv",
     "fundamentals_table.csv",
-    "1k_bucket_table.csv",
-    "5k_bucket_table.csv",
     "bitcoin_dominance_history.csv",
     "cycle_low_data.csv",
-    "eoy_model_data.csv",
-    "electricity_cost_scenarios.csv",
     "halving_data.csv",
-    "model_coefficients.csv",
     "monthly_heatmap_data.csv",
     "mtd_return_comparison.csv",
     "mtd_returns_history.csv",
-    "network_model_metrics.csv",
     "onchain_price_models.csv",
     "performance_table.csv",
     "report_ohlc_summary.csv",
@@ -288,11 +219,7 @@ def _validate_dated_output(
 INDEX_CUTOFF_OUTPUTS = {
     "master_metrics_data.csv.gz": "time",
     "cagr_data.csv": "time",
-    "brk_onchain_raw.csv": "timestamp",
 }
-
-# Index columns stored as epoch numbers rather than date strings.
-INDEX_CUTOFF_UNITS = {"brk_onchain_raw.csv": "s"}
 
 
 def _validate_index_cutoff(
@@ -301,7 +228,6 @@ def _validate_index_cutoff(
     column: str,
     expected_report_date: pd.Timestamp,
     errors: list[str],
-    unit: str | None = None,
 ) -> None:
     """Assert a large dated export ends exactly on the report date."""
     path = output_dir / filename
@@ -313,10 +239,7 @@ def _validate_index_cutoff(
         errors.append(f"{filename}: cannot read {column!r} ({exc})")
         return
 
-    if unit is None:
-        parsed = pd.to_datetime(index, errors="coerce")
-    else:
-        parsed = pd.to_datetime(pd.to_numeric(index, errors="coerce"), unit=unit)
+    parsed = pd.to_datetime(index, errors="coerce")
     if parsed.isna().any():
         errors.append(f"{filename}: {column!r} contains invalid or missing dates")
         return
@@ -413,7 +336,6 @@ def _validate_price_agreement(
 
     dated_price_sources = {
         "onchain_price_models.csv": ("date", "BTC Price"),
-        "eoy_model_data.csv": ("time", "price_close"),
         "report_ohlc_summary.csv": ("Report Date", "Daily Close"),
     }
     for filename, (date_column, value_column) in dated_price_sources.items():
@@ -430,16 +352,6 @@ def _validate_price_agreement(
             errors.append(
                 f"{filename}: expected one price for {expected_report_date.date()}"
             )
-
-    for filename in ("1k_bucket_table.csv", "5k_bucket_table.csv"):
-        frame = frames.get(filename)
-        if frame is None or "Current Price" not in frame.columns:
-            continue
-        values = _unique_numeric_values(frame, "Current Price")
-        if len(values) == 1:
-            prices[filename] = values[0]
-        else:
-            errors.append(f"{filename}: expected one shared Current Price value")
 
     for filename in ("mtd_return_comparison.csv", "ytd_return_comparison.csv"):
         frame = frames.get(filename)
@@ -595,98 +507,6 @@ def _validate_cycle_contracts(
                 )
 
 
-def _validate_electricity_scenarios(
-    frames: dict[str, pd.DataFrame],
-    expected_report_date: pd.Timestamp,
-    errors: list[str],
-) -> None:
-    filename = "electricity_cost_scenarios.csv"
-    frame = frames.get(filename)
-    if frame is None or frame.empty:
-        return
-
-    _validate_dated_output(
-        frames, filename, "date", expected_report_date, errors
-    )
-
-    numeric_columns = [
-        "BTC Price",
-        "Daily Electricity Consumption (kWh)",
-        "Subsidy (BTC)",
-        "Fees (BTC)",
-        "Miner Revenue (BTC)",
-        "Power-Only Break-Even Tariff ($/kWh)",
-    ]
-    tariffs = ELECTRICITY_TARIFFS_USD_PER_KWH
-    tariff_columns = TARIFF_COLUMNS
-    if not set(numeric_columns + tariff_columns).issubset(frame.columns):
-        return
-
-    numeric = frame[numeric_columns + tariff_columns].apply(
-        pd.to_numeric, errors="coerce"
-    )
-    valid = (
-        numeric["Daily Electricity Consumption (kWh)"].gt(0)
-        & numeric["Miner Revenue (BTC)"].gt(0)
-    )
-    if not valid.any():
-        errors.append(f"{filename}: contains no valid positive energy/revenue rows")
-        return
-
-    revenue_expected = numeric["Subsidy (BTC)"] + numeric["Fees (BTC)"]
-    if not np.allclose(
-        numeric.loc[valid, "Miner Revenue (BTC)"],
-        revenue_expected.loc[valid],
-        rtol=1e-10,
-        atol=1e-8,
-    ):
-        errors.append(f"{filename}: miner revenue does not equal subsidy plus fees")
-
-    for tariff, column in zip(tariffs, tariff_columns):
-        expected = (
-            numeric["Daily Electricity Consumption (kWh)"]
-            * tariff
-            / numeric["Miner Revenue (BTC)"]
-        )
-        if not np.allclose(
-            numeric.loc[valid, column],
-            expected.loc[valid],
-            rtol=1e-10,
-            atol=1e-6,
-        ):
-            errors.append(
-                f"{filename}: {column!r} does not match energy × tariff ÷ miner revenue"
-            )
-
-    breakeven_expected = (
-        numeric["BTC Price"]
-        * numeric["Miner Revenue (BTC)"]
-        / numeric["Daily Electricity Consumption (kWh)"]
-    )
-    if not np.allclose(
-        numeric.loc[valid, "Power-Only Break-Even Tariff ($/kWh)"],
-        breakeven_expected.loc[valid],
-        rtol=1e-10,
-        atol=1e-10,
-    ):
-        errors.append(f"{filename}: break-even tariff does not match its inputs")
-
-    onchain = frames.get("onchain_price_models.csv")
-    if onchain is not None and {"date", "Electricity Cost"}.issubset(onchain.columns):
-        scenario = frame[["date", "Power Expense ($0.05/kWh)"]].copy()
-        comparison = scenario.merge(
-            onchain[["date", "Electricity Cost"]], on="date", how="inner"
-        ).dropna()
-        if comparison.empty or not np.allclose(
-            comparison["Power Expense ($0.05/kWh)"],
-            comparison["Electricity Cost"],
-            rtol=1e-10,
-            atol=1e-6,
-        ):
-            errors.append(
-                "onchain_price_models.csv: Electricity Cost disagrees with the "
-                "canonical $0.05/kWh power-expense scenario"
-            )
 
 
 # The Dashboard price chart's simple moving averages, recomputed here independently:
@@ -726,155 +546,6 @@ def _validate_price_moving_averages(
             )
 
 
-def _validate_network_models(
-    frames: dict[str, pd.DataFrame],
-    expected_report_date: pd.Timestamp,
-    errors: list[str],
-) -> None:
-    filename = "network_model_metrics.csv"
-    frame = frames.get(filename)
-    if frame is None or frame.empty:
-        return
-    _validate_dated_output(frames, filename, "date", expected_report_date, errors)
-
-    numeric_columns = [
-        column for column in REQUIRED_COLUMNS[filename]
-        if column not in {"date", "Hash Ribbon Capitulation"}
-    ]
-    if not set(numeric_columns).issubset(frame.columns):
-        return
-    numeric = frame[numeric_columns].apply(pd.to_numeric, errors="coerce")
-
-    metcalfe_models = (
-        (
-            "Non-Zero Address Count",
-            "Metcalfe Value (Any Balance)",
-            "Metcalfe Scale (Any Balance)",
-        ),
-        (
-            "Addresses Holding 0.001+ BTC",
-            "Metcalfe Value (0.001+ BTC)",
-            "Metcalfe Scale (0.001+ BTC)",
-        ),
-        (
-            "Addresses Holding 0.01+ BTC",
-            "Metcalfe Value (0.01+ BTC)",
-            "Metcalfe Scale (0.01+ BTC)",
-        ),
-        (
-            "Addresses Holding 0.1+ BTC",
-            "Metcalfe Value (0.1+ BTC)",
-            "Metcalfe Scale (0.1+ BTC)",
-        ),
-    )
-    for address_column, value_column, scale_column in metcalfe_models:
-        valid = (
-            numeric["BTC Price"].gt(0)
-            & numeric["Bitcoin Supply"].gt(0)
-            & numeric[address_column].gt(0)
-        )
-        if not valid.any():
-            errors.append(f"{filename}: no valid rows for {value_column}")
-            continue
-        expected_scale = np.exp(
-            (
-                np.log(
-                    numeric.loc[valid, "BTC Price"]
-                    * numeric.loc[valid, "Bitcoin Supply"]
-                )
-                - 2 * np.log(numeric.loc[valid, address_column])
-            ).mean()
-        )
-        if not np.allclose(
-            numeric.loc[valid, scale_column], expected_scale, rtol=1e-10, atol=0
-        ):
-            errors.append(f"{filename}: {scale_column} does not match the fitted scale")
-        expected_value = (
-            expected_scale
-            * numeric.loc[valid, address_column].pow(2)
-            / numeric.loc[valid, "Bitcoin Supply"]
-        )
-        if not np.allclose(
-            numeric.loc[valid, value_column], expected_value, rtol=1e-10, atol=1e-6
-        ):
-            errors.append(f"{filename}: {value_column} does not match scale × n² ÷ supply")
-
-    power_valid = numeric["BTC Price"].gt(0) & numeric["Days Since Genesis"].gt(0)
-    if power_valid.sum() >= 2:
-        exponent, log_scale = np.polyfit(
-            np.log(numeric.loc[power_valid, "Days Since Genesis"]),
-            np.log(numeric.loc[power_valid, "BTC Price"]),
-            1,
-        )
-        scale = np.exp(log_scale)
-        expected_power = (
-            scale * numeric.loc[power_valid, "Days Since Genesis"].pow(exponent)
-        )
-        if not np.allclose(
-            numeric.loc[power_valid, "Power Law Exponent"], exponent,
-            rtol=1e-10, atol=0,
-        ):
-            errors.append(f"{filename}: Power Law Exponent does not match the fit")
-        if not np.allclose(
-            numeric.loc[power_valid, "Power Law Scale"], scale,
-            rtol=1e-10, atol=0,
-        ):
-            errors.append(f"{filename}: Power Law Scale does not match the fit")
-        if not np.allclose(
-            numeric.loc[power_valid, "Power Law Price"], expected_power,
-            rtol=1e-10, atol=1e-6,
-        ):
-            errors.append(f"{filename}: Power Law Price does not match scale × age^exponent")
-    else:
-        errors.append(f"{filename}: fewer than two positive rows for the power-law fit")
-
-    hash_rate = numeric["Hash Rate (H/s)"]
-    fast = hash_rate.rolling(30).mean()
-    slow = hash_rate.rolling(60).mean()
-    check = slow.notna() & slow.ne(0)
-    if check.any():
-        if not np.allclose(
-            numeric.loc[check, "Hash Rate 30-Day MA (H/s)"], fast.loc[check],
-            rtol=1e-10, atol=1,
-        ) or not np.allclose(
-            numeric.loc[check, "Hash Rate 60-Day MA (H/s)"], slow.loc[check],
-            rtol=1e-10, atol=1,
-        ):
-            errors.append(f"{filename}: hash-rate moving averages do not match 30/60-day means")
-        expected_ratio = fast.loc[check] / slow.loc[check]
-        if not np.allclose(
-            numeric.loc[check, "Hash Ribbon 30D / 60D"], expected_ratio,
-            rtol=1e-10, atol=1e-12,
-        ):
-            errors.append(f"{filename}: hash-ribbon ratio does not equal 30D ÷ 60D")
-        actual_state = (
-            frame.loc[check, "Hash Ribbon Capitulation"].astype(str).str.lower()
-        )
-        expected_state = (fast.loc[check] < slow.loc[check]).astype(str).str.lower()
-        if not actual_state.equals(expected_state):
-            errors.append(f"{filename}: hash-ribbon state disagrees with its averages")
-
-    onchain = frames.get("onchain_price_models.csv")
-    if onchain is not None and {
-        "date", "Metcalfe Value", "Power Law Price"
-    }.issubset(onchain.columns):
-        detailed = frame[
-            ["date", "Metcalfe Value (Any Balance)", "Power Law Price"]
-        ].rename(columns={"Metcalfe Value (Any Balance)": "Metcalfe Value"})
-        comparison = detailed.merge(
-            onchain[["date", "Metcalfe Value", "Power Law Price"]],
-            on="date",
-            how="inner",
-            suffixes=("_detail", "_onchain"),
-        ).dropna()
-        for column in ("Metcalfe Value", "Power Law Price"):
-            if comparison.empty or not np.allclose(
-                comparison[f"{column}_detail"], comparison[f"{column}_onchain"],
-                rtol=1e-10, atol=1e-6,
-            ):
-                errors.append(
-                    f"onchain_price_models.csv: {column} disagrees with {filename}"
-                )
 
 
 def _validate_report_agreement(
@@ -882,13 +553,9 @@ def _validate_report_agreement(
     expected_report_date: pd.Timestamp,
     errors: list[str],
 ) -> None:
-    for filename, column in (
-        ("onchain_price_models.csv", "date"),
-        ("eoy_model_data.csv", "time"),
-    ):
-        _validate_dated_output(
-            frames, filename, column, expected_report_date, errors
-        )
+    _validate_dated_output(
+        frames, "onchain_price_models.csv", "date", expected_report_date, errors
+    )
     _validate_dated_output(
         frames,
         "report_ohlc_summary.csv",
@@ -897,17 +564,6 @@ def _validate_report_agreement(
         errors,
         require_every_row=True,
     )
-    # Every coefficient row must name the release it was fitted for; a row carrying an
-    # older report date means the file was not regenerated with the rest of the release.
-    for column in ("report_date", "fit_end_date"):
-        _validate_dated_output(
-            frames,
-            "model_coefficients.csv",
-            column,
-            expected_report_date,
-            errors,
-            require_every_row=True,
-        )
 
     dominance = frames.get("bitcoin_dominance_history.csv")
     if dominance is not None and not dominance.empty:
@@ -1004,8 +660,6 @@ def _validate_report_agreement(
     _validate_price_agreement(frames, expected_report_date, errors)
     _validate_return_agreement(frames, expected_report_date, errors)
     _validate_cycle_contracts(frames, errors)
-    _validate_electricity_scenarios(frames, expected_report_date, errors)
-    _validate_network_models(frames, expected_report_date, errors)
     _validate_price_moving_averages(frames, errors)
 
 
@@ -1042,29 +696,6 @@ def _validate_review_contracts(frames, output_dir, report_date, errors):
                 raise ValueError("report_ohlc_summary.csv: inconsistent week-to-date candle")
         except (ValueError, KeyError, IndexError) as exc:
             errors.append(f"report_ohlc_summary.csv: {exc}")
-    coefficients = frames.get("model_coefficients.csv")
-    if coefficients is not None:
-        mapping = {
-            "power_law_exponent": "Power Law Exponent", "power_law_scale": "Power Law Scale",
-            "metcalfe_scale_any_balance": "Metcalfe Scale (Any Balance)",
-            "metcalfe_scale_0p001_btc": "Metcalfe Scale (0.001+ BTC)",
-            "metcalfe_scale_0p01_btc": "Metcalfe Scale (0.01+ BTC)",
-            "metcalfe_scale_0p1_btc": "Metcalfe Scale (0.1+ BTC)",
-        }
-        try:
-            if set(coefficients.coefficient) != set(mapping) or coefficients.coefficient.duplicated().any():
-                raise ValueError("expected exactly six unique named coefficients")
-            network = frames.get("network_model_metrics.csv")
-            for name, column in mapping.items():
-                value = float(coefficients.set_index("coefficient").loc[name, "value"])
-                if not np.isfinite(value) or (name != "power_law_exponent" and value <= 0):
-                    raise ValueError(f"invalid {name}")
-                if network is not None:
-                    reference = pd.to_numeric(network[column], errors="coerce").dropna()
-                    if reference.empty or not np.isclose(reference, value, rtol=1e-9, atol=0).all():
-                        raise ValueError(f"{name} disagrees with network model coefficients")
-        except (ValueError, KeyError, AttributeError) as exc:
-            errors.append(f"model_coefficients.csv: {exc}")
     fundamentals = frames.get("fundamentals_table.csv")
     master_path = output_dir / "master_metrics_data.csv.gz"
     if fundamentals is not None and master_path.is_file():
@@ -1137,7 +768,6 @@ def validate_outputs(
             column,
             expected_report_date,
             errors,
-            unit=INDEX_CUTOFF_UNITS.get(filename),
         )
 
     _validate_report_agreement(retained_frames, expected_report_date, errors)

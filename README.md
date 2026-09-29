@@ -161,17 +161,11 @@ The master metrics dataset is exported as gzipped CSV (`.csv.gz`) to keep the fi
 | `ytd_return_comparison.csv` | Year-to-date return from the latest positive close before January 1, plus the historical median projection |
 | `relative_value_comparison.csv` | Relative valuation metrics |
 | `roi_table.csv` | Historical ROI by labeled time frame and entry date |
-| `eoy_model_data.csv` | End-of-year price model inputs and 4-year growth rates, capped at `report_date` |
-| `5k_bucket_table.csv` | Positive-price trading-day distribution in $5,000 buckets, capped at `report_date` |
-| `1k_bucket_table.csv` | Positive-price trading-day distribution in $1,000 buckets, capped at `report_date` |
 | `monthly_heatmap_data.csv` | Monthly/yearly returns measured from the latest positive prior-period close |
 | `ohlc_data.csv` | Weekly OHLC from 2017, aggregated from BRK daily candles and labeled by Monday week start; the open week closes on `report_date` |
 | `report_ohlc_summary.csv` | Report-date daily OHLC plus week-to-date context capped at the report date |
 | `summary_history.csv` | 31 daily endpoints spanning 30 calendar days for dashboard sparklines + exact 30d deltas |
 | `onchain_price_models.csv` | Daily valuation models (Metcalfe, power law, Realized, STH/LTH Realized, canonical $0.05/kWh power expense, and 3× Realized) joined to BTC price through `report_date`, plus the 50-day, 3-month, 200-day, 1-year and 200-week moving averages (50, 90, 200, 364 and 1,400 daily closes; empty until the window is complete). The Dashboard price chart draws the 3-month, 1-year and 200-week averages |
-| `electricity_cost_scenarios.csv` | Daily network energy inputs, $0.03–$0.07/kWh power-expense scenarios, break-even tariff, and retained legacy/Production Cost/Hayes/Energy Value comparisons through `report_date` |
-| `network_model_metrics.csv` | Daily Metcalfe inputs and four address-band values, fitted power-law inputs/parameters, and 30/60-day Hash Ribbon metrics through `report_date` |
-| `model_coefficients.csv` | The six fitted power-law and Metcalfe coefficients used by the current release, labeled with their report and fit-end dates |
 | `mtd_returns_history.csv` | Indexed MTD paths with row 0 as the shared prior-month close anchor; day 1 retains its actual move and the current series is capped at `report_date` |
 | `ytd_returns_history.csv` | Indexed YTD paths with row 0 as the shared prior-year close anchor; calendar dates align across leap years and the current series is capped at `report_date` |
 | `price_outlook.csv` | Hand-maintained Bear/Base/Bull cases, their forecast year, and retained support/resistance reference data; the website and bundled dashboard render the three case lines |
@@ -187,12 +181,6 @@ These CSV files are pre-computed for downstream visualization by [Bitcoin-Chart-
 | `release_manifest.json` | Shared release ID, report date, generation time, and SHA-256/size records for every published CSV |
 | `halving_data.csv` | Performance indexed from each Bitcoin halving with a positive day-0 source price; the pre-price Genesis era is omitted |
 | `cagr_data.csv` | Rolling 2-year and 4-year CAGR values for the configured 13 downstream metrics, measured from the same calendar date 2 or 4 years earlier (leap days included) and expressed in percentage points |
-
-### Raw Data
-
-| File | Description |
-|------|-------------|
-| `brk_onchain_raw.csv` | Raw BRK API on-chain data before transformations, through `report_date` (the in-progress UTC day is excluded) |
 
 ## Dashboard
 
@@ -215,9 +203,9 @@ assuming a fixed time.
 The run fails closed if BRK has no on-chain row for the exact report date, miner
 revenue or supply contains an internal gap (neither is ever forward-filled), a
 hand-maintained reference dataset exceeds its reviewed-age budget, or a dated export
-(including the raw BRK file and the latest weekly candle) extends past the completed
-report date. Model coefficients are published with
-each release so fitted valuation series remain reproducible.
+(including the latest weekly candle) extends past the completed report date. The fitted
+power-law and Metcalfe coefficients are kept in the master file for every date, so fitted
+valuation series remain reproducible.
 
 Bitcoin dominance is a required report-date input. The pipeline stores the latest usable
 CoinGecko snapshot available when the run executes, including delayed runs, and fails only
@@ -315,8 +303,7 @@ from the same daily candles, so both weekly exports agree.
 The dashboard price outlook uses the shared Chart Library renderer: weekly candles,
 a linear four-year view, historical events and the annual start marker. Scenario
 cards remain above the plot and its PNG export. The former Trading Range graphics
-have been removed from the dashboard; their producer CSVs remain available to other
-consumers. See [dashboard/README.md](dashboard/README.md) for local builds, renderer
+have been removed from the dashboard. See [dashboard/README.md](dashboard/README.md) for local builds, renderer
 sync and frozen newsletter exports.
 
 ## License

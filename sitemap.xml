@@ -7,18 +7,6 @@
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/1k_bucket_table.csv</loc>
-    <lastmod>2026-09-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.5</priority>
-  </url>
-  <url>
-    <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/5k_bucket_table.csv</loc>
-    <lastmod>2026-09-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.5</priority>
-  </url>
-  <url>
     <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/bitcoin_candles.csv.gz</loc>
     <lastmod>2026-09-29</lastmod>
     <changefreq>daily</changefreq>
@@ -26,12 +14,6 @@
   </url>
   <url>
     <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/bitcoin_dominance_history.csv</loc>
-    <lastmod>2026-09-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.5</priority>
-  </url>
-  <url>
-    <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/brk_onchain_raw.csv</loc>
     <lastmod>2026-09-29</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.5</priority>
@@ -55,18 +37,6 @@
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/electricity_cost_scenarios.csv</loc>
-    <lastmod>2026-09-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.5</priority>
-  </url>
-  <url>
-    <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/eoy_model_data.csv</loc>
-    <lastmod>2026-09-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.5</priority>
-  </url>
-  <url>
     <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/fundamentals_table.csv</loc>
     <lastmod>2026-09-29</lastmod>
     <changefreq>daily</changefreq>
@@ -80,12 +50,6 @@
   </url>
   <url>
     <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/master_metrics_data.csv.gz</loc>
-    <lastmod>2026-09-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.5</priority>
-  </url>
-  <url>
-    <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/model_coefficients.csv</loc>
     <lastmod>2026-09-29</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.5</priority>
@@ -110,12 +74,6 @@
   </url>
   <url>
     <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/mtd_returns_history.csv</loc>
-    <lastmod>2026-09-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.5</priority>
-  </url>
-  <url>
-    <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/network_model_metrics.csv</loc>
     <lastmod>2026-09-29</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.5</priority>

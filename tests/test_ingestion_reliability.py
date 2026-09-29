@@ -553,26 +553,6 @@ class IngestionReliabilityTests(unittest.TestCase):
         self.assertTrue(pd.isna(result.loc["price_close", "OLD_close"]))
         self.assertTrue(pd.isna(result.loc["price_close", "NEW_close"]))
 
-    def test_raw_brk_csv_stops_at_the_cutoff(self):
-        csv_text = (
-            "timestamp,price_close\n"
-            "1704067200,42000\n"  # 2024-01-01
-            "1704153600,43000\n"  # 2024-01-02 (partial day)
-        )
-        with tempfile.TemporaryDirectory() as directory, patch.object(
-            data_format, "BRK_METRICS", ["timestamp", "price_close"]
-        ), patch.object(
-            data_format.requests, "get", return_value=FakeResponse(text=csv_text)
-        ):
-            out_path = Path(directory) / "raw.csv"
-            frame = data_format.get_brk_onchain(
-                "2024-01-01", out_path=str(out_path), verbose=False,
-                cutoff_date="2024-01-01",
-            )
-            saved = out_path.read_text(encoding="utf-8").strip().splitlines()
-        self.assertEqual(saved, ["timestamp,price_close", "1704067200,42000"])
-        self.assertEqual(len(frame), 2)
-
     def test_onchain_freshness_requires_the_report_date_row(self):
         index = pd.date_range("2024-01-01", periods=5, freq="D")
         data = pd.DataFrame(

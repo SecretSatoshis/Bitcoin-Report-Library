@@ -87,24 +87,14 @@ class ReviewFixTests(unittest.TestCase):
         for item in result.values():
             self.assertTrue(pd.isna(item.loc['price_close','MISSING_close']))
 
-    def test_release_rejects_mutated_coefficients_and_candle(self):
-        mapping = {
-            'power_law_exponent':'Power Law Exponent', 'power_law_scale':'Power Law Scale',
-            'metcalfe_scale_any_balance':'Metcalfe Scale (Any Balance)',
-            'metcalfe_scale_0p001_btc':'Metcalfe Scale (0.001+ BTC)',
-            'metcalfe_scale_0p01_btc':'Metcalfe Scale (0.01+ BTC)',
-            'metcalfe_scale_0p1_btc':'Metcalfe Scale (0.1+ BTC)'}
+    def test_release_rejects_an_inconsistent_candle(self):
         summary = {f'{prefix} {column}':[value] for prefix in ('Daily','Week-to-Date')
                    for column,value in zip(('Open','High','Low','Close'), (100,110,90,105))}
         summary.update({'Week Start':['2026-09-07'], 'Week-to-Date Days':[2]})
-        frames = {'model_coefficients.csv':pd.DataFrame({'coefficient':list(mapping),'value':1.0}),
-                  'network_model_metrics.csv':pd.DataFrame({v:[1.0] for v in mapping.values()}),
-                  'report_ohlc_summary.csv':pd.DataFrame(summary)}
-        frames['model_coefficients.csv']['value'] = 999
+        frames = {'report_ohlc_summary.csv':pd.DataFrame(summary)}
         frames['report_ohlc_summary.csv']['Daily High'] = 1
         errors=[]
         release._validate_review_contracts(frames, Path('/nonexistent'), pd.Timestamp('2026-09-08'), errors)
-        self.assertTrue(any('model_coefficients.csv' in error for error in errors))
         self.assertTrue(any('report_ohlc_summary.csv' in error for error in errors))
 
     def test_completed_december_year_included_in_average(self):
@@ -165,12 +155,3 @@ class SecondReviewFixTests(unittest.TestCase):
             path.unlink()
             self.assertIsNone(release._manifest_report_date(directory, '2026-09-27')[0])
 
-    def test_release_rejects_a_raw_brk_row_after_the_report_date(self):
-        stamps = (pd.date_range('2024-01-01', periods=5) - pd.Timestamp(0)) // pd.Timedelta(seconds=1)
-        with tempfile.TemporaryDirectory() as directory:
-            pd.DataFrame({'timestamp': stamps, 'price_close': 1.0}).to_csv(
-                Path(directory) / 'brk_onchain_raw.csv', index=False)
-            errors = []
-            release._validate_index_cutoff(Path(directory), 'brk_onchain_raw.csv', 'timestamp',
-                                           pd.Timestamp('2024-01-04'), errors, unit='s')
-        self.assertTrue(any('2024-01-05' in error for error in errors))

@@ -1,13 +1,5 @@
 {
   "files": {
-    "1k_bucket_table.csv": {
-      "sha256": "e5e0e75efb90966b504d78fafd471c13e852362568bc642efb7616b5ecd6ef79",
-      "size_bytes": 3565
-    },
-    "5k_bucket_table.csv": {
-      "sha256": "a131cec41e327549934ebc1555f2be510a642c2c7142fc88f1172c3e76f9df87",
-      "size_bytes": 775
-    },
     "bitcoin_candles.csv.gz": {
       "sha256": "61abb657878d733b6823596e8b5455fd388d44e1f977aeeeb9898c27e3fd29a0",
       "size_bytes": 134216
@@ -15,10 +7,6 @@
     "bitcoin_dominance_history.csv": {
       "sha256": "142f1f88b94c328e467641a02a353461dba9d1fd089b8e08f74ebb829a86361a",
       "size_bytes": 2024
-    },
-    "brk_onchain_raw.csv": {
-      "sha256": "456f8458a5a9634557cb7f444fed7e5031790579c939c4c49c741dc8d7c5469a",
-      "size_bytes": 5609248
     },
     "cagr_data.csv": {
       "sha256": "798b8c6a57cc595e6be27ddfa849cbec5af897fffc6dbf385a301bb2638b22d7",
@@ -32,14 +20,6 @@
       "sha256": "d73d7de6e1f4d3d10f64113207ec3deaa7f5212ec2906313e929aa4bf1d90b6f",
       "size_bytes": 164885
     },
-    "electricity_cost_scenarios.csv": {
-      "sha256": "9de97916f6d5750c0e63078b585e9f9287dd809c2338a5c1871470c982b8d91d",
-      "size_bytes": 1630893
-    },
-    "eoy_model_data.csv": {
-      "sha256": "2d1d7c31fd36c756e2fd0ac41a1bdb2af657a4f1aed50b00192bf5c7be7475c0",
-      "size_bytes": 1296802
-    },
     "fundamentals_table.csv": {
       "sha256": "33ec3c4a18c7d00fc847cf2a8e84035fc007a8660901218308c012e6d16f1fff",
       "size_bytes": 2565
@@ -51,10 +31,6 @@
     "master_metrics_data.csv.gz": {
       "sha256": "b5f29fbb1adb0369c72e9d6a528f87ed49552361b7b8010683e21e7826358d77",
       "size_bytes": 21140008
-    },
-    "model_coefficients.csv": {
-      "sha256": "9fbbcb415b60594ae97fcc5b748401bb51a4cd6fbf74d71a3c8bbf6ae6ebf837",
-      "size_bytes": 437
     },
     "monthly_heatmap_data.csv": {
       "sha256": "bceff99064caa3d7246c975bba8b83e5fc9e9bad76de76f4aa28064afd117d29",
@@ -71,10 +47,6 @@
     "mtd_returns_history.csv": {
       "sha256": "b8c81e08096b3be8192d109637cb581e86727241bfdbb412f139349160e0e9aa",
       "size_bytes": 8076
-    },
-    "network_model_metrics.csv": {
-      "sha256": "bfa57c74da62ea00bcde8b564802322f7bc2881dc8cbb721b6fff85a0de3f18f",
-      "size_bytes": 2574908
     },
     "ohlc_data.csv": {
       "sha256": "976795ee5c1b7d94598ec80d473af7974516dd70f0a419273838edb9ca74490c",

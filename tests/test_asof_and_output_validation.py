@@ -48,24 +48,6 @@ class AsOfReportTests(unittest.TestCase):
         self.assertEqual(result["52 Week High"], 100.0)
         self.assertEqual(result["52 Week Low"], 50.0)
 
-    def test_eoy_model_data_honors_optional_report_date_cutoff(self):
-        dates = pd.date_range("2024-01-01", periods=3, freq="D")
-        report_data = pd.DataFrame(
-            {"price_close": [100.0, 110.0, 999.0]}, index=dates
-        )
-        cagr_results = pd.DataFrame(
-            {"price_close_4_Year_CAGR": [1.0, 2.0, 999.0]}, index=dates
-        )
-
-        capped = report_tables.create_eoy_model_table(
-            report_data, cagr_results, report_date="2024-01-02"
-        )
-        uncapped = report_tables.create_eoy_model_table(report_data, cagr_results)
-
-        self.assertEqual(capped.index.max(), pd.Timestamp("2024-01-02"))
-        self.assertEqual(capped.iloc[-1]["price_close"], 110.0)
-        self.assertEqual(capped.iloc[-1]["price_close_4_Year_CAGR"], 2.0)
-        self.assertEqual(uncapped.index.max(), pd.Timestamp("2024-01-03"))
 
 
 class OutputValidationTests(unittest.TestCase):
@@ -298,44 +280,6 @@ class OutputValidationTests(unittest.TestCase):
             errors = validate_outputs(directory, "2024-02-15", rules=rules)
             self.assertTrue(any("falls below" in error for error in errors))
             self.assertTrue(any("Genesis Era" in error for error in errors))
-
-    def test_validator_recomputes_electricity_tariff_scenarios(self):
-        rules = {"electricity_cost_scenarios.csv": RowBounds(1, 10)}
-        with tempfile.TemporaryDirectory() as temp_dir:
-            directory = Path(temp_dir)
-            kwh = 1_000.0
-            revenue = 10.0
-            row = {
-                "date": "2024-02-15",
-                "BTC Price": 100.0,
-                "Fleet Efficiency (J/GH)": 0.03,
-                "Network Power Draw (W)": 1_000.0 / 24 * 1_000,
-                "Daily Electricity Consumption (kWh)": kwh,
-                "Subsidy (BTC)": 9.0,
-                "Fees (BTC)": 1.0,
-                "Miner Revenue (BTC)": revenue,
-                "Power-Only Break-Even Tariff ($/kWh)": 1.0,
-                "Legacy PUE/Subsidy-Only Cost": 6.0,
-                "Bitcoin Production Cost": 10.0,
-                "Hayes Network Price": 5.0,
-                "Energy Value": 20.0,
-            }
-            for tariff in (0.03, 0.04, 0.05, 0.06, 0.07):
-                row[f"Power Expense (${tariff:.2f}/kWh)"] = (
-                    kwh * tariff / revenue
-                )
-            path = directory / "electricity_cost_scenarios.csv"
-            pd.DataFrame([row]).to_csv(path, index=False)
-
-            self.assertEqual(
-                validate_outputs(directory, "2024-02-15", rules=rules), []
-            )
-
-            frame = pd.read_csv(path)
-            frame.loc[0, "Power Expense ($0.05/kWh)"] += 1.0
-            frame.to_csv(path, index=False)
-            errors = validate_outputs(directory, "2024-02-15", rules=rules)
-            self.assertTrue(any("$0.05/kWh" in error for error in errors))
 
     def test_validator_recomputes_price_moving_averages(self):
         rules = {"onchain_price_models.csv": RowBounds(1, 5_000)}

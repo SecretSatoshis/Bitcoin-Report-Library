@@ -145,12 +145,6 @@ correlation_results = data_format.create_btc_correlation_data(
 # Import Report Functions
 import report_tables
 
-# Creating trading range table $5000
-bucket_counts_5k_df = report_tables.calculate_price_buckets(data, 5000, report_date)
-
-# Creating trading range table $1000
-bucket_counts_1k_df = report_tables.calculate_price_buckets(data, 1000, report_date)
-
 # Create ROI Table
 roi_table = report_tables.calculate_roi_table(data, report_date)
 
@@ -189,15 +183,6 @@ performance_table = (
 # Create Heat Map CSV
 report_tables.monthly_heatmap(report_data, report_date)
 
-# Create daily electricity tariff scenarios and retain the other energy-model
-# definitions alongside them for explicit comparison.
-electricity_cost_scenarios = report_tables.create_electricity_cost_scenarios(
-    report_data, report_date
-)
-network_model_metrics = report_tables.create_network_model_metrics(
-    report_data, report_date
-)
-
 
 # CSV Exports
 
@@ -209,9 +194,6 @@ report_data = report_data.loc[:report_date]
 cagr_results = cagr_results.loc[:report_date]
 
 
-## Price Bucket CSVs
-bucket_counts_5k_df.to_csv("csv/5k_bucket_table.csv", index=False)
-bucket_counts_1k_df.to_csv("csv/1k_bucket_table.csv", index=False)
 
 ## Fundamentals Table CSV
 fundamentals_table.to_csv("csv/fundamentals_table.csv", index=False)
@@ -265,13 +247,6 @@ onchain_subset = report_tables.add_price_moving_averages(onchain_subset)
 onchain_subset.index.name = "date"
 onchain_subset.to_csv("csv/onchain_price_models.csv")
 
-## Electricity tariff scenarios — power expense per observed BTC earned plus
-## the retained legacy/production/Hayes/Energy Value models for comparison.
-electricity_cost_scenarios.to_csv("csv/electricity_cost_scenarios.csv")
-
-## Detailed Metcalfe, power-law, and hash-ribbon model inputs and outputs.
-network_model_metrics.to_csv("csv/network_model_metrics.csv")
-
 
 ## Summary History CSV - inclusive 30-day comparison window (31 daily endpoints)
 ## Bitcoin Dominance is maintained separately in bitcoin_dominance_history.csv. Its
@@ -304,12 +279,6 @@ rv_table.to_csv("csv/relative_value_comparison.csv", index=False)
 ## ROI Table CSV
 roi_table.to_csv("csv/roi_table.csv", index=False)
 
-## EOY Price Model Data CSV
-eoy_model_data = report_tables.create_eoy_model_table(
-    data, cagr_results, report_date
-)
-eoy_model_data.to_csv("csv/eoy_model_data.csv", index=True)
-
 ## Master CSV - All calculated metrics after analysis (includes change calculations)
 ## Gzipped to reduce file size (~99MB raw → ~5-10MB compressed)
 report_data.to_csv("csv/master_metrics_data.csv.gz", index=True, compression="gzip")
@@ -339,32 +308,6 @@ halving_data.to_csv("csv/halving_data.csv", index=False)
 
 ## CAGR results
 cagr_results.to_csv("csv/cagr_data.csv", index=True)
-
-## Model coefficients — the power-law and Metcalfe fits are re-run every day over all
-## observations through the report date, so `power_law_price` and `metcalfe_value` change
-## retroactively for every historical date on every run. Publishing the coefficients that
-## produced this release makes any cited value reproducible from the release it came from
-## instead of drifting silently run over run.
-MODEL_COEFFICIENT_COLUMNS = [
-    "power_law_exponent",
-    "power_law_scale",
-    "metcalfe_scale_any_balance",
-    "metcalfe_scale_0p001_btc",
-    "metcalfe_scale_0p01_btc",
-    "metcalfe_scale_0p1_btc",
-]
-_coefficient_row = report_data.loc[report_date]
-model_coefficients = pd.DataFrame(
-    {
-        "coefficient": MODEL_COEFFICIENT_COLUMNS,
-        "value": [
-            float(_coefficient_row[column]) for column in MODEL_COEFFICIENT_COLUMNS
-        ],
-        "report_date": report_date.strftime("%Y-%m-%d"),
-        "fit_end_date": report_date.strftime("%Y-%m-%d"),
-    }
-)
-model_coefficients.to_csv("csv/model_coefficients.csv", index=False)
 
 # Downstream consumers verify this complete release before rendering.
 # The workflow validates the release before publishing its CSV directory.

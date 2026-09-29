@@ -79,39 +79,6 @@ class ReportRegressionTests(unittest.TestCase):
         numeric = pd.to_numeric(result, errors="coerce").dropna()
         self.assertFalse(np.isinf(numeric).any())
 
-    def test_electricity_scenario_table_preserves_all_model_definitions(self):
-        modeled = data_format.electric_price_models(self._energy_input())
-        result = report_tables.create_electricity_cost_scenarios(
-            modeled, report_date="2024-01-01"
-        )
-
-        self.assertEqual(result.index.name, "date")
-        self.assertIn("Power Expense ($0.03/kWh)", result.columns)
-        self.assertIn("Power Expense ($0.07/kWh)", result.columns)
-        self.assertIn("Legacy PUE/Subsidy-Only Cost", result.columns)
-        self.assertIn("Bitcoin Production Cost", result.columns)
-        self.assertIn("Hayes Network Price", result.columns)
-        self.assertIn("Energy Value", result.columns)
-        self.assertAlmostEqual(
-            result.iloc[0]["Power Expense ($0.05/kWh)"],
-            modeled.iloc[0]["Electricity_Cost"],
-        )
-
-    def test_price_buckets_exclude_placeholders_and_post_cutoff_rows(self):
-        prices = pd.DataFrame(
-            {"price_close": [0.0, 999.0, 1_000.0, 9_999.0]},
-            index=pd.date_range("2024-01-01", periods=4, freq="D"),
-        )
-
-        result = report_tables.calculate_price_buckets(
-            prices, 1_000, report_date="2024-01-03"
-        )
-
-        self.assertEqual(int(result["Count"].sum()), 2)
-        self.assertEqual(float(result["Current Price"].iloc[0]), 1_000.0)
-        self.assertEqual(int(result.loc[0, "Count"]), 1)
-        self.assertEqual(int(result.loc[1, "Count"]), 1)
-
     def test_roi_year_periods_use_calendar_offsets(self):
         dates = pd.date_range("2015-01-01", "2026-08-15", freq="D")
         prices = pd.DataFrame(

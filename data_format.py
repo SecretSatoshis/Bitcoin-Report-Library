@@ -1235,18 +1235,14 @@ def get_brk_onchain(
     start_date: str,
     index: str = "dateindex",
     from_: int = 0,
-    save_csv: bool = True,
-    out_path: str = "csv/brk_onchain_raw.csv",
     verbose: bool = True,
-    cutoff_date=None,
 ) -> pd.DataFrame:
     """
-    Pull BRK metrics, align by timestamp (included in every chunk), optionally save raw CSV,
-    then return a pandas DataFrame with a 'time' column using native BRK field names.
+    Pull BRK metrics, align by timestamp (included in every chunk), and return a pandas
+    DataFrame with a 'time' column using native BRK field names.
 
-    ``cutoff_date`` limits the saved raw CSV to rows on or before that UTC day. BRK also
-    returns the partial, in-progress day, whose 24h aggregates must not be published. The
-    returned frame is not truncated; main.py applies the cutoff to its own exports.
+    BRK also returns the partial, in-progress UTC day. The returned frame is not truncated;
+    main.py applies the report-date cutoff to its own exports.
     """
 
     metric_list = BRK_METRICS[:]  # copy
@@ -1313,18 +1309,6 @@ def get_brk_onchain(
         row = [data[ts].get(c, "") for c in ordered_cols]
         row_lines.append((int(float(ts)), ",".join(map(str, row))))
     merged_csv = "\n".join([header_line] + [line for _, line in row_lines])
-
-    if save_csv:
-        published = row_lines
-        if cutoff_date is not None:
-            cutoff_end = pd.to_datetime(cutoff_date).normalize() + pd.Timedelta(days=1)
-            cutoff_seconds = int(cutoff_end.timestamp())
-            published = [(ts, line) for ts, line in row_lines if ts < cutoff_seconds]
-        os.makedirs(os.path.dirname(out_path), exist_ok=True)
-        with open(out_path, "w", newline="") as f:
-            f.write("\n".join([header_line] + [line for _, line in published]) + "\n")
-        if verbose:
-            print(f"[BRK] saved raw CSV -> {out_path}")
 
     # load into pandas
     df = pd.read_csv(StringIO(merged_csv), low_memory=False)
@@ -1820,7 +1804,7 @@ def get_data(
                     dominance is aligned to report_date instead of the fetch timestamp.
     """
     # Fetch data
-    coindata = get_brk_onchain(start_date, cutoff_date=report_date)
+    coindata = get_brk_onchain(start_date)
     prices = get_price(tickers, start_date)
     marketcaps = get_marketcap(tickers, start_date)
     fear_greed_index = get_fear_and_greed_index()

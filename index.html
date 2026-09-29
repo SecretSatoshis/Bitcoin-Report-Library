@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bitcoin Data Release | Secret Satoshis</title>
-<meta name="description" content="The daily Secret Satoshis Bitcoin data release: 31 CSV files covering price, supply, mining, network activity and valuation, regenerated each day by an open pipeline.">
+<meta name="description" content="The daily Secret Satoshis Bitcoin data release: 24 CSV files covering price, supply, mining, network activity and valuation, regenerated each day by an open pipeline.">
 <link rel="canonical" href="https://secretsatoshis.github.io/Bitcoin-Report-Library/">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta name="theme-color" content="#08080c">
@@ -13,7 +13,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Secret Satoshis">
 <meta property="og:title" content="Bitcoin Data Release | Secret Satoshis">
-<meta property="og:description" content="The daily Secret Satoshis Bitcoin data release: 31 CSV files covering price, supply, mining, network activity and valuation, regenerated each day by an open pipeline.">
+<meta property="og:description" content="The daily Secret Satoshis Bitcoin data release: 24 CSV files covering price, supply, mining, network activity and valuation, regenerated each day by an open pipeline.">
 <meta property="og:url" content="https://secretsatoshis.github.io/Bitcoin-Report-Library/">
 <meta property="og:image" content="https://secretsatoshis.com/assets/images/social-card.jpg">
 <meta property="og:image:alt" content="Secret Satoshis — AI-Native Bitcoin Market Intelligence">
@@ -50,18 +50,6 @@
   "distribution": [
     {
       "@type": "DataDownload",
-      "encodingFormat": "text/csv",
-      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/1k_bucket_table.csv",
-      "name": "1k bucket table"
-    },
-    {
-      "@type": "DataDownload",
-      "encodingFormat": "text/csv",
-      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/5k_bucket_table.csv",
-      "name": "5k bucket table"
-    },
-    {
-      "@type": "DataDownload",
       "encodingFormat": "application/gzip",
       "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/bitcoin_candles.csv.gz",
       "name": "Bitcoin candles"
@@ -71,12 +59,6 @@
       "encodingFormat": "text/csv",
       "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/bitcoin_dominance_history.csv",
       "name": "Bitcoin dominance history"
-    },
-    {
-      "@type": "DataDownload",
-      "encodingFormat": "text/csv",
-      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/brk_onchain_raw.csv",
-      "name": "Brk onchain raw"
     },
     {
       "@type": "DataDownload",
@@ -99,18 +81,6 @@
     {
       "@type": "DataDownload",
       "encodingFormat": "text/csv",
-      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/electricity_cost_scenarios.csv",
-      "name": "Electricity cost scenarios"
-    },
-    {
-      "@type": "DataDownload",
-      "encodingFormat": "text/csv",
-      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/eoy_model_data.csv",
-      "name": "Eoy model data"
-    },
-    {
-      "@type": "DataDownload",
-      "encodingFormat": "text/csv",
       "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/fundamentals_table.csv",
       "name": "Fundamentals table"
     },
@@ -125,12 +95,6 @@
       "encodingFormat": "application/gzip",
       "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/master_metrics_data.csv.gz",
       "name": "Master metrics data"
-    },
-    {
-      "@type": "DataDownload",
-      "encodingFormat": "text/csv",
-      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/model_coefficients.csv",
-      "name": "Model coefficients"
     },
     {
       "@type": "DataDownload",
@@ -155,12 +119,6 @@
       "encodingFormat": "text/csv",
       "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/mtd_returns_history.csv",
       "name": "Mtd returns history"
-    },
-    {
-      "@type": "DataDownload",
-      "encodingFormat": "text/csv",
-      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/network_model_metrics.csv",
-      "name": "Network model metrics"
     },
     {
       "@type": "DataDownload",
@@ -265,7 +223,7 @@
     <p class="eyebrow"><span>//</span> Open Data</p>
     <h1>Bitcoin Data Release</h1>
     <p>
-      The daily Secret Satoshis Bitcoin data release. 31 CSV files covering price, market
+      The daily Secret Satoshis Bitcoin data release. 24 CSV files covering price, market
       capitalisation, supply, mining, network activity, valuation models and multi-asset
       performance, regenerated each day by an open pipeline and read directly by
       <a href="https://dashboard.secretsatoshis.com/">the Market Dashboard</a>,
@@ -288,20 +246,6 @@
         </thead>
         <tbody>
         <tr>
-          <td class="f"><a href="csv/1k_bucket_table.csv">1k bucket table</a><br><code>1k_bucket_table.csv</code></td>
-          <td>—</td>
-          <td class="num">125</td>
-          <td class="num">4</td>
-          <td class="num">3 KB</td>
-        </tr>
-        <tr>
-          <td class="f"><a href="csv/5k_bucket_table.csv">5k bucket table</a><br><code>5k_bucket_table.csv</code></td>
-          <td>—</td>
-          <td class="num">25</td>
-          <td class="num">4</td>
-          <td class="num">1 KB</td>
-        </tr>
-        <tr>
           <td class="f"><a href="csv/bitcoin_candles.csv.gz">Bitcoin candles</a><br><code>bitcoin_candles.csv.gz</code></td>
           <td>2010-08-16 → 2026-09-29</td>
           <td class="num">6,924</td>
@@ -314,13 +258,6 @@
           <td class="num">36</td>
           <td class="num">3</td>
           <td class="num">2 KB</td>
-        </tr>
-        <tr>
-          <td class="f"><a href="csv/brk_onchain_raw.csv">Brk onchain raw</a><br><code>brk_onchain_raw.csv</code></td>
-          <td>—</td>
-          <td class="num">6,116</td>
-          <td class="num">79</td>
-          <td class="num">5.3 MB</td>
         </tr>
         <tr>
           <td class="f"><a href="csv/cagr_data.csv">Cagr data</a><br><code>cagr_data.csv</code></td>
@@ -344,20 +281,6 @@
           <td class="num">161 KB</td>
         </tr>
         <tr>
-          <td class="f"><a href="csv/electricity_cost_scenarios.csv">Electricity cost scenarios</a><br><code>electricity_cost_scenarios.csv</code></td>
-          <td>2011-03-01 → 2026-09-29</td>
-          <td class="num">5,692</td>
-          <td class="num">18</td>
-          <td class="num">1.6 MB</td>
-        </tr>
-        <tr>
-          <td class="f"><a href="csv/eoy_model_data.csv">Eoy model data</a><br><code>eoy_model_data.csv</code></td>
-          <td>2010-01-01 → 2026-09-29</td>
-          <td class="num">6,116</td>
-          <td class="num">15</td>
-          <td class="num">1.2 MB</td>
-        </tr>
-        <tr>
           <td class="f"><a href="csv/fundamentals_table.csv">Fundamentals table</a><br><code>fundamentals_table.csv</code></td>
           <td>—</td>
           <td class="num">20</td>
@@ -377,13 +300,6 @@
           <td class="num">6,116</td>
           <td class="num">567</td>
           <td class="num">20.2 MB</td>
-        </tr>
-        <tr>
-          <td class="f"><a href="csv/model_coefficients.csv">Model coefficients</a><br><code>model_coefficients.csv</code></td>
-          <td>2026-09-29 → 2026-09-29</td>
-          <td class="num">6</td>
-          <td class="num">4</td>
-          <td class="num">0 KB</td>
         </tr>
         <tr>
           <td class="f"><a href="csv/monthly_heatmap_data.csv">Monthly heatmap data</a><br><code>monthly_heatmap_data.csv</code></td>
@@ -412,13 +328,6 @@
           <td class="num">31</td>
           <td class="num">16</td>
           <td class="num">8 KB</td>
-        </tr>
-        <tr>
-          <td class="f"><a href="csv/network_model_metrics.csv">Network model metrics</a><br><code>network_model_metrics.csv</code></td>
-          <td>2010-08-16 → 2026-09-29</td>
-          <td class="num">5,889</td>
-          <td class="num">27</td>
-          <td class="num">2.5 MB</td>
         </tr>
         <tr>
           <td class="f"><a href="csv/ohlc_data.csv">Ohlc data</a><br><code>ohlc_data.csv</code></td>

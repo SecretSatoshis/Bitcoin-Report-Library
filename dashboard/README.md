@@ -220,5 +220,4 @@ closes stays null. Other consumers read the same published columns, so any level
 matches the chart. The file also carries 50-day and 200-day averages, which the chart does
 not draw.
 
-The Trading Range bucket graphics are no longer displayed or downloaded by the dashboard.
-Their upstream CSVs remain available for other Report Library consumers.
+The Trading Range bucket graphics are no longer displayed.
