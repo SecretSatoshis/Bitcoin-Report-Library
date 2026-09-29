@@ -220,7 +220,7 @@ def _last_positive_before(price_series, boundary):
 # Price moving averages: simple means over calendar-day windows of daily closes. A
 # window missing any daily close stays empty rather than averaging fewer days. The
 # 3-month, 1-year and 200-week averages are drawn on the Dashboard price chart; the
-# 50-day and 200-day averages are published for other consumers such as the newsletter.
+# 50-day and 200-day averages are published for other consumers of the dataset.
 PRICE_MOVING_AVERAGES = {
     "50-day MA": 50,
     "3-month MA": 90,
