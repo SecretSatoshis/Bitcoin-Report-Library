@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import pandas as pd
 
-import data_format
+import metrics
 
 
 class CustomOnchainContractTests(unittest.TestCase):
@@ -33,7 +33,7 @@ class CustomOnchainContractTests(unittest.TestCase):
         return frame
 
     def test_current_report_metric_names_and_formulas_remain_stable(self):
-        result = data_format.calculate_custom_on_chain_metrics(self.source_frame())
+        result = metrics.calculate_custom_on_chain_metrics(self.source_frame())
 
         # All-time miner revenue treats the leading gap as zero: 1.0 over a supply of 20.
         self.assertEqual(result["thermocap_price"].iloc[0], 0.05)

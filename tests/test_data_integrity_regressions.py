@@ -9,7 +9,9 @@ import unittest
 import numpy as np
 import pandas as pd
 
-import data_format
+import freshness
+import metrics
+import sources
 from data_definitions import BITCOIN_GENESIS_DATE
 
 
@@ -39,7 +41,7 @@ class AverageCapNetworkAgeTests(unittest.TestCase):
         )
 
     def test_divisor_is_days_since_genesis(self):
-        result = data_format.calculate_custom_on_chain_metrics(
+        result = metrics.calculate_custom_on_chain_metrics(
             self.frame("2010-01-01", 10)
         )
         first_date = pd.Timestamp("2010-01-01")
@@ -53,7 +55,7 @@ class AverageCapNetworkAgeTests(unittest.TestCase):
 
     def test_average_cap_is_independent_of_where_the_history_starts(self):
         """The metric is a property of the network, not of the fetch window."""
-        long_run = data_format.calculate_custom_on_chain_metrics(
+        long_run = metrics.calculate_custom_on_chain_metrics(
             self.frame("2010-01-01", 400)
         )
         # A window starting later reaches the same date with fewer rows; the shared
@@ -68,7 +70,7 @@ class AverageCapNetworkAgeTests(unittest.TestCase):
         )
 
     def test_delta_cap_absorbs_the_corrected_average_cap(self):
-        result = data_format.calculate_custom_on_chain_metrics(
+        result = metrics.calculate_custom_on_chain_metrics(
             self.frame("2010-01-01", 5)
         )
         self.assertTrue(
@@ -88,13 +90,13 @@ class CumulativeOnchainGapTests(unittest.TestCase):
         )
 
     def test_complete_series_passes(self):
-        data_format.assert_no_internal_onchain_gaps(self.frame(), "2024-01-30")
+        freshness.assert_no_internal_onchain_gaps(self.frame(), "2024-01-30")
 
     def test_internal_gap_raises(self):
         frame = self.frame()
         frame.iloc[10, 0] = np.nan
         with self.assertRaises(RuntimeError) as ctx:
-            data_format.assert_no_internal_onchain_gaps(frame, "2024-01-30")
+            freshness.assert_no_internal_onchain_gaps(frame, "2024-01-30")
         self.assertIn("internal gap", str(ctx.exception))
         self.assertIn("2024-01-11", str(ctx.exception))
 
@@ -102,21 +104,21 @@ class CumulativeOnchainGapTests(unittest.TestCase):
         frame = self.frame()
         frame.iloc[12, 1] = np.nan
         with self.assertRaisesRegex(RuntimeError, "supply has an internal gap"):
-            data_format.assert_no_internal_onchain_gaps(frame, "2024-01-30")
+            freshness.assert_no_internal_onchain_gaps(frame, "2024-01-30")
 
     def test_leading_nulls_are_allowed(self):
         frame = self.frame()
         frame.iloc[:5, 0] = np.nan
-        data_format.assert_no_internal_onchain_gaps(frame, "2024-01-30")
+        freshness.assert_no_internal_onchain_gaps(frame, "2024-01-30")
 
     def test_gap_after_the_report_date_is_ignored(self):
         frame = self.frame()
         frame.iloc[25, 0] = np.nan
-        data_format.assert_no_internal_onchain_gaps(frame, "2024-01-20")
+        freshness.assert_no_internal_onchain_gaps(frame, "2024-01-20")
 
     def test_absent_column_raises(self):
         with self.assertRaises(RuntimeError):
-            data_format.assert_no_internal_onchain_gaps(
+            freshness.assert_no_internal_onchain_gaps(
                 pd.DataFrame(index=pd.date_range("2024-01-01", periods=3)),
                 "2024-01-03",
             )
@@ -126,7 +128,7 @@ class ReferenceDataVintageTests(unittest.TestCase):
     """Hand-maintained inputs must carry a plausible, current vintage."""
 
     def test_current_reference_vintage_passes(self):
-        data_format.assert_reference_data_fresh(
+        freshness.assert_reference_data_fresh(
             "2026-08-28", {"reference": "2026-08-22"}, max_age_days=365
         )
 
@@ -138,7 +140,7 @@ class ReferenceDataVintageTests(unittest.TestCase):
         )
         for vintages in cases:
             with self.subTest(vintages=vintages), self.assertRaises(RuntimeError):
-                data_format.assert_reference_data_fresh(
+                freshness.assert_reference_data_fresh(
                     "2026-08-28", vintages, max_age_days=365
                 )
 
@@ -148,9 +150,9 @@ class ReferenceDataVintageTests(unittest.TestCase):
 
         self.assertIs(REFERENCE_DATA_VINTAGES["POWER_LAW_VALUATION_BANDS"], POWER_LAW_BANDS_AS_OF)
         bands = {"POWER_LAW_VALUATION_BANDS": POWER_LAW_BANDS_AS_OF}
-        data_format.assert_reference_data_fresh(POWER_LAW_BANDS_AS_OF + pd.Timedelta(days=365), bands)
+        freshness.assert_reference_data_fresh(POWER_LAW_BANDS_AS_OF + pd.Timedelta(days=365), bands)
         with self.assertRaisesRegex(RuntimeError, "POWER_LAW_VALUATION_BANDS"):
-            data_format.assert_reference_data_fresh(POWER_LAW_BANDS_AS_OF + pd.Timedelta(days=366), bands)
+            freshness.assert_reference_data_fresh(POWER_LAW_BANDS_AS_OF + pd.Timedelta(days=366), bands)
 
 
 class SharesOutstandingBudgetTests(unittest.TestCase):
@@ -158,8 +160,8 @@ class SharesOutstandingBudgetTests(unittest.TestCase):
 
     def test_budget_clears_a_semiannual_filer_but_not_a_dormant_one(self):
         # Observed worst case among tracked tickers is 2222.SR at ~162 days.
-        self.assertGreater(data_format.SHARES_OUTSTANDING_MAX_AGE_DAYS, 162)
-        self.assertLess(data_format.SHARES_OUTSTANDING_MAX_AGE_DAYS, 365)
+        self.assertGreater(sources.SHARES_OUTSTANDING_MAX_AGE_DAYS, 162)
+        self.assertLess(sources.SHARES_OUTSTANDING_MAX_AGE_DAYS, 365)
 
     def test_stale_share_count_nulls_the_market_cap(self):
         """The masking arithmetic, isolated from the network fetch."""
@@ -180,7 +182,7 @@ class SharesOutstandingBudgetTests(unittest.TestCase):
         )
         rows = pd.Series(close.index, index=close.index).dt.normalize()
         age = (rows - source.dt.normalize()).dt.days
-        budget = data_format.SHARES_OUTSTANDING_MAX_AGE_DAYS
+        budget = sources.SHARES_OUTSTANDING_MAX_AGE_DAYS
         masked = filled.where(age.between(0, budget))
 
         self.assertTrue(masked.iloc[0] == 1_000.0)

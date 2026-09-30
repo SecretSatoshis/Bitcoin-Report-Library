@@ -2,6 +2,8 @@
 import numpy as np
 import pandas as pd
 
+OHLC_COLUMNS = ["Open", "High", "Low", "Close"]
+
 
 def validate_calendar(index, label, step=1):
     dates = pd.DatetimeIndex(pd.to_datetime(index))
@@ -13,7 +15,7 @@ def validate_calendar(index, label, step=1):
 
 
 def validate_candles(frame, label):
-    columns = ["Open", "High", "Low", "Close"]
+    columns = OHLC_COLUMNS
     if frame.empty or not set(columns).issubset(frame.columns):
         raise ValueError(f"{label}: missing OHLC candles/columns")
     values = frame[columns].apply(pd.to_numeric, errors="coerce")
@@ -24,3 +26,17 @@ def validate_candles(frame, label):
         raise ValueError(f"{label}: invalid OHLC candle values or high/low ordering")
     if frame.index.has_duplicates:
         raise ValueError(f"{label}: duplicate candle dates")
+
+
+def assert_ohlc_usable(ohlc_data: pd.DataFrame, label: str = "OHLC") -> None:
+    """Raise before publication when an OHLC frame has no complete numeric candle."""
+    if ohlc_data is None or ohlc_data.empty:
+        raise RuntimeError(f"{label} data is empty; refusing to overwrite OHLC outputs")
+
+    missing = [column for column in OHLC_COLUMNS if column not in ohlc_data.columns]
+    if missing:
+        raise RuntimeError(
+            f"{label} data is missing required columns {missing}; refusing to overwrite OHLC outputs"
+        )
+
+    validate_candles(ohlc_data, label)

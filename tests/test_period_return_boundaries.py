@@ -5,7 +5,7 @@ import unittest
 import numpy as np
 import pandas as pd
 
-import data_format
+import metrics
 import report_tables
 
 
@@ -30,8 +30,8 @@ class PeriodReturnBoundaryTests(unittest.TestCase):
             index=dates,
         )
 
-        ytd = data_format.calculate_ytd_change(data)
-        mtd = data_format.calculate_mtd_change(data)
+        ytd = metrics.calculate_ytd_change(data)
+        mtd = metrics.calculate_mtd_change(data)
 
         self.assertAlmostEqual(ytd.loc["2023-01-01", "a_YTD_change"], 25.0)
         self.assertAlmostEqual(ytd.loc["2023-01-01", "b_YTD_change"], 20.0)

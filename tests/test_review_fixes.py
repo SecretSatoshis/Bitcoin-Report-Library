@@ -7,7 +7,10 @@ from contextlib import ExitStack
 import numpy as np
 import pandas as pd
 import json
-import data_format as ingest
+import data_validation
+import freshness
+import metrics
+import sources
 from candle_data import weekly_ohlc
 import report_tables as tables
 import validate_outputs as release
@@ -20,7 +23,7 @@ class ReviewFixTests(unittest.TestCase):
         dates = pd.date_range('2024-01-01', periods=10)
         for broken in (dates.delete(4), dates.insert(4, dates[4]), dates[::-1]):
             with self.subTest(index=broken), self.assertRaises(RuntimeError):
-                ingest.assert_no_internal_onchain_gaps(pd.DataFrame(
+                freshness.assert_no_internal_onchain_gaps(pd.DataFrame(
                     {'coinbase_sum_24h_usd': 1.0}, index=broken), dates[-1])
         validate_calendar(dates, 'complete')
 
@@ -28,17 +31,17 @@ class ReviewFixTests(unittest.TestCase):
         base = dict(index='day1', start=10, end=12)
         dates = FakeResponse(json_data=dict(base, data=['2024-01-01', '2024-01-02']))
         good = FakeResponse(json_data=dict(base, data=[[100,110,90,105]]*2))
-        with patch.object(ingest.requests, 'get', side_effect=[dates, good]):
-            self.assertEqual(len(ingest.get_brk_ohlc()), 2)
+        with patch.object(sources.requests, 'get', side_effect=[dates, good]):
+            self.assertEqual(len(sources.get_brk_ohlc()), 2)
         for payload in (dict(base, index='hour1', data=[[100,110,90,105]]*2),
                         dict(base, start=20, end=22, data=[[100,110,90,105]]*2),
                         dict(base, data=[[100,90,110,100]]*2)):
-            with patch.object(ingest.requests, 'get', side_effect=[dates, FakeResponse(json_data=payload)]):
+            with patch.object(sources.requests, 'get', side_effect=[dates, FakeResponse(json_data=payload)]):
                 with self.assertRaises(RuntimeError):
-                    ingest.get_brk_ohlc()
+                    sources.get_brk_ohlc()
 
     def test_missing_week_candle_cannot_replace_output(self):
-        candles = pd.DataFrame([[100,110,90,105]]*3, columns=ingest.OHLC_COLUMNS,
+        candles = pd.DataFrame([[100,110,90,105]]*3, columns=data_validation.OHLC_COLUMNS,
                                index=pd.to_datetime(['2024-01-01','2024-01-03','2024-01-04']))
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)/'summary.csv'
@@ -64,17 +67,17 @@ class ReviewFixTests(unittest.TestCase):
         base = pd.DataFrame({'time': pd.date_range('2024-01-01', periods=10),
                              'price_close': 100.0})
         with ExitStack() as stack:
-            stack.enter_context(patch.object(ingest, 'get_brk_onchain', return_value=base))
+            stack.enter_context(patch.object(sources, 'get_brk_onchain', return_value=base))
             for function in ('get_price', 'get_marketcap', 'get_miner_data'):
-                stack.enter_context(patch.object(ingest, function, return_value=pd.DataFrame()))
-            data = ingest.get_data({'stocks':['MISSING']}, '2024-01-01')
+                stack.enter_context(patch.object(sources, function, return_value=pd.DataFrame()))
+            data = sources.get_data({'stocks':['MISSING']}, '2024-01-01')
         self.assertTrue(data[['MISSING_close', 'MISSING_MarketCap']].isna().all().all())
-        filled = ingest.forward_fill_market_data(data)
+        filled = freshness.forward_fill_market_data(data)
         self.assertTrue(filled['MISSING_close'].isna().all())
 
     def test_absent_asset_keeps_correlation_schema(self):
         frame = pd.DataFrame({'price_close': np.arange(1,41)**2}, index=pd.date_range('2024-01-01', periods=40))
-        result = ingest.create_btc_correlation_data(frame.index[-1], {'stocks':['MISSING']}, frame)
+        result = metrics.create_btc_correlation_data(frame.index[-1], {'stocks':['MISSING']}, frame)
         for item in result.values():
             self.assertTrue(pd.isna(item.loc['price_close','MISSING_close']))
 
@@ -115,7 +118,7 @@ class SecondReviewFixTests(unittest.TestCase):
     def test_cagr_uses_calendar_years_across_leap_days(self):
         dates = pd.date_range('2020-01-01', '2024-03-01')
         values = pd.DataFrame({'price_close': np.arange(1.0, len(dates) + 1)}, index=dates)
-        cagr = ingest.calculate_rolling_cagr_for_all_columns(values, 4)
+        cagr = metrics.calculate_rolling_cagr_for_all_columns(values, 4)
         start = values.loc['2020-03-01', 'price_close']
         end = values.loc['2024-03-01', 'price_close']
         expected = ((end / start) ** 0.25 - 1) * 100

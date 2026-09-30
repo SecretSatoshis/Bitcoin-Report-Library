@@ -5,7 +5,8 @@ import unittest
 import numpy as np
 import pandas as pd
 
-import data_format
+import cycles
+import metrics
 import report_tables
 
 
@@ -25,7 +26,7 @@ class ReportRegressionTests(unittest.TestCase):
         )
 
     def test_electricity_cost_uses_observed_subsidy_plus_fees_and_tariffs(self):
-        result = data_format.electric_price_models(self._energy_input()).iloc[0]
+        result = metrics.electric_price_models(self._energy_input()).iloc[0]
 
         expected_kwh = 1.0e18 / 1.0e9 * 0.03 * 24 / 1000
         expected_revenue = 404.0
@@ -36,7 +37,7 @@ class ReportRegressionTests(unittest.TestCase):
         self.assertEqual(result["Electricity_Cost"], result["Electricity_Cost_5c"])
 
     def test_electricity_cost_returns_nan_for_zero_miner_revenue(self):
-        result = data_format.electric_price_models(
+        result = metrics.electric_price_models(
             self._energy_input(subsidy=0.0, fees=0.0)
         ).iloc[0]
 
@@ -204,7 +205,7 @@ class ReportRegressionTests(unittest.TestCase):
             index=dates,
         )
 
-        result = data_format.calculate_yoy_change(data)
+        result = metrics.calculate_yoy_change(data)
 
         self.assertEqual(result.loc["2020-02-28", "metric_YOY_change"], 100.0)
         self.assertEqual(result.loc["2020-02-29", "metric_YOY_change"], 200.0)
@@ -218,7 +219,7 @@ class ReportRegressionTests(unittest.TestCase):
             index=dates,
         )
 
-        result = data_format.calculate_all_changes(data, ["price_close"])
+        result = metrics.calculate_all_changes(data, ["price_close"])
 
         self.assertEqual(sorted(result.columns), sorted([
             "price_close_7_change", "price_close_90_change", "price_close_MTD_change",
@@ -234,7 +235,7 @@ class ReportRegressionTests(unittest.TestCase):
         prices.loc["2010-07-28":] = 6.0
         data = pd.DataFrame({"price_close": prices})
 
-        result = data_format.compute_cycle_lows(data)
+        result = cycles.compute_cycle_lows(data)
 
         self.assertEqual(result["days_since_cycle_low"].iloc[0], 0)
         self.assertEqual(result["index_value"].iloc[0], 1.0)
@@ -248,7 +249,7 @@ class ReportRegressionTests(unittest.TestCase):
         prices.loc["2012-11-28":] = 10.0
         data = pd.DataFrame({"price_close": prices})
 
-        result = data_format.compute_halving_days(data)
+        result = cycles.compute_halving_days(data)
 
         self.assertNotIn("Genesis Era", set(result["Era"]))
         second_era = result[result["Era"] == "2nd Era"]

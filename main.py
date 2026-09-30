@@ -13,7 +13,7 @@ if __name__ != "__main__":
     raise RuntimeError(
         "main.py is an executable pipeline, not an importable module — running it as a "
         "side effect of an import would fetch upstream data and rewrite csv/. Import "
-        "data_format or report_tables instead, or run `python main.py`."
+        "the pipeline modules instead, or run `python main.py`."
     )
 
 # Import Packages
@@ -27,7 +27,11 @@ warnings.simplefilter(action="ignore", category=FutureWarning)
 sys.dont_write_bytecode = True
 
 # Import Files
-import data_format
+import cycles
+import data_validation
+import freshness
+import metrics
+import sources
 
 from data_definitions import (
     TICKERS,
@@ -48,65 +52,65 @@ from data_definitions import (
 )
 
 # Fetch the data
-data = data_format.get_data(TICKERS, MARKET_DATA_START_DATE)
+data = sources.get_data(TICKERS, MARKET_DATA_START_DATE)
 
 ## Forward fill market data only.
 ## Equities/ETFs/FX print on trading days and miner efficiency prints monthly, so both
 ## need carrying forward onto Bitcoin's 365-day index. On-chain series print daily, and
 ## filling those would turn a missing or malformed BRK response into a silent repeat of
 ## yesterday's values, so they are validated instead.
-data_format.warn_on_stale_market_data(data, REPORT_DATE)
+freshness.warn_on_stale_market_data(data, REPORT_DATE)
 ## Correlations need each asset's real trading days, so capture them before the fill
 ## turns weekends and holidays into carried-forward closes.
-correlation_df = data_format.observed_market_values(data, CORRELATION_COLUMNS)
-data = data_format.forward_fill_market_data(data)
-data_format.assert_onchain_freshness(data, REPORT_DATE)
-data_format.assert_no_internal_onchain_gaps(data, REPORT_DATE)
-data_format.assert_reference_data_fresh(REPORT_DATE)
-data_format.assert_price_outlook_current(REPORT_DATE)
-data_format.warn_on_stale_miner_efficiency(data, REPORT_DATE)
+correlation_df = metrics.observed_market_values(data, CORRELATION_COLUMNS)
+data = freshness.forward_fill_market_data(data)
+freshness.assert_onchain_freshness(data, REPORT_DATE)
+freshness.assert_no_internal_onchain_gaps(data, REPORT_DATE)
+freshness.assert_reference_data_fresh(REPORT_DATE)
+freshness.assert_price_outlook_current(REPORT_DATE)
+freshness.warn_on_stale_miner_efficiency(data, REPORT_DATE)
 
 ## BRK OHLC data — daily candles are the single source; weekly candles are aggregated
 ## from them so the open week is cut off at the report date like every other export.
 daily_ohlc_start = "2009-01-03"
-daily_ohlc_data = data_format.get_brk_ohlc(start=daily_ohlc_start)
+daily_ohlc_data = sources.get_brk_ohlc(start=daily_ohlc_start)
 daily_ohlc_data.index = pd.to_datetime(daily_ohlc_data.index)
 if daily_ohlc_data.index.tz is not None:
     daily_ohlc_data.index = daily_ohlc_data.index.tz_convert(None)
-data_format.assert_ohlc_usable(daily_ohlc_data, label="Daily BRK OHLC")
+data_validation.assert_ohlc_usable(daily_ohlc_data, label="Daily BRK OHLC")
 
 from candle_data import weekly_ohlc
 WEEKLY_OHLC_START = "2017-01-01"
 ohlc_data = weekly_ohlc(daily_ohlc_data, REPORT_DATE, start=WEEKLY_OHLC_START)
-data_format.assert_ohlc_usable(ohlc_data, label="Weekly OHLC")
+data_validation.assert_ohlc_usable(ohlc_data, label="Weekly OHLC")
 
 # Calculate Custom Metrics
-data = data_format.calculate_custom_on_chain_metrics(data)
-data = data_format.calculate_moving_averages(data, MOVING_AVERAGE_METRICS)
+data = metrics.calculate_custom_on_chain_metrics(data)
+data = metrics.calculate_moving_averages(data, MOVING_AVERAGE_METRICS)
 
 ## Fiat / Gold Calculations
-data = data_format.calculate_btc_price_to_surpass_fiat(data, FIAT_MONEY_SUPPLY)
-data = data_format.calculate_metal_market_caps(data, GOLD_SILVER_SUPPLY)
-data = data_format.calculate_btc_price_to_surpass_metal_categories(data, GOLD_SUPPLY_BREAKDOWN)
+data = metrics.calculate_btc_price_to_surpass_fiat(data, FIAT_MONEY_SUPPLY)
+data = metrics.calculate_metal_market_caps(data, GOLD_SILVER_SUPPLY)
+data = metrics.calculate_btc_price_to_surpass_metal_categories(data, GOLD_SUPPLY_BREAKDOWN)
 
 ## Calculate On-chain Models
-data = data_format.calculate_btc_price_for_stock_mkt_caps(data, STOCK_TICKERS)
-data = data_format.calculate_network_model_metrics(data, REPORT_DATE)
-data = data_format.electric_price_models(data)
+data = metrics.calculate_btc_price_for_stock_mkt_caps(data, STOCK_TICKERS)
+data = metrics.calculate_network_model_metrics(data, REPORT_DATE)
+data = metrics.electric_price_models(data)
 
 # Create Datasets
 
 ## Create Report Data - 7-day, 90-day, MTD and YTD changes for the price columns
 ## the reports read, plus Bitcoin's YoY change
-changes = data_format.calculate_all_changes(data[CHANGE_COLUMNS], YOY_COLUMNS)
+changes = metrics.calculate_all_changes(data[CHANGE_COLUMNS], YOY_COLUMNS)
 report_data = pd.concat([data, changes], axis=1)
 
 ## 4-year CAGR for the price columns Chart Library's CAGR charts read
-cagr_results = data_format.calculate_rolling_cagr_for_all_columns(data[CAGR_COLUMNS], 4)
+cagr_results = metrics.calculate_rolling_cagr_for_all_columns(data[CAGR_COLUMNS], 4)
 report_data = report_data.merge(cagr_results, left_index=True, right_index=True, how="left")
 
 ## Create Bitcoin Correlation Data (correlation_df was captured before the fill)
-correlation_results = data_format.create_btc_correlation_data(
+correlation_results = metrics.create_btc_correlation_data(
     REPORT_DATE, TICKERS, correlation_df
 )
 
@@ -255,15 +259,15 @@ write_candle_tables(daily_ohlc_data, report_data, REPORT_DATE)
 # These datasets are consumed by Bitcoin-Chart-Library for visualization
 
 ## Drawdown data (ATH drawdown cycles)
-drawdown_data = data_format.compute_drawdowns(report_data)
+drawdown_data = cycles.compute_drawdowns(report_data)
 drawdown_data.to_csv("csv/drawdown_data.csv", index=False)
 
 ## Cycle low data (market cycle performance from lows)
-cycle_low_data = data_format.compute_cycle_lows(report_data)
+cycle_low_data = cycles.compute_cycle_lows(report_data)
 cycle_low_data.to_csv("csv/cycle_low_data.csv", index=False)
 
 ## Halving era data (performance indexed from each halving)
-halving_data = data_format.compute_halving_days(report_data)
+halving_data = cycles.compute_halving_days(report_data)
 halving_data.to_csv("csv/halving_data.csv", index=False)
 
 

@@ -5,7 +5,8 @@ from unittest.mock import patch
 
 import pandas as pd
 
-import data_format
+import metrics
+import sources
 
 
 class FakeYahooTicker:
@@ -54,8 +55,8 @@ class YahooMarketCapTests(unittest.TestCase):
         shares = pd.Series([100.0], index=pd.to_datetime(["2015-01-02"]))
         ticker = FakeYahooTicker(history=history, shares=shares)
 
-        with patch.object(data_format.yf, "Ticker", return_value=ticker):
-            result = data_format.get_marketcap(
+        with patch.object(sources.yf, "Ticker", return_value=ticker):
+            result = sources.get_marketcap(
                 {"stocks": ["TEST"]},
                 "2014-12-30",
                 end_date="2015-01-02",
@@ -85,8 +86,8 @@ class YahooMarketCapTests(unittest.TestCase):
         )
         ticker = FakeYahooTicker(history=history, shares=shares)
 
-        with patch.object(data_format.yf, "Ticker", return_value=ticker):
-            result = data_format.get_marketcap(
+        with patch.object(sources.yf, "Ticker", return_value=ticker):
+            result = sources.get_marketcap(
                 {"stocks": ["TEST"]},
                 "2020-08-27",
                 end_date="2020-09-01",
@@ -101,7 +102,7 @@ class YahooMarketCapTests(unittest.TestCase):
 
         downstream = result.copy()
         downstream["supply"] = 20.0
-        downstream = data_format.calculate_btc_price_for_stock_mkt_caps(
+        downstream = metrics.calculate_btc_price_for_stock_mkt_caps(
             downstream, ["TEST"]
         )
         self.assertEqual(
@@ -121,8 +122,8 @@ class YahooMarketCapTests(unittest.TestCase):
             index=pd.to_datetime(["2020-08-20", "2020-08-31", "2020-09-04"]),
         )
 
-        leading_result = data_format._split_adjust_yahoo_shares(leading, split)
-        lagging_result = data_format._split_adjust_yahoo_shares(lagging, split)
+        leading_result = sources._split_adjust_yahoo_shares(leading, split)
+        lagging_result = sources._split_adjust_yahoo_shares(lagging, split)
 
         self.assertTrue(leading_result.eq(100.0).all())
         self.assertTrue(lagging_result.eq(100.0).all())
@@ -133,7 +134,7 @@ class YahooMarketCapTests(unittest.TestCase):
             index=pd.to_datetime(["2023-06-05", "2023-06-09", "2023-06-13"]),
         )
 
-        result = data_format._split_adjust_yahoo_shares(
+        result = sources._split_adjust_yahoo_shares(
             shares, pd.Series(dtype="float64")
         )
 
@@ -159,9 +160,9 @@ class YahooMarketCapTests(unittest.TestCase):
         ticker_objects = {"META": meta, "FB": fb}
 
         with patch.object(
-            data_format.yf, "Ticker", side_effect=lambda symbol: ticker_objects[symbol]
+            sources.yf, "Ticker", side_effect=lambda symbol: ticker_objects[symbol]
         ):
-            result = data_format.get_marketcap(
+            result = sources.get_marketcap(
                 {"stocks": ["META"]},
                 "2022-05-27",
                 end_date="2022-06-10",
@@ -176,9 +177,9 @@ class YahooMarketCapTests(unittest.TestCase):
     def test_missing_history_uses_current_cap_only_on_final_date(self):
         failed = FakeYahooTicker(market_cap=1_234.0)
 
-        with patch.object(data_format.yf, "Ticker", return_value=failed), \
+        with patch.object(sources.yf, "Ticker", return_value=failed), \
             self.assertWarnsRegex(RuntimeWarning, "no closing-price history"):
-            result = data_format.get_marketcap(
+            result = sources.get_marketcap(
                 {"stocks": ["FAIL"]},
                 "2020-01-01",
                 end_date="2020-01-03",
@@ -201,9 +202,9 @@ class YahooMarketCapTests(unittest.TestCase):
         ticker_objects = {"GOOD": valid, "FAIL": failed}
 
         with patch.object(
-            data_format.yf, "Ticker", side_effect=lambda symbol: ticker_objects[symbol]
+            sources.yf, "Ticker", side_effect=lambda symbol: ticker_objects[symbol]
         ), self.assertWarnsRegex(RuntimeWarning, "FAIL"):
-            result = data_format.get_marketcap(
+            result = sources.get_marketcap(
                 {"stocks": ["GOOD", "FAIL"], "etfs": ["SPY"]},
                 "2020-01-01",
                 end_date="2020-01-03",
@@ -234,9 +235,9 @@ class YahooMarketCapTests(unittest.TestCase):
         ticker_objects = {"2222.SR": local_stock, "SARUSD=X": sar_usd}
 
         with patch.object(
-            data_format.yf, "Ticker", side_effect=lambda symbol: ticker_objects[symbol]
+            sources.yf, "Ticker", side_effect=lambda symbol: ticker_objects[symbol]
         ):
-            result = data_format.get_marketcap(
+            result = sources.get_marketcap(
                 {"stocks": ["2222.SR"]},
                 "2026-08-19",
                 end_date="2026-08-20",
