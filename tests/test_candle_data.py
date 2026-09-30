@@ -41,7 +41,7 @@ class CandleTests(unittest.TestCase):
         from pathlib import Path
         from tempfile import TemporaryDirectory
         from unittest.mock import patch
-        from chart_manifest import write_release_manifest
+        from release_manifest import write_release_manifest
         from validate_outputs import _validate_release_manifest
         with TemporaryDirectory() as directory, patch('validate_outputs.OUTPUT_RULES', {}):
             output = Path(directory)

@@ -6,6 +6,7 @@ OHLC_COLUMNS = ["Open", "High", "Low", "Close"]
 
 
 def validate_calendar(index, label, step=1):
+    """Require dates that are unique, ordered, at midnight and complete at `step`-day spacing."""
     dates = pd.DatetimeIndex(pd.to_datetime(index))
     if (dates.empty or dates.hasnans or dates.has_duplicates
             or not dates.is_monotonic_increasing
@@ -15,6 +16,7 @@ def validate_calendar(index, label, step=1):
 
 
 def validate_candles(frame, label):
+    """Require finite, positive candles whose High and Low bound Open and Close, one per date."""
     columns = OHLC_COLUMNS
     if frame.empty or not set(columns).issubset(frame.columns):
         raise ValueError(f"{label}: missing OHLC candles/columns")

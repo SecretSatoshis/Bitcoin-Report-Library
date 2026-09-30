@@ -31,8 +31,9 @@ def is_gzip(path: Path) -> bool:
 
 
 def release_files() -> list[Path]:
-    """Every published CSV, plain or gzipped (the master and candle files are .csv.gz)."""
-    return sorted([*CSV_DIR.glob("*.csv"), *CSV_DIR.glob("*.csv.gz")])
+    """The files the release manifest lists, so the page describes exactly the release."""
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    return sorted(CSV_DIR / name for name in manifest["files"])
 
 
 def release_date() -> str | None:

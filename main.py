@@ -23,7 +23,7 @@ import metrics
 import report_tables
 import sources
 from candle_data import weekly_ohlc, write_candle_tables
-from chart_manifest import write_release_manifest
+from release_manifest import write_release_manifest
 from data_definitions import (
     CAGR_COLUMNS,
     CHANGE_COLUMNS,
@@ -160,8 +160,12 @@ for filename, table in tables.items():
 for filename, table in indexed_tables.items():
     table.to_csv(f"csv/{filename}")
 report_data.to_csv("csv/master_metrics_data.csv.gz", index=True, compression="gzip")
-write_candle_tables(daily_ohlc, report_data, REPORT_DATE)
+candle_files = write_candle_tables(daily_ohlc, report_data, REPORT_DATE)
 
 # Downstream consumers verify this complete release before rendering.
 # The workflow validates the release before publishing its CSV directory.
-write_release_manifest("csv", REPORT_DATE)
+write_release_manifest(
+    "csv",
+    REPORT_DATE,
+    [*tables, *indexed_tables, "master_metrics_data.csv.gz", *candle_files],
+)

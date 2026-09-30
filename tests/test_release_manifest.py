@@ -3,10 +3,10 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from chart_manifest import write_release_manifest
+from release_manifest import write_release_manifest
 
 
-class ChartManifestTests(unittest.TestCase):
+class ReleaseManifestTests(unittest.TestCase):
     def test_release_manifest_records_every_csv_and_release_identity(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory)
@@ -20,3 +20,17 @@ class ChartManifestTests(unittest.TestCase):
             self.assertEqual(
                 json.loads((output / 'release_manifest.json').read_text()), manifest
             )
+
+    def test_an_explicit_file_list_excludes_leftovers_and_requires_every_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            (output / 'alpha.csv').write_text('a\n1\n')
+            (output / 'retired.csv').write_text('old\n')
+            manifest = write_release_manifest(output, '2026-09-09', ['alpha.csv'])
+            self.assertEqual(set(manifest['files']), {'alpha.csv'})
+            with self.assertRaisesRegex(FileNotFoundError, 'missing.csv'):
+                write_release_manifest(output, '2026-09-09', ['alpha.csv', 'missing.csv'])
+
+
+if __name__ == '__main__':
+    unittest.main()

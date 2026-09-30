@@ -59,6 +59,10 @@ def weekly_ohlc(daily, report_date, start=None):
 
 
 def build_candle_tables(daily, master, report_date):
+    """Daily/weekly/monthly candles and the master rows at each week and month close.
+
+    Daily closes must agree with the master's price_close. Returns {filename: frame}.
+    """
     cutoff = pd.Timestamp(report_date).normalize()
     daily = _cutoff_daily_candles(daily, report_date, 'Chart daily candles')
     if cutoff not in master.index:
@@ -80,6 +84,7 @@ def build_candle_tables(daily, master, report_date):
 
 
 def write_candle_tables(daily, master, report_date, output_dir='csv'):
+    """Build the candle tables and write them, gzipped, to output_dir."""
     tables = build_candle_tables(daily, master, report_date)
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
@@ -89,6 +94,7 @@ def write_candle_tables(daily, master, report_date, output_dir='csv'):
 
 
 def validate_candle_exports(output_dir, master, report_date):
+    """Rebuild the candle tables from the published files and require an exact match."""
     output = Path(output_dir)
     candles = pd.read_csv(output / CANDLE_FILES[0], parse_dates=['period_start', 'period_end', 'observation_date'])
     daily = candles.loc[candles.interval.eq('daily')].set_index('period_start')[['Open', 'High', 'Low', 'Close']]
