@@ -21,19 +21,6 @@ updates:
           - minor
           - patch
     ignore:
-      # Evidence 40.1.8 pins these peer packages to exact versions. They must
-      # move together with a compatible Evidence release.
-      - dependency-name: "@sveltejs/vite-plugin-svelte"
-      - dependency-name: "debounce"
-      - dependency-name: "git-remote-origin-url"
-      - dependency-name: "postcss-load-config"
-      - dependency-name: "svelte"
-      - dependency-name: "svelte-preprocess"
-      - dependency-name: "svelte2tsx"
-      - dependency-name: "tailwindcss"
-      - dependency-name: "typescript"
-      - dependency-name: "unist-util-visit"
-      - dependency-name: "vite"
       - dependency-name: "*"
         update-types:
           - "version-update:semver-major"

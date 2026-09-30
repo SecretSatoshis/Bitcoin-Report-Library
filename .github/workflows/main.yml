@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   dashboard:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -46,11 +46,28 @@ jobs:
       - name: Audit deployed dependency scope
         run: npx --yes npm@12.0.2 audit --omit=dev
 
+      - name: Check dashboard types
+        run: npx --yes npm@12.0.2 run typecheck
+
       - name: Build the static dashboard
         run: |
           npx --yes npm@12.0.2 run sync:local
-          npx --yes npm@12.0.2 run sources
           npx --yes npm@12.0.2 run build
+
+      - name: Verify data adapters and frozen reference parity
+        run: npx --yes npm@12.0.2 test
+
+      - name: Install pinned browser
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium
+
+      - name: Verify charts, accessibility and responsive layouts
+        run: npx --yes npm@12.0.2 run test:browser
+
+      - name: Verify newsletter capture contracts
+        run: |
+          REPORT_DATE=$(node -p "JSON.parse(require('fs').readFileSync('../csv/release_manifest.json')).report_date")
+          npm run export:newsletter -- --report-date "$REPORT_DATE" --output-dir ../outputs/weekly-visuals
+          npm run export:newsletter -- --profile quarterly --report-date "$REPORT_DATE" --output-dir ../outputs/quarterly-visuals
 
   build:
     runs-on: ubuntu-latest

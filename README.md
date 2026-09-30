@@ -86,7 +86,7 @@ uv run --no-sync python validate_outputs.py
 | `candle_data.py` | Daily, weekly and monthly candles |
 | `data_definitions.py` | Configuration: tickers, series, reference data |
 | `validate_outputs.py` | Release checks run before publishing |
-| `dashboard/` | The [Evidence](https://evidence.dev) dashboard ([its README](dashboard/README.md)) |
+| `dashboard/` | The Market Dashboard, a static site built from the release ([its README](dashboard/README.md)) |
 | `tests/` | One test file per module |
 
 ## Reading the data

@@ -6,7 +6,7 @@
  *
  * Each sync stages one complete release, checks every file against its manifest, then
  * swaps the datasource folder in one step. A failure leaves the current sources untouched.
- * The wide master file is not synced: Evidence's CSV plugin hangs on its type inference.
+ * The dashboard consumes a declared subset; the wide master file is not required.
  */
 
 import {
@@ -17,11 +17,9 @@ import {
   renameSync,
   rmSync,
   statSync,
-  readdirSync,
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { gunzipSync } from "node:zlib";
 import { createHash } from "node:crypto";
 import { pipeline } from "node:stream/promises";
 import https from "node:https";
@@ -35,8 +33,7 @@ const REMOTE_BASE_URL =
   "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv";
 const LOCAL_CSV_DIR = path.resolve(__dirname, "../../csv");
 const OUT_DIR = path.resolve(__dirname, "../sources/bitcoin_report_library");
-// Outside sources/: Evidence treats every sources/* folder with a connection.yaml as a
-// datasource, so a leftover staging copy there would be ingested twice.
+// Stage outside the published input directory so readers always see one release.
 const STAGING_DIR = path.resolve(__dirname, "../.sync-staging");
 const PREVIOUS_DIR = path.resolve(__dirname, "../.sync-previous");
 const RELEASE_MANIFEST = "release_manifest.json";
@@ -72,14 +69,20 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 function httpsGet(url, redirectsLeft = MAX_REDIRECTS) {
   return new Promise((resolve, reject) => {
     const req = https.get(url, { timeout: REQUEST_TIMEOUT_MS }, (res) => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+      if (
+        res.statusCode >= 300 &&
+        res.statusCode < 400 &&
+        res.headers.location
+      ) {
         // Drain the redirect body so the socket is reused; the depth cap stops a loop.
         res.resume();
         if (redirectsLeft <= 0) {
           reject(new Error(`Too many redirects for ${url}`));
           return;
         }
-        resolve(httpsGet(new URL(res.headers.location, url).href, redirectsLeft - 1));
+        resolve(
+          httpsGet(new URL(res.headers.location, url).href, redirectsLeft - 1),
+        );
         return;
       }
       if (res.statusCode !== 200) {
@@ -92,7 +95,9 @@ function httpsGet(url, redirectsLeft = MAX_REDIRECTS) {
 
     // A hung socket never errors on its own; fail fast instead of stalling the build.
     req.on("timeout", () => {
-      req.destroy(new Error(`Timed out after ${REQUEST_TIMEOUT_MS}ms for ${url}`));
+      req.destroy(
+        new Error(`Timed out after ${REQUEST_TIMEOUT_MS}ms for ${url}`),
+      );
     });
     req.on("error", reject);
   });
@@ -107,11 +112,15 @@ async function readRemoteJson(url) {
 
 // A missing or incomplete manifest fails the sync.
 function loadManifest(payload) {
-  if (!payload || payload.schema_version !== 1
-      || typeof payload.release_id !== "string"
-      || payload.release_id !== payload.report_date
-      || !/^\d{4}-\d{2}-\d{2}$/.test(payload.report_date)
-      || !payload.files || typeof payload.files !== "object") {
+  if (
+    !payload ||
+    payload.schema_version !== 1 ||
+    typeof payload.release_id !== "string" ||
+    payload.release_id !== payload.report_date ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(payload.report_date) ||
+    !payload.files ||
+    typeof payload.files !== "object"
+  ) {
     throw new Error("invalid Report Library release manifest");
   }
   for (const file of CSV_FILES) {
@@ -136,7 +145,9 @@ function readLocalManifest() {
 }
 
 function verifyHash(file, filePath, manifest) {
-  const digest = createHash("sha256").update(readFileSync(filePath)).digest("hex");
+  const digest = createHash("sha256")
+    .update(readFileSync(filePath))
+    .digest("hex");
   if (digest !== manifest.files[file].sha256) {
     throw new Error(`${file}: release manifest hash mismatch`);
   }
@@ -158,7 +169,7 @@ function validateLocalInputs() {
       failures.push(
         err.code === "ENOENT"
           ? `${file}: source file is missing`
-          : `${file}: ${err.message}`
+          : `${file}: ${err.message}`,
       );
     }
   }
@@ -172,7 +183,7 @@ function stageLocal() {
   if (failures.length) {
     throw new Error(
       `${failures.length} of ${CSV_FILES.length} local source files are invalid:\n` +
-        failures.map((f) => `  - ${f}`).join("\n")
+        failures.map((f) => `  - ${f}`).join("\n"),
     );
   }
   const manifest = readLocalManifest();
@@ -180,7 +191,9 @@ function stageLocal() {
     const staged = path.join(STAGING_DIR, file);
     copyFileSync(path.join(LOCAL_CSV_DIR, file), staged);
     verifyHash(file, staged, manifest);
-    console.log(`  ✓ ${file} (${statSync(staged).size.toLocaleString()} bytes)`);
+    console.log(
+      `  ✓ ${file} (${statSync(staged).size.toLocaleString()} bytes)`,
+    );
   }
   return manifest;
 }
@@ -190,7 +203,10 @@ function stageLocal() {
 function checkoutRelease() {
   try {
     const manifest = readLocalManifest();
-    return { report_date: manifest.report_date, generated_at: manifest.generated_at ?? "" };
+    return {
+      report_date: manifest.report_date,
+      generated_at: manifest.generated_at ?? "",
+    };
   } catch {
     return null;
   }
@@ -207,7 +223,9 @@ function isAtLeast(remote, minimum) {
 }
 
 function describeRelease(release) {
-  return release ? `${release.report_date} (generated ${release.generated_at || "unknown"})` : "none";
+  return release
+    ? `${release.report_date} (generated ${release.generated_at || "unknown"})`
+    : "none";
 }
 
 async function waitForRemoteRelease(minimum) {
@@ -217,7 +235,9 @@ async function waitForRemoteRelease(minimum) {
     try {
       // A unique query bypasses the CDN's cached copy of the manifest.
       manifest = loadManifest(
-        await readRemoteJson(`${REMOTE_BASE_URL}/${RELEASE_MANIFEST}?t=${Date.now()}`)
+        await readRemoteJson(
+          `${REMOTE_BASE_URL}/${RELEASE_MANIFEST}?t=${Date.now()}`,
+        ),
       );
     } catch (err) {
       if (Date.now() >= deadline) throw err;
@@ -229,12 +249,12 @@ async function waitForRemoteRelease(minimum) {
     if (Date.now() >= deadline) {
       throw new Error(
         `GitHub Pages still serves release ${describeRelease(manifest)}, but this ` +
-          `checkout contains ${describeRelease(minimum)}; refusing to build stale data`
+          `checkout contains ${describeRelease(minimum)}; refusing to build stale data`,
       );
     }
     if (manifest) {
       console.log(
-        `  … Pages serves ${describeRelease(manifest)}; waiting for ${describeRelease(minimum)} to deploy`
+        `  … Pages serves ${describeRelease(manifest)}; waiting for ${describeRelease(minimum)} to deploy`,
       );
     }
     await sleep(RELEASE_POLL_MS);
@@ -263,7 +283,9 @@ async function downloadRemote(file, manifest) {
       if (existsSync(tmp)) rmSync(tmp, { force: true });
       if (attempt < MAX_ATTEMPTS) {
         const backoff = 500 * 2 ** (attempt - 1);
-        console.warn(`  ⟳ ${file} attempt ${attempt} failed (${err.message}) — retrying in ${backoff}ms`);
+        console.warn(
+          `  ⟳ ${file} attempt ${attempt} failed (${err.message}) — retrying in ${backoff}ms`,
+        );
         await sleep(backoff);
       }
     }
@@ -287,29 +309,19 @@ async function stageRemote() {
   if (failures.length) {
     throw new Error(
       `${failures.length} of ${CSV_FILES.length} files could not be downloaded:\n` +
-        failures.map((f) => `  - ${f}`).join("\n")
+        failures.map((f) => `  - ${f}`).join("\n"),
     );
   }
   return manifest;
 }
 
-// Swap the whole datasource folder at once, so Evidence never sees a mix of releases and
+// Swap the whole input folder at once, so preparation never sees mixed releases and
 // files dropped from CSV_FILES disappear.
-function publishStaged() {
-  // Evidence reads the decompressed candle table.
-  const archive = path.join(STAGING_DIR, CANDLE_ARCHIVE);
-  writeFileSync(path.join(STAGING_DIR, "bitcoin_candles.csv"), gunzipSync(readFileSync(archive)));
-  rmSync(archive);
-
-  // Carry the datasource configuration (connection.yaml) into the new folder.
-  if (existsSync(OUT_DIR)) {
-    for (const entry of readdirSync(OUT_DIR, { withFileTypes: true })) {
-      if (entry.isFile() && !/\.csv(\.gz)?$/.test(entry.name)) {
-        copyFileSync(path.join(OUT_DIR, entry.name), path.join(STAGING_DIR, entry.name));
-      }
-    }
-  }
-
+function publishStaged(manifest) {
+  writeFileSync(
+    path.join(STAGING_DIR, RELEASE_MANIFEST),
+    JSON.stringify(manifest, null, 2) + "\n",
+  );
   rmSync(PREVIOUS_DIR, { recursive: true, force: true });
   if (existsSync(OUT_DIR)) renameSync(OUT_DIR, PREVIOUS_DIR);
   renameSync(STAGING_DIR, OUT_DIR);
@@ -320,10 +332,14 @@ rmSync(STAGING_DIR, { recursive: true, force: true });
 mkdirSync(STAGING_DIR, { recursive: true });
 try {
   const manifest = LOCAL_MODE ? stageLocal() : await stageRemote();
-  publishStaged();
-  console.log(`\nSynced release ${manifest.release_id}. Next: npm run sources && npm run dev\n`);
+  publishStaged(manifest);
+  console.log(
+    `\nSynced release ${manifest.release_id}. Next: npm run prepare:data && npm run dev\n`,
+  );
 } catch (err) {
   rmSync(STAGING_DIR, { recursive: true, force: true });
-  console.error(`\n✗ ${err.message}\nRefusing to sync; existing dashboard sources were left unchanged.\n`);
+  console.error(
+    `\n✗ ${err.message}\nRefusing to sync; existing dashboard sources were left unchanged.\n`,
+  );
   process.exit(1);
 }

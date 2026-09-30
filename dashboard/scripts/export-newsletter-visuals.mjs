@@ -1,91 +1,144 @@
 #!/usr/bin/env node
 
-import { createHash } from 'node:crypto';
-import { createReadStream, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, linkSync, unlinkSync } from 'node:fs';
-import { createServer } from 'node:http';
-import { dirname, extname, join, normalize, relative, resolve, sep } from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { chromium } from 'playwright-core';
+import { createHash } from "node:crypto";
+import {
+  createReadStream,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+  linkSync,
+  unlinkSync,
+} from "node:fs";
+import { createServer } from "node:http";
+import {
+  dirname,
+  extname,
+  join,
+  normalize,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { chromium } from "playwright-core";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const DASHBOARD_ROOT = resolve(SCRIPT_DIR, '..');
-const REPOSITORY_ROOT = resolve(DASHBOARD_ROOT, '..');
-const DEFAULT_BUILD_DIR = join(DASHBOARD_ROOT, 'build');
-const MANIFEST_NAME = 'visual-manifest.json';
+const DASHBOARD_ROOT = resolve(SCRIPT_DIR, "..");
+const REPOSITORY_ROOT = resolve(DASHBOARD_ROOT, "..");
+const DEFAULT_BUILD_DIR = join(DASHBOARD_ROOT, "build");
+const MANIFEST_NAME = "visual-manifest.json";
 const VIEWPORT = { width: 1440, height: 1000 };
 const DEVICE_SCALE_FACTOR = 2;
 
 const VISUALS = [
   {
-    id: 'bitcoin-snapshot-market-data',
-    file: 'bitcoin-snapshot.png',
-    sourceUrl: 'https://dashboard.secretsatoshis.com/#bitcoin-snapshot',
-    alt: 'Bitcoin Snapshot market-data cards showing price, market capitalization, and sats per dollar.',
-    requiredText: ['Market Data', 'Bitcoin Price', 'Bitcoin Market Cap', 'Sats Per Dollar'],
-    forbiddenText: ['Bitcoin Supply'],
+    id: "bitcoin-snapshot-market-data",
+    file: "bitcoin-snapshot.png",
+    sourceUrl: "https://dashboard.secretsatoshis.com/#bitcoin-snapshot",
+    alt: "Bitcoin Snapshot market-data cards showing price, market capitalization, and sats per dollar.",
+    requiredText: [
+      "Market Data",
+      "Bitcoin Price",
+      "Bitcoin Market Cap",
+      "Sats Per Dollar",
+    ],
+    forbiddenText: ["Bitcoin Supply"],
   },
   {
-    id: 'bitcoin-price',
-    file: 'bitcoin-price.png',
-    sourceUrl: 'https://dashboard.secretsatoshis.com/#bitcoin-price',
-    alt: 'Bitcoin price with realized-price models, 3-month, 1-year and 200-week moving averages, and Secret Satoshis bear, base, and bull cases.',
-    requiredText: ['Bitcoin Price', 'Bear Case', 'Base Case', 'Bull Case', 'STH Realized', 'Realized', '3× Realized', '3-month MA', '1-year MA', '200-week MA'],
-    forbiddenText: ['Power Expense', 'Electricity'],
+    id: "bitcoin-price",
+    file: "bitcoin-price.png",
+    sourceUrl: "https://dashboard.secretsatoshis.com/#bitcoin-price",
+    alt: "Bitcoin price with realized-price models, 3-month, 1-year and 200-week moving averages, and Secret Satoshis bear, base, and bull cases.",
+    requiredText: [
+      "Bitcoin Price",
+      "Bear Case",
+      "Base Case",
+      "Bull Case",
+      "STH Realized",
+      "Realized",
+      "3× Realized",
+      "3-month MA",
+      "1-year MA",
+      "200-week MA",
+    ],
+    forbiddenText: ["Power Expense", "Electricity"],
   },
   {
-    id: 'monthly-return-heatmap',
-    file: 'monthly-return-heatmap.png',
-    sourceUrl: 'https://dashboard.secretsatoshis.com/#monthly-bitcoin-price-return-heatmap',
-    alt: 'Monthly Bitcoin price-return heatmap with statistical reference rows and historical yearly returns.',
-    requiredText: ['Monthly Bitcoin Price Return Heatmap', 'Statistical Reference', 'Historical Returns by Year'],
+    id: "monthly-return-heatmap",
+    file: "monthly-return-heatmap.png",
+    sourceUrl:
+      "https://dashboard.secretsatoshis.com/#monthly-bitcoin-price-return-heatmap",
+    alt: "Monthly Bitcoin price-return heatmap with statistical reference rows and historical yearly returns.",
+    requiredText: [
+      "Monthly Bitcoin Price Return Heatmap",
+      "Statistical Reference",
+      "Historical Returns by Year",
+    ],
     forbiddenText: [],
   },
   {
-    id: 'seasonal-mtd',
-    file: 'seasonal-mtd.png',
-    sourceUrl: 'https://dashboard.secretsatoshis.com/#seasonal-returns',
-    alt: 'Current Bitcoin month-to-date path compared with historical years and the historical average.',
-    requiredText: ['MTD Returns Comparison'],
+    id: "seasonal-mtd",
+    file: "seasonal-mtd.png",
+    sourceUrl: "https://dashboard.secretsatoshis.com/#seasonal-returns",
+    alt: "Current Bitcoin month-to-date path compared with historical years and the historical average.",
+    requiredText: ["MTD Returns Comparison"],
     forbiddenText: [],
-    requireCanvas: true,
+    requireChart: true,
   },
   {
-    id: 'seasonal-ytd',
-    file: 'seasonal-ytd.png',
-    sourceUrl: 'https://dashboard.secretsatoshis.com/#seasonal-returns',
-    alt: 'Current Bitcoin year-to-date path compared with historical years and the historical average.',
-    requiredText: ['YTD Returns Comparison'],
+    id: "seasonal-ytd",
+    file: "seasonal-ytd.png",
+    sourceUrl: "https://dashboard.secretsatoshis.com/#seasonal-returns",
+    alt: "Current Bitcoin year-to-date path compared with historical years and the historical average.",
+    requiredText: ["YTD Returns Comparison"],
     forbiddenText: [],
-    requireCanvas: true,
+    requireChart: true,
   },
 ];
 
 const QUARTERLY_VISUALS = [
-  { ...VISUALS[1], id: 'price-outlook', file: 'price-outlook.png',
+  {
+    ...VISUALS[1],
+    id: "price-outlook",
+    file: "price-outlook.png",
     selector: '[data-newsletter-visual="bitcoin-price"]',
-    sourceUrl: 'https://dashboard.secretsatoshis.com/#price-outlook' },
+    sourceUrl: "https://dashboard.secretsatoshis.com/#price-outlook",
+  },
   ...[
-    ['performance-indexes', 'Stock Market Index Performance'],
-    ['performance-sectors', 'Sector Performance'],
-    ['performance-macro', 'Macro Asset Class Performance'],
-    ['performance-bitcoin', 'Bitcoin Industry Performance'],
-  ].map(([id, title]) => ({ id, file: `${id}.png`,
+    ["performance-indexes", "Stock Market Index Performance"],
+    ["performance-sectors", "Sector Performance"],
+    ["performance-macro", "Macro Asset Class Performance"],
+    ["performance-bitcoin", "Bitcoin Industry Performance"],
+  ].map(([id, title]) => ({
+    id,
+    file: `${id}.png`,
     selector: `[data-quarterly-visual="${id}"]`,
-    sourceUrl: 'https://dashboard.secretsatoshis.com/#performance',
+    sourceUrl: "https://dashboard.secretsatoshis.com/#performance",
     alt: `${title} at the reporting cutoff, including year-to-date returns.`,
-    requiredText: [title, 'YTD Return'], forbiddenText: [] })),
-  { id: 'relative-valuation', file: 'relative-valuation.png', widthCssPx: 1280,
+    requiredText: [title, "YTD Return"],
+    forbiddenText: [],
+  })),
+  {
+    id: "relative-valuation",
+    file: "relative-valuation.png",
+    widthCssPx: 1280,
     selector: '[data-quarterly-visual="relative-valuation"]',
-    sourceUrl: 'https://dashboard.secretsatoshis.com/#relative-valuation',
-    alt: 'Bitcoin market size beside monetary bases, precious metals, and selected companies.',
-    requiredText: ['Relative Valuation', 'Market Cap'], forbiddenText: [] },
+    sourceUrl: "https://dashboard.secretsatoshis.com/#relative-valuation",
+    alt: "Bitcoin market size beside monetary bases, precious metals, and selected companies.",
+    requiredText: ["Relative Valuation", "Market Cap"],
+    forbiddenText: [],
+  },
 ];
 
 function usage(message) {
   if (message) process.stderr.write(`ERROR: ${message}\n`);
   process.stderr.write(
-    'Usage: node scripts/export-newsletter-visuals.mjs --report-date YYYY-MM-DD --output-dir PATH [--build-dir PATH] [--chrome PATH] [--profile weekly|quarterly]\n'
+    "Usage: node scripts/export-newsletter-visuals.mjs --report-date YYYY-MM-DD --output-dir PATH [--build-dir PATH] [--chrome PATH] [--profile weekly|quarterly]\n",
   );
   process.exit(2);
 }
@@ -94,35 +147,37 @@ function parseArgs(argv) {
   const args = {};
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
-    if (!token.startsWith('--')) usage(`unexpected argument: ${token}`);
+    if (!token.startsWith("--")) usage(`unexpected argument: ${token}`);
     const value = argv[index + 1];
-    if (!value || value.startsWith('--')) usage(`${token} requires a value`);
+    if (!value || value.startsWith("--")) usage(`${token} requires a value`);
     args[token.slice(2)] = value;
     index += 1;
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(args['report-date'] || '')) {
-    usage('--report-date must be YYYY-MM-DD');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(args["report-date"] || "")) {
+    usage("--report-date must be YYYY-MM-DD");
   }
-  if (!args['output-dir']) usage('--output-dir is required');
-  if (args.profile && !['weekly', 'quarterly'].includes(args.profile)) usage('invalid profile');
+  if (!args["output-dir"]) usage("--output-dir is required");
+  if (args.profile && !["weekly", "quarterly"].includes(args.profile))
+    usage("invalid profile");
   return {
-    profile: args.profile || 'weekly',
-    reportDate: args['report-date'],
-    outputDir: resolve(args['output-dir']),
-    buildDir: resolve(args['build-dir'] || DEFAULT_BUILD_DIR),
-    chrome: args.chrome || process.env.CHROME_EXECUTABLE
-      ? resolve(args.chrome || process.env.CHROME_EXECUTABLE)
-      : null,
+    profile: args.profile || "weekly",
+    reportDate: args["report-date"],
+    outputDir: resolve(args["output-dir"]),
+    buildDir: resolve(args["build-dir"] || DEFAULT_BUILD_DIR),
+    chrome:
+      args.chrome || process.env.CHROME_EXECUTABLE
+        ? resolve(args.chrome || process.env.CHROME_EXECUTABLE)
+        : null,
   };
 }
 
 function sha256(path) {
-  return createHash('sha256').update(readFileSync(path)).digest('hex');
+  return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
 function git(command) {
-  const result = spawnSync('git', ['-C', REPOSITORY_ROOT, ...command], {
-    encoding: 'utf8',
+  const result = spawnSync("git", ["-C", REPOSITORY_ROOT, ...command], {
+    encoding: "utf8",
     timeout: 10_000,
   });
   return result.status === 0 ? result.stdout.trim() : null;
@@ -130,41 +185,50 @@ function git(command) {
 
 function pngDimensions(path) {
   const bytes = readFileSync(path);
-  const signature = '89504e470d0a1a0a';
-  if (bytes.length < 24 || bytes.subarray(0, 8).toString('hex') !== signature) {
+  const signature = "89504e470d0a1a0a";
+  if (bytes.length < 24 || bytes.subarray(0, 8).toString("hex") !== signature) {
     throw new Error(`${path} is not a valid PNG`);
   }
   return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
 }
 
 function mimeType(path) {
-  return {
-    '.css': 'text/css; charset=utf-8',
-    '.html': 'text/html; charset=utf-8',
-    '.ico': 'image/x-icon',
-    '.js': 'text/javascript; charset=utf-8',
-    '.json': 'application/json; charset=utf-8',
-    '.png': 'image/png',
-    '.svg': 'image/svg+xml',
-    '.wasm': 'application/wasm',
-    '.webmanifest': 'application/manifest+json',
-  }[extname(path).toLowerCase()] || 'application/octet-stream';
+  return (
+    {
+      ".css": "text/css; charset=utf-8",
+      ".html": "text/html; charset=utf-8",
+      ".ico": "image/x-icon",
+      ".js": "text/javascript; charset=utf-8",
+      ".json": "application/json; charset=utf-8",
+      ".png": "image/png",
+      ".svg": "image/svg+xml",
+      ".wasm": "application/wasm",
+      ".webmanifest": "application/manifest+json",
+    }[extname(path).toLowerCase()] || "application/octet-stream"
+  );
 }
 
 function staticServer(buildDir) {
   return createServer((request, response) => {
     try {
-      const requestPath = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
-      const requested = requestPath === '/' ? 'index.html' : requestPath.replace(/^\/+/, '');
+      const requestPath = decodeURIComponent(
+        new URL(request.url, "http://localhost").pathname,
+      );
+      const requested =
+        requestPath === "/" ? "index.html" : requestPath.replace(/^\/+/, "");
       const path = normalize(join(buildDir, requested));
       const relativePath = relative(buildDir, path);
-      if (relativePath === '..' || relativePath.startsWith(`..${sep}`) || !existsSync(path)) {
-        response.writeHead(404).end('Not found');
+      if (
+        relativePath === ".." ||
+        relativePath.startsWith(`..${sep}`) ||
+        !existsSync(path)
+      ) {
+        response.writeHead(404).end("Not found");
         return;
       }
       response.writeHead(200, {
-        'Cache-Control': 'no-store',
-        'Content-Type': mimeType(path),
+        "Cache-Control": "no-store",
+        "Content-Type": mimeType(path),
       });
       createReadStream(path).pipe(response);
     } catch (error) {
@@ -175,8 +239,8 @@ function staticServer(buildDir) {
 
 async function listen(server) {
   await new Promise((resolvePromise, rejectPromise) => {
-    server.once('error', rejectPromise);
-    server.listen(0, '127.0.0.1', resolvePromise);
+    server.once("error", rejectPromise);
+    server.listen(0, "127.0.0.1", resolvePromise);
   });
   return server.address().port;
 }
@@ -190,7 +254,8 @@ function publishFiles(temporaryDir, outputDir, filenames) {
   try {
     for (const filename of filenames) {
       const destination = join(outputDir, filename);
-      if (existsSync(destination)) throw new Error(`refusing to overwrite ${destination}`);
+      if (existsSync(destination))
+        throw new Error(`refusing to overwrite ${destination}`);
       linkSync(join(temporaryDir, filename), destination);
       published.push(destination);
     }
@@ -202,8 +267,9 @@ function publishFiles(temporaryDir, outputDir, filenames) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const selectedVisuals = args.profile === 'quarterly' ? QUARTERLY_VISUALS : VISUALS;
-  if (!existsSync(join(args.buildDir, 'index.html'))) {
+  const selectedVisuals =
+    args.profile === "quarterly" ? QUARTERLY_VISUALS : VISUALS;
+  if (!existsSync(join(args.buildDir, "index.html"))) {
     throw new Error(`dashboard build is missing: ${args.buildDir}`);
   }
   if (args.chrome && !existsSync(args.chrome)) {
@@ -212,14 +278,18 @@ async function main() {
   mkdirSync(args.outputDir, { recursive: true });
   for (const visual of selectedVisuals) {
     if (existsSync(join(args.outputDir, visual.file))) {
-      throw new Error(`refusing to overwrite ${join(args.outputDir, visual.file)}`);
+      throw new Error(
+        `refusing to overwrite ${join(args.outputDir, visual.file)}`,
+      );
     }
   }
   if (existsSync(join(args.outputDir, MANIFEST_NAME))) {
-    throw new Error(`refusing to overwrite ${join(args.outputDir, MANIFEST_NAME)}`);
+    throw new Error(
+      `refusing to overwrite ${join(args.outputDir, MANIFEST_NAME)}`,
+    );
   }
 
-  const temporaryDir = mkdtempSync(join(args.outputDir, '.newsletter-export-'));
+  const temporaryDir = mkdtempSync(join(args.outputDir, ".newsletter-export-"));
   const server = staticServer(args.buildDir);
   let browser;
   try {
@@ -227,94 +297,164 @@ async function main() {
     browser = await chromium.launch({
       ...(args.chrome ? { executablePath: args.chrome } : {}),
       headless: true,
-      args: ['--force-color-profile=srgb', '--font-render-hinting=none'],
+      args: ["--force-color-profile=srgb", "--font-render-hinting=none"],
     });
     const context = await browser.newContext({
       viewport: VIEWPORT,
       deviceScaleFactor: DEVICE_SCALE_FACTOR,
-      colorScheme: 'dark',
-      reducedMotion: 'reduce',
+      colorScheme: "dark",
+      reducedMotion: "reduce",
     });
     const page = await context.newPage();
     const pageErrors = [];
-    page.on('pageerror', (error) => pageErrors.push(String(error)));
+    page.on("pageerror", (error) => pageErrors.push(String(error)));
     await page.goto(`http://127.0.0.1:${port}/`, {
-      waitUntil: 'domcontentloaded',
+      waitUntil: "domcontentloaded",
       timeout: 60_000,
     });
     await page.waitForFunction(
       () => {
-        const hero = document.querySelector('[data-dashboard-date]');
-        return hero?.getAttribute('data-dashboard-date') &&
-          document.querySelectorAll('[data-newsletter-visual]').length === 5;
+        const hero = document.querySelector("[data-dashboard-date]");
+        return (
+          hero?.getAttribute("data-dashboard-date") &&
+          document.querySelectorAll("[data-newsletter-visual]").length === 5
+        );
       },
       { timeout: 120_000 },
     );
     await page.evaluate(async () => {
       await document.fonts.ready;
-      document.body.classList.add('newsletter-export-mode');
+      document.body.classList.add("newsletter-export-mode");
     });
     await page.addStyleTag({
-      content: '*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;transition:none!important;caret-color:transparent!important}',
+      content:
+        "*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;transition:none!important;caret-color:transparent!important}",
     });
     await page.waitForTimeout(1500);
 
-    const dashboardDate = await page.locator('[data-dashboard-date]').getAttribute('data-dashboard-date');
+    const dashboardDate = await page
+      .locator("[data-dashboard-date]")
+      .getAttribute("data-dashboard-date");
     if (dashboardDate !== args.reportDate) {
-      throw new Error(`dashboard latest-data date ${dashboardDate || 'missing'} does not match ${args.reportDate}`);
+      throw new Error(
+        `dashboard latest-data date ${dashboardDate || "missing"} does not match ${args.reportDate}`,
+      );
     }
-    if (pageErrors.length) throw new Error(`dashboard page errors: ${pageErrors.join('; ')}`);
+    for (const frameElement of await page
+      .locator("[data-chart-frame]")
+      .elementHandles()) {
+      const embedded = await frameElement.contentFrame();
+      await embedded.waitForFunction(() => window.SecretSatoshisChart?.ready);
+      const payload = await embedded.evaluate(async () => {
+        await document.fonts.ready;
+        const chart = await window.SecretSatoshisChart.ready;
+        // Price presentation selects a prepared candle view. The embedded source
+        // stays immutable so we can compare all data, not just its report label.
+        return JSON.parse(document.querySelector("#chart-data").textContent);
+      });
+      const expected = JSON.parse(
+        readFileSync(join(args.buildDir, "data/charts", `${payload.id}.json`), "utf8"),
+      );
+      if (
+        payload.reportDate !== args.reportDate ||
+        JSON.stringify(payload) !== JSON.stringify(expected)
+      )
+        throw new Error(`Chart payload mismatch: ${payload.id}`);
+    }
+    if (pageErrors.length)
+      throw new Error(`dashboard page errors: ${pageErrors.join("; ")}`);
 
     const files = [];
     for (const visual of selectedVisuals) {
-      const selector = visual.selector || `[data-newsletter-visual="${visual.id}"]`;
+      const selector =
+        visual.selector || `[data-newsletter-visual="${visual.id}"]`;
       const locator = page.locator(selector);
       const count = await locator.count();
-      if (count !== 1) throw new Error(`${selector} expected exactly once, found ${count}`);
+      if (count !== 1)
+        throw new Error(`${selector} expected exactly once, found ${count}`);
       if (visual.widthCssPx) {
-        await locator.evaluate((element, width) => { element.style.width = `${width}px`; }, visual.widthCssPx);
+        await locator.evaluate((element, width) => {
+          element.style.width = `${width}px`;
+        }, visual.widthCssPx);
       }
       let text = await locator.innerText();
-      const chartFrame = locator.locator('[data-price-outlook-frame]');
-      const chartError = locator.locator('[data-price-outlook-error]');
+      const chartFrame = locator.locator("[data-chart-frame]");
+      const chartError = locator.locator("[data-chart-error]:not([hidden])");
       if (await chartError.count()) {
-        throw new Error(`${visual.id}: ${(await chartError.innerText()).trim()}`);
+        throw new Error(
+          `${visual.id}: ${(await chartError.innerText()).trim()}`,
+        );
       }
-      if(await chartFrame.count()){
-        const handle=await chartFrame.elementHandle(), embedded=await handle.contentFrame();
-        await embedded.waitForFunction(()=>window.SecretSatoshisChart?.ready);
-        const chartDate=await embedded.evaluate(async()=>{const chart=await SecretSatoshisChart.ready;return chart.payload.reportDate;});
-        if(chartDate!==args.reportDate)throw new Error('Price outlook iframe cutoff mismatch');
+      if (await chartFrame.count()) {
+        const handle = await chartFrame.elementHandle(),
+          embedded = await handle.contentFrame();
+        await embedded.waitForFunction(() => window.SecretSatoshisChart?.ready);
+        const chartDate = await embedded.evaluate(async () => {
+          const chart = await SecretSatoshisChart.ready;
+          return chart.payload.reportDate;
+        });
+        if (chartDate !== args.reportDate)
+          throw new Error("Chart iframe cutoff mismatch");
         // Present the complete seven-series legend in newsletter captures.
-        await embedded.addStyleTag({content:'.toolbar{display:none!important}#legend{max-height:none!important}.plot-wrap{height:660px;min-height:660px}'});
-        await embedded.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
-        text += ' '+await embedded.locator('body').innerText();
+        await embedded.addStyleTag({
+          content:
+            ".toolbar{display:none!important}#legend{max-height:none!important}.plot-wrap{height:660px;min-height:660px}",
+        });
+        await embedded.evaluate(
+          () =>
+            new Promise((r) =>
+              requestAnimationFrame(() => requestAnimationFrame(r)),
+            ),
+        );
+        text += " " + (await embedded.locator("body").innerText());
       }
-      text=text.replace(/\s+/g, ' ').trim();
+      text = text.replace(/\s+/g, " ").trim();
       for (const required of visual.requiredText) {
-        if (!text.toLocaleLowerCase('en-US').includes(required.toLocaleLowerCase('en-US'))) {
+        if (
+          !text
+            .toLocaleLowerCase("en-US")
+            .includes(required.toLocaleLowerCase("en-US"))
+        ) {
           throw new Error(`${visual.id} is missing required text: ${required}`);
         }
       }
       for (const forbidden of visual.forbiddenText) {
-        if (text.toLocaleLowerCase('en-US').includes(forbidden.toLocaleLowerCase('en-US'))) {
+        if (
+          text
+            .toLocaleLowerCase("en-US")
+            .includes(forbidden.toLocaleLowerCase("en-US"))
+        ) {
           throw new Error(`${visual.id} contains forbidden text: ${forbidden}`);
         }
       }
-      if (visual.requireCanvas && await locator.locator('canvas').count() !== 1) {
-        throw new Error(`${visual.id} must contain exactly one rendered chart canvas`);
+      if (visual.requireChart && (await chartFrame.count()) !== 1) {
+        throw new Error(
+          `${visual.id} must contain exactly one shared chart frame`,
+        );
       }
       const box = await locator.boundingBox();
       if (!box || box.width < 1000 || box.height < 160) {
-        throw new Error(`${visual.id} has an implausible capture box: ${JSON.stringify(box)}`);
+        throw new Error(
+          `${visual.id} has an implausible capture box: ${JSON.stringify(box)}`,
+        );
       }
       await locator.scrollIntoViewIfNeeded();
       const temporaryPath = join(temporaryDir, visual.file);
-      await locator.screenshot({ path: temporaryPath, animations: 'disabled', type: 'png' });
+      await locator.screenshot({
+        path: temporaryPath,
+        animations: "disabled",
+        type: "png",
+      });
       const dimensions = pngDimensions(temporaryPath);
       const sizeBytes = statSync(temporaryPath).size;
-      if (dimensions.width < 2000 || dimensions.height < 300 || sizeBytes < 10_000) {
-        throw new Error(`${visual.id} produced an implausible PNG: ${dimensions.width}x${dimensions.height}, ${sizeBytes} bytes`);
+      if (
+        dimensions.width < 2000 ||
+        dimensions.height < 300 ||
+        sizeBytes < 10_000
+      ) {
+        throw new Error(
+          `${visual.id} produced an implausible PNG: ${dimensions.width}x${dimensions.height}, ${sizeBytes} bytes`,
+        );
       }
       files.push({
         id: visual.id,
@@ -331,41 +471,48 @@ async function main() {
       });
     }
 
-    const buildManifestPath = join(args.buildDir, 'data', 'manifest.json');
+    const buildManifestPath = join(args.buildDir, "data", "manifest.json");
     const manifest = {
       schema_version: 1,
-      workflow: `Secret Satoshis ${args.profile === 'quarterly' ? 'Quarterly' : 'Weekly'} Newsletter Dashboard Visual Export`,
+      workflow: `Secret Satoshis ${args.profile === "quarterly" ? "Quarterly" : "Weekly"} Newsletter Dashboard Visual Export`,
       report_date: args.reportDate,
       generated_at: new Date().toISOString(),
-      status: 'passed',
+      status: "passed",
       dashboard: {
-        repository: 'SecretSatoshis/Bitcoin-Report-Library',
+        repository: "SecretSatoshis/Bitcoin-Report-Library",
         local_root: REPOSITORY_ROOT,
-        commit: git(['rev-parse', 'HEAD']),
-        dirty: Boolean(git(['status', '--porcelain'])),
-        build_index_sha256: sha256(join(args.buildDir, 'index.html')),
-        build_data_manifest_sha256: existsSync(buildManifestPath) ? sha256(buildManifestPath) : null,
+        commit: git(["rev-parse", "HEAD"]),
+        dirty: Boolean(git(["status", "--porcelain"])),
+        build_index_sha256: sha256(join(args.buildDir, "index.html")),
+        build_data_manifest_sha256: existsSync(buildManifestPath)
+          ? sha256(buildManifestPath)
+          : null,
         latest_data_date: dashboardDate,
-        production_url: 'https://dashboard.secretsatoshis.com/',
+        production_url: "https://dashboard.secretsatoshis.com/",
       },
       render: {
         browser: await browser.version(),
         viewport_css_px: VIEWPORT,
         device_scale_factor: DEVICE_SCALE_FACTOR,
-        color_scheme: 'dark',
-        color_profile: 'sRGB',
-        format: 'PNG',
+        color_scheme: "dark",
+        color_profile: "sRGB",
+        format: "PNG",
       },
       files,
     };
-    writeFileSync(join(temporaryDir, MANIFEST_NAME), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
-    publishFiles(
-      temporaryDir,
-      args.outputDir,
-      [...files.map((item) => item.filename), MANIFEST_NAME],
+    writeFileSync(
+      join(temporaryDir, MANIFEST_NAME),
+      `${JSON.stringify(manifest, null, 2)}\n`,
+      "utf8",
     );
+    publishFiles(temporaryDir, args.outputDir, [
+      ...files.map((item) => item.filename),
+      MANIFEST_NAME,
+    ]);
     process.stdout.write(`${JSON.stringify(manifest, null, 2)}\n`);
-    process.stdout.write(`OK: newsletter visuals written to ${args.outputDir}\n`);
+    process.stdout.write(
+      `OK: newsletter visuals written to ${args.outputDir}\n`,
+    );
   } finally {
     if (browser) await browser.close();
     await close(server);

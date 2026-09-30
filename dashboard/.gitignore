@@ -1,10 +1,15 @@
 node_modules/
-.evidence/
-.svelte-kit/
 build/
 sources/bitcoin_report_library/*.csv
-!sources/bitcoin_report_library/connection.yaml
 
 sources/bitcoin_report_library/*.csv.gz
 .sync-staging/
 .sync-previous/
+
+.generated/
+.prepare-staging/
+.prepare-previous/
+.build-staging/
+.build-previous/
+sources/bitcoin_report_library/release_manifest.json
+.vercel/

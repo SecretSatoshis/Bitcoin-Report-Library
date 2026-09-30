@@ -34,6 +34,25 @@ main{width:var(--chart-content-width);max-width:none;padding:106px 0 28px}
 .compact-legend .indicator .value{font-size:12px;line-height:1.5;margin-top:3px}
 .compact-legend .legend-hint{margin-top:12px}
 
+/* Template-defined panels keep their proportions on every screen. */
+.panel-layout .chart-card{scroll-margin-top:80px}
+.panel-layout .plot-wrap{height:clamp(570px,calc(var(--chart-viewport-height,100svh) - 110px),710px);min-height:0}
+.panel-layout.embedded{--chart-viewport-height:800px}
+.panel-layout .stacked{grid-template-columns:minmax(0,1fr)}
+.panel-layout .chart-pane{min-width:0}
+.panel-layout .plot-label{display:none}
+.panel-layout #chart{inset:12px 16px 0 12px;min-height:0}
+.panel-layout .pane-label{z-index:4;font-weight:600;background:var(--bg);padding:4px 6px;top:4px;left:6px;max-width:calc(100% - 120px);line-height:1.5}
+.legend-group h3{font-size:9px;font-weight:600;line-height:1.6;color:var(--dim);margin:18px 0 4px}
+.legend-group:first-child h3{margin-top:0}
+.panel-layout #legend{max-height:590px}
+.panel-layout .indicators{padding-top:16px;padding-bottom:12px}
+.panel-layout .indicator{padding:8px 0}
+.panel-layout .reading-date{margin-top:12px}
+.panel-layout .legend-group h3{margin-top:12px}
+.panel-layout .legend-group:first-child h3{margin-top:0}
+@media(max-width:760px){.panel-layout #chart{inset:12px 6px 0}.panel-layout #legend{display:block;max-height:500px}.panel-layout .pane-label{font-size:8px}}
+
 /* Standard Secret Satoshis site chrome and shared chart width. */
 :root{--chart-content-width:calc(min(100vw, 1680px) - 7.6vw);--nav-height:64px;--max-width:1120px;--gutter:clamp(20px,5vw,60px);--white:#fff;--text-dim:#9090a8;--text-mute:#82829c;--accent:#f7931a;--mono:'JetBrains Mono',monospace}
 .accent{color:var(--accent)}
