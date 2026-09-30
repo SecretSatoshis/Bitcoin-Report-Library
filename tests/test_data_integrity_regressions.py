@@ -143,6 +143,16 @@ class ReferenceDataVintageTests(unittest.TestCase):
                 )
 
 
+    def test_power_law_bands_expire_a_year_after_review(self):
+        from data_definitions import POWER_LAW_BANDS_AS_OF, REFERENCE_DATA_VINTAGES
+
+        self.assertIs(REFERENCE_DATA_VINTAGES["POWER_LAW_VALUATION_BANDS"], POWER_LAW_BANDS_AS_OF)
+        bands = {"POWER_LAW_VALUATION_BANDS": POWER_LAW_BANDS_AS_OF}
+        data_format.assert_reference_data_fresh(POWER_LAW_BANDS_AS_OF + pd.Timedelta(days=365), bands)
+        with self.assertRaisesRegex(RuntimeError, "POWER_LAW_VALUATION_BANDS"):
+            data_format.assert_reference_data_fresh(POWER_LAW_BANDS_AS_OF + pd.Timedelta(days=366), bands)
+
+
 class SharesOutstandingBudgetTests(unittest.TestCase):
     """The share-count fill is bounded by a cadence-appropriate budget."""
 

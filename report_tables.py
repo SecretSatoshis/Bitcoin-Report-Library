@@ -28,7 +28,7 @@ from data_definitions import (
     NUPL_SENTIMENT_ZONES,
     POWER_LAW_VALUATION_BANDS,
     SATS_PER_BTC,
-    fiat_money_data_top10,
+    FIAT_MONEY_SUPPLY,
 )
 
 
@@ -1108,7 +1108,7 @@ def create_asset_valuation_table(report_data, report_date=None):
         - market_cap: Current Bitcoin market cap
         - *_mc_btc_price: Calculated BTC price if matching each asset's market cap
         - *_MarketCap: Market cap values for comparison stocks in USD (fiat M0 comes
-          from data_definitions.fiat_money_data_top10)
+          from data_definitions.FIAT_MONEY_SUPPLY)
         - gold/silver ``*_marketcap_billion_usd`` columns: legacy-named columns
           whose stored values are absolute USD, not values to rescale by one billion
 
@@ -1122,7 +1122,7 @@ def create_asset_valuation_table(report_data, report_date=None):
         Numeric throughout; missing values are NaN. Sorted by market cap, descending.
     """
     fiat_m0_usd = dict(zip(
-        fiat_money_data_top10["Country"], fiat_money_data_top10["US Dollar Trillion"] * 1e12
+        FIAT_MONEY_SUPPLY["Country"], FIAT_MONEY_SUPPLY["US Dollar Trillion"] * 1e12
     ))
     assets = [
         {"name": "Bitcoin", "data": "price_close", "marketcap": "market_cap"},

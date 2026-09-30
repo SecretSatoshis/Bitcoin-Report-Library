@@ -94,12 +94,12 @@ class ReviewFixTests(unittest.TestCase):
         self.assertAlmostEqual(float(result.loc['Average','Yearly']), 200.0)
 
     def test_release_rejects_missing_day_and_mutated_fundamental(self):
-        from data_definitions import metrics_template
-        columns = {item[0] for group in metrics_template.values() for item in group.values()}
+        from data_definitions import FUNDAMENTALS_TEMPLATE
+        columns = {item[0] for group in FUNDAMENTALS_TEMPLATE.values() for item in group.values()}
         dates = pd.date_range('2024-01-01', periods=400)
         master = pd.DataFrame(10.0, index=dates, columns=sorted(columns))
         master.index.name = 'time'
-        fundamentals = tables.create_fundamentals_table(master, metrics_template, dates[-1])
+        fundamentals = tables.create_fundamentals_table(master, FUNDAMENTALS_TEMPLATE, dates[-1])
         fundamentals.loc[0,'Current Value'] = '999999999'
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory)

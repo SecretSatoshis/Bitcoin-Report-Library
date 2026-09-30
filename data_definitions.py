@@ -5,11 +5,14 @@ This module contains all static configuration, ticker lists, reference data,
 and API settings used throughout the Bitcoin report generation system.
 
 Sections:
-    - Market Data: Tickers, dates, and asset categories
-    - Reference Data: Fiat supply, precious metals supply
-    - Report Configuration: Metrics, columns, and templates
-    - API Configuration: BRK metrics, URLs, and request settings
-    - Model Parameters: Electric price model constants
+    - Market Data: Yahoo tickers by group, history start dates, the report date
+    - Reference Data: hand-maintained fiat and metal figures, the price outlook, and the
+      review dates that fail the build when they go stale
+    - Report Configuration: columns that get changes, averages and CAGRs; the fundamentals
+      template
+    - BRK API: the on-chain series fetched
+    - Model Parameters: network-model anchors and electricity tariffs
+    - Investor Sentiment: NUPL zones and power-law valuation bands
 """
 import pandas as pd
 
@@ -18,8 +21,8 @@ import pandas as pd
 # MARKET DATA CONFIGURATION
 # =============================================================================
 
-# Asset tickers organized by category for yfinance API calls
-tickers = {
+# Asset TICKERS organized by category for yfinance API calls
+TICKERS = {
     "stocks": [
         "AAPL",
         "MSFT",
@@ -74,34 +77,34 @@ tickers = {
     ],
 }
 
-# Stock tickers extracted for market cap calculations
-stock_tickers = tickers["stocks"]
+# Stock TICKERS extracted for market cap calculations
+STOCK_TICKERS = TICKERS["stocks"]
 
 # Start date for historical TradFi data (format: YYYY-MM-DD)
-market_data_start_date = "2010-01-01"
+MARKET_DATA_START_DATE = "2010-01-01"
 
 # Yahoo's historical shares-outstanding feed is useful and reasonably complete from 2015
 # onward. Keep the broader price history above, but do not invent stock market caps before
 # Yahoo supplies a historical share count.
-market_cap_history_start_date = "2015-01-01"
+MARKET_CAP_HISTORY_START_DATE = "2015-01-01"
 
 # Yahoo keys historical share counts to the ticker that was active at the time. Prices for
 # the current symbols already span these renames, so only the shares feed needs stitching.
-yahoo_share_ticker_aliases = {
+YAHOO_SHARE_TICKER_ALIASES = {
     "META": ["FB", "META"],
 }
 
 # Yahoo reports historical Close and shares in each listing's trading currency. Convert
 # non-USD listings before publishing the project's ``*_MarketCap`` columns, whose contract
 # is absolute USD. TSM is a USD-traded ADR and therefore needs no conversion here.
-yahoo_market_cap_fx_tickers = {
+YAHOO_MARKET_CAP_FX_TICKERS = {
     "2222.SR": "SARUSD=X",
     "005930.KS": "KRWUSD=X",
 }
 
 # The report represents the last completed UTC day. GitHub-hosted runners currently use
 # UTC, but making the clock explicit keeps local and CI runs identical across timezones.
-report_date = (
+REPORT_DATE = (
     pd.Timestamp.now(tz="UTC").normalize().tz_localize(None)
     - pd.Timedelta(days=1)
 )
@@ -122,6 +125,9 @@ report_date = (
 FIAT_MONEY_AS_OF = pd.Timestamp("2026-08-22")
 PRECIOUS_METALS_AS_OF = pd.Timestamp("2026-08-22")
 GOLD_BREAKDOWN_AS_OF = pd.Timestamp("2026-08-22")
+# The power-law valuation bands (POWER_LAW_VALUATION_BANDS, below) are fixed thresholds.
+# Re-check them against the latest spread of the multiple once a year and bump this date.
+POWER_LAW_BANDS_AS_OF = pd.Timestamp("2026-09-29")
 
 # How far behind the report date a reference figure may fall before the build fails.
 # Above-ground gold grows ~1.7%/yr and global M0 moves considerably faster, so a figure
@@ -129,15 +135,16 @@ GOLD_BREAKDOWN_AS_OF = pd.Timestamp("2026-08-22")
 REFERENCE_DATA_MAX_AGE_DAYS = 365
 
 REFERENCE_DATA_VINTAGES = {
-    "fiat_money_data_top10": FIAT_MONEY_AS_OF,
-    "gold_silver_supply": PRECIOUS_METALS_AS_OF,
-    "gold_supply_breakdown": GOLD_BREAKDOWN_AS_OF,
+    "FIAT_MONEY_SUPPLY": FIAT_MONEY_AS_OF,
+    "GOLD_SILVER_SUPPLY": PRECIOUS_METALS_AS_OF,
+    "GOLD_SUPPLY_BREAKDOWN": GOLD_BREAKDOWN_AS_OF,
+    "POWER_LAW_VALUATION_BANDS": POWER_LAW_BANDS_AS_OF,
 }
 
 
 # Global fiat money supply (M0) by country in USD trillions
 # Source: Central bank data. Vintage: FIAT_MONEY_AS_OF.
-fiat_money_data_top10 = pd.DataFrame(
+FIAT_MONEY_SUPPLY = pd.DataFrame(
     {
         "Country": [
             "United States",
@@ -167,7 +174,7 @@ fiat_money_data_top10 = pd.DataFrame(
 # Above-ground precious metals supply in troy ounces
 # Gold: ~6.1B oz, Silver: ~30.9B oz (World Gold Council estimates)
 # Vintage: PRECIOUS_METALS_AS_OF.
-gold_silver_supply = pd.DataFrame(
+GOLD_SILVER_SUPPLY = pd.DataFrame(
     {
         "Metal": ["Gold", "Silver"],
         "Supply in Billion Troy Ounces": [6100000000, 30900000000],
@@ -175,7 +182,7 @@ gold_silver_supply = pd.DataFrame(
 )
 
 # Gold market allocation by use case (World Gold Council). Vintage: GOLD_BREAKDOWN_AS_OF.
-gold_supply_breakdown = pd.DataFrame(
+GOLD_SUPPLY_BREAKDOWN = pd.DataFrame(
     {
         "Gold Supply Breakdown": [
             "Jewellery",
@@ -197,7 +204,7 @@ PRICE_OUTLOOK_YEAR = 2026
 # `color` is the single source of truth for case styling — the dashboard reads it for
 # both the headline cards and the chart's reference lines, so they cannot drift apart.
 # Values are the brand cypherpunk red/gold/green.
-price_outlook_levels = pd.DataFrame(
+PRICE_OUTLOOK_LEVELS = pd.DataFrame(
     [
         {"label": "Bull Case", "price": 160000, "type": "case", "color": "#00FF88"},
         {"label": "Base Case", "price": 120000, "type": "case", "color": "#FFD700"},
@@ -248,7 +255,7 @@ price_outlook_levels = pd.DataFrame(
 
 # Columns that get a rolling 4-year CAGR. Chart Library's CAGR charts read these
 # from the master file; nothing reads any other CAGR.
-cagr_columns = [
+CAGR_COLUMNS = [
     "price_close",
     "SPY_close",
     "QQQ_close",
@@ -261,7 +268,7 @@ cagr_columns = [
 ]
 
 # Metrics that get 30-day and 365-day moving averages (Chart Library lines)
-moving_avg_metrics = [
+MOVING_AVERAGE_METRICS = [
     "hash_rate",
     "daily_active_addresses_sending",
     "tx_count_sum_24h",
@@ -273,7 +280,7 @@ moving_avg_metrics = [
 
 # Price columns that get 7-day, 90-day, MTD and YTD changes. These feed the
 # performance tables, Chart Library's return comparisons and the quarterly report.
-analysis_columns = [
+CHANGE_COLUMNS = [
     "price_close",
     # Equity ETFs
     "SPY_close",
@@ -298,10 +305,10 @@ analysis_columns = [
 ]
 
 # Only Bitcoin's year-over-year change is read (Chart Library's YoY chart).
-yoy_columns = ["price_close"]
+YOY_COLUMNS = ["price_close"]
 
 # Column names for correlation analysis
-correlation_data = [
+CORRELATION_COLUMNS = [
     "price_close",
     "AAPL_close",
     "MSFT_close",
@@ -349,7 +356,7 @@ correlation_data = [
 ]
 
 # Template for weekly fundamentals table: {section: {label: (column, format_type)}}
-metrics_template = {
+FUNDAMENTALS_TEMPLATE = {
     "Network Performance": {
         "Total Address Count": ("addrs_over_1sat_addr_count", "number"),
         "Address Count > $10": ("addrs_over_10k_sats_addr_count", "number"),
@@ -514,8 +521,8 @@ NUPL_SENTIMENT_WINDOW_DAYS = 7
 # Valuation is price against the power-law fair value (`power_law_price_multiple`), banded
 # at standard deviations around the fair-value line: -1, 0, +1 and +2 sigma, where sigma is
 # the log10 spread of the multiple since 2015 (0.2388 as reviewed on 2026-09-29). The
-# thresholds are fixed so labels never drift on their own; review them once a year.
-POWER_LAW_VALUATION_REVIEWED = "2026-09-29"
+# thresholds are fixed so labels never drift on their own. POWER_LAW_BANDS_AS_OF records the
+# last review; the build fails once it is more than a year old.
 POWER_LAW_VALUATION_BANDS = [
     (0.58, "Undervalued"),
     (1.00, "Below Fair Value"),

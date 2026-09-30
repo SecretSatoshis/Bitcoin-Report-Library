@@ -30,41 +30,41 @@ sys.dont_write_bytecode = True
 import data_format
 
 from data_definitions import (
-    tickers,
-    stock_tickers,
-    report_date,
-    market_data_start_date,
-    moving_avg_metrics,
-    cagr_columns,
-    fiat_money_data_top10,
-    gold_silver_supply,
-    gold_supply_breakdown,
-    analysis_columns,
-    yoy_columns,
-    correlation_data,
-    metrics_template,
-    price_outlook_levels,
+    TICKERS,
+    STOCK_TICKERS,
+    REPORT_DATE,
+    MARKET_DATA_START_DATE,
+    MOVING_AVERAGE_METRICS,
+    CAGR_COLUMNS,
+    FIAT_MONEY_SUPPLY,
+    GOLD_SILVER_SUPPLY,
+    GOLD_SUPPLY_BREAKDOWN,
+    CHANGE_COLUMNS,
+    YOY_COLUMNS,
+    CORRELATION_COLUMNS,
+    FUNDAMENTALS_TEMPLATE,
+    PRICE_OUTLOOK_LEVELS,
     PRICE_OUTLOOK_YEAR,
 )
 
 # Fetch the data
-data = data_format.get_data(tickers, market_data_start_date)
+data = data_format.get_data(TICKERS, MARKET_DATA_START_DATE)
 
 ## Forward fill market data only.
 ## Equities/ETFs/FX print on trading days and miner efficiency prints monthly, so both
 ## need carrying forward onto Bitcoin's 365-day index. On-chain series print daily, and
 ## filling those would turn a missing or malformed BRK response into a silent repeat of
 ## yesterday's values, so they are validated instead.
-data_format.warn_on_stale_market_data(data, report_date)
+data_format.warn_on_stale_market_data(data, REPORT_DATE)
 ## Correlations need each asset's real trading days, so capture them before the fill
 ## turns weekends and holidays into carried-forward closes.
-correlation_df = data_format.observed_market_values(data, correlation_data)
+correlation_df = data_format.observed_market_values(data, CORRELATION_COLUMNS)
 data = data_format.forward_fill_market_data(data)
-data_format.assert_onchain_freshness(data, report_date)
-data_format.assert_no_internal_onchain_gaps(data, report_date)
-data_format.assert_reference_data_fresh(report_date)
-data_format.assert_price_outlook_current(report_date)
-data_format.warn_on_stale_miner_efficiency(data, report_date)
+data_format.assert_onchain_freshness(data, REPORT_DATE)
+data_format.assert_no_internal_onchain_gaps(data, REPORT_DATE)
+data_format.assert_reference_data_fresh(REPORT_DATE)
+data_format.assert_price_outlook_current(REPORT_DATE)
+data_format.warn_on_stale_miner_efficiency(data, REPORT_DATE)
 
 ## BRK OHLC data — daily candles are the single source; weekly candles are aggregated
 ## from them so the open week is cut off at the report date like every other export.
@@ -77,37 +77,37 @@ data_format.assert_ohlc_usable(daily_ohlc_data, label="Daily BRK OHLC")
 
 from candle_data import weekly_ohlc
 WEEKLY_OHLC_START = "2017-01-01"
-ohlc_data = weekly_ohlc(daily_ohlc_data, report_date, start=WEEKLY_OHLC_START)
+ohlc_data = weekly_ohlc(daily_ohlc_data, REPORT_DATE, start=WEEKLY_OHLC_START)
 data_format.assert_ohlc_usable(ohlc_data, label="Weekly OHLC")
 
 # Calculate Custom Metrics
 data = data_format.calculate_custom_on_chain_metrics(data)
-data = data_format.calculate_moving_averages(data, moving_avg_metrics)
+data = data_format.calculate_moving_averages(data, MOVING_AVERAGE_METRICS)
 
 ## Fiat / Gold Calculations
-data = data_format.calculate_btc_price_to_surpass_fiat(data, fiat_money_data_top10)
-data = data_format.calculate_metal_market_caps(data, gold_silver_supply)
-data = data_format.calculate_btc_price_to_surpass_metal_categories(data, gold_supply_breakdown)
+data = data_format.calculate_btc_price_to_surpass_fiat(data, FIAT_MONEY_SUPPLY)
+data = data_format.calculate_metal_market_caps(data, GOLD_SILVER_SUPPLY)
+data = data_format.calculate_btc_price_to_surpass_metal_categories(data, GOLD_SUPPLY_BREAKDOWN)
 
 ## Calculate On-chain Models
-data = data_format.calculate_btc_price_for_stock_mkt_caps(data, stock_tickers)
-data = data_format.calculate_network_model_metrics(data, report_date)
+data = data_format.calculate_btc_price_for_stock_mkt_caps(data, STOCK_TICKERS)
+data = data_format.calculate_network_model_metrics(data, REPORT_DATE)
 data = data_format.electric_price_models(data)
 
 # Create Datasets
 
 ## Create Report Data - 7-day, 90-day, MTD and YTD changes for the price columns
 ## the reports read, plus Bitcoin's YoY change
-changes = data_format.calculate_all_changes(data[analysis_columns], yoy_columns)
+changes = data_format.calculate_all_changes(data[CHANGE_COLUMNS], YOY_COLUMNS)
 report_data = pd.concat([data, changes], axis=1)
 
 ## 4-year CAGR for the price columns Chart Library's CAGR charts read
-cagr_results = data_format.calculate_rolling_cagr_for_all_columns(data[cagr_columns], 4)
+cagr_results = data_format.calculate_rolling_cagr_for_all_columns(data[CAGR_COLUMNS], 4)
 report_data = report_data.merge(cagr_results, left_index=True, right_index=True, how="left")
 
 ## Create Bitcoin Correlation Data (correlation_df was captured before the fill)
 correlation_results = data_format.create_btc_correlation_data(
-    report_date, tickers, correlation_df
+    REPORT_DATE, TICKERS, correlation_df
 )
 
 # Table Creation
@@ -116,42 +116,42 @@ correlation_results = data_format.create_btc_correlation_data(
 import report_tables
 
 # Create ROI Table
-roi_table = report_tables.calculate_roi_table(data, report_date)
+roi_table = report_tables.calculate_roi_table(data, REPORT_DATE)
 
 # Create Fundamentals Table
 fundamentals_table = report_tables.create_fundamentals_table(
-    report_data, metrics_template, report_date
+    report_data, FUNDAMENTALS_TEMPLATE, REPORT_DATE
 )
 
 # Create OHLC CSV
 report_tables.calculate_ohlc(ohlc_data)
-report_tables.create_report_ohlc_summary(daily_ohlc_data, report_date)
+report_tables.create_report_ohlc_summary(daily_ohlc_data, REPORT_DATE)
 
 # Create MTD Return Comparison Table
-mtd_return_comp = report_tables.create_monthly_returns_table(report_data, report_date)
+mtd_return_comp = report_tables.create_monthly_returns_table(report_data, REPORT_DATE)
 
 # Create YTD Return Comparison Table
-ytd_return_comp = report_tables.create_yearly_returns_table(report_data, report_date)
+ytd_return_comp = report_tables.create_yearly_returns_table(report_data, REPORT_DATE)
 
 # Create Relative Valuation Table
-rv_table = report_tables.create_asset_valuation_table(report_data, report_date)
+rv_table = report_tables.create_asset_valuation_table(report_data, REPORT_DATE)
 
 # Create the summary table
 summary_table = report_tables.create_summary_table(
-    report_data, report_date
+    report_data, REPORT_DATE
 )
 # Create the performance table
 performance_table = (
     report_tables.create_full_performance_table(
         report_data,
-        report_date,
+        REPORT_DATE,
         correlation_results,
     )
 )
 
 
 # Create Heat Map CSV
-report_tables.monthly_heatmap(report_data, report_date)
+report_tables.monthly_heatmap(report_data, REPORT_DATE)
 
 
 # CSV Exports
@@ -160,7 +160,7 @@ report_tables.monthly_heatmap(report_data, report_date)
 ## partial, in-progress UTC day whose 24h aggregates (hash rate, miner revenue, tx
 ## count, supply issuance) are a fraction of a real day; publishing it puts a spurious
 ## final point on every downstream chart. Do this once, here, so no export can miss it.
-report_data = report_data.loc[:report_date]
+report_data = report_data.loc[:REPORT_DATE]
 
 
 
@@ -173,8 +173,8 @@ summary_table.to_csv("csv/summary_table.csv", index=False)
 ## Fixed Price Outlook CSV
 ## The outlook year travels with the levels so every consumer can verify it is looking
 ## at the current forecast rather than trusting its own hardcoded copy.
-price_outlook_levels = price_outlook_levels.assign(outlook_year=PRICE_OUTLOOK_YEAR)
-price_outlook_levels.to_csv("csv/price_outlook.csv", index=False)
+PRICE_OUTLOOK_LEVELS = PRICE_OUTLOOK_LEVELS.assign(outlook_year=PRICE_OUTLOOK_YEAR)
+PRICE_OUTLOOK_LEVELS.to_csv("csv/price_outlook.csv", index=False)
 
 ## MTD / YTD Historical Returns — indexed to current-period start price.
 ## Each historical year's intra-period pattern is applied to the current year's
@@ -185,12 +185,12 @@ INDEXED_RETURNS_MIN_YEAR = 2014
 
 _price = report_data["price_close"]
 mtd_history = report_tables.create_indexed_returns_history(
-    _price, report_date, "mtd", INDEXED_RETURNS_MIN_YEAR
+    _price, REPORT_DATE, "mtd", INDEXED_RETURNS_MIN_YEAR
 )
 mtd_history.to_csv("csv/mtd_returns_history.csv")
 
 ytd_history = report_tables.create_indexed_returns_history(
-    _price, report_date, "ytd", INDEXED_RETURNS_MIN_YEAR
+    _price, REPORT_DATE, "ytd", INDEXED_RETURNS_MIN_YEAR
 )
 ytd_history.to_csv("csv/ytd_returns_history.csv")
 
@@ -207,7 +207,7 @@ ONCHAIN_PRICE_MODEL_COLS = {
     "realized_price": "Realized Price",
 }
 onchain_subset = (
-    report_data.loc[:report_date, list(ONCHAIN_PRICE_MODEL_COLS.keys())]
+    report_data.loc[:REPORT_DATE, list(ONCHAIN_PRICE_MODEL_COLS.keys())]
     .dropna(subset=["price_close"])
 )
 onchain_subset["3x Realized Price"] = onchain_subset["realized_price"] * 3
@@ -227,7 +227,7 @@ HEADLINE_METRICS = {
     "Bitcoin Transaction Volume": "transfer_volume_sum_24h_usd",
 }
 summary_history = report_tables.create_summary_history(
-    report_data, report_date, HEADLINE_METRICS, comparison_days=30
+    report_data, REPORT_DATE, HEADLINE_METRICS, comparison_days=30
 )
 summary_history.to_csv("csv/summary_history.csv", index=False)
 
@@ -249,7 +249,7 @@ roi_table.to_csv("csv/roi_table.csv", index=False)
 report_data.to_csv("csv/master_metrics_data.csv.gz", index=True, compression="gzip")
 
 from candle_data import write_candle_tables
-write_candle_tables(daily_ohlc_data, report_data, report_date)
+write_candle_tables(daily_ohlc_data, report_data, REPORT_DATE)
 
 # --- Chart-Ready CSV Exports --- #
 # These datasets are consumed by Bitcoin-Chart-Library for visualization
@@ -270,4 +270,4 @@ halving_data.to_csv("csv/halving_data.csv", index=False)
 # Downstream consumers verify this complete release before rendering.
 # The workflow validates the release before publishing its CSV directory.
 from chart_manifest import write_release_manifest
-write_release_manifest("csv", report_date)
+write_release_manifest("csv", REPORT_DATE)

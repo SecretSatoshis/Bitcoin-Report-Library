@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 # Local configuration only; importing data_definitions performs no I/O.
-from data_definitions import report_date as CLOCK_REPORT_DATE
+from data_definitions import REPORT_DATE as CLOCK_REPORT_DATE
 
 
 @dataclass(frozen=True)
@@ -712,12 +712,12 @@ def _validate_review_contracts(frames, output_dir, report_date, errors):
         _validate_investor_sentiment(summary, master_path, report_date, errors)
     fundamentals = frames.get("fundamentals_table.csv")
     if fundamentals is not None and master_path.is_file():
-        from data_definitions import metrics_template
+        from data_definitions import FUNDAMENTALS_TEMPLATE
         from report_tables import create_fundamentals_table
         try:
-            columns = list(dict.fromkeys(["time"] + [item[0] for group in metrics_template.values() for item in group.values()]))
+            columns = list(dict.fromkeys(["time"] + [item[0] for group in FUNDAMENTALS_TEMPLATE.values() for item in group.values()]))
             master = pd.read_csv(master_path, usecols=columns, parse_dates=["time"]).set_index("time")
-            expected = create_fundamentals_table(master, metrics_template, report_date)
+            expected = create_fundamentals_table(master, FUNDAMENTALS_TEMPLATE, report_date)
             change = "7 Day Change (%)"
             if not np.allclose(pd.to_numeric(fundamentals[change], errors="coerce"),
                                expected[change], rtol=1e-10, atol=1e-10, equal_nan=True):

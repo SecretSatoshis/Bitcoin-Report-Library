@@ -29,9 +29,9 @@ from data_definitions import (
     MINER_DATA_SHEET_URL,
     API_TIMEOUT,
     SATS_PER_BTC,
-    market_cap_history_start_date,
-    yahoo_market_cap_fx_tickers,
-    yahoo_share_ticker_aliases,
+    MARKET_CAP_HISTORY_START_DATE,
+    YAHOO_MARKET_CAP_FX_TICKERS,
+    YAHOO_SHARE_TICKER_ALIASES,
     BITCOIN_GENESIS_DATE,
     REFERENCE_DATA_VINTAGES,
     PRICE_OUTLOOK_YEAR,
@@ -377,7 +377,7 @@ def get_marketcap(
         data[f"{ticker}_MarketCap"] = np.nan
 
     history_start = max(
-        requested_start, pd.to_datetime(market_cap_history_start_date).normalize()
+        requested_start, pd.to_datetime(MARKET_CAP_HISTORY_START_DATE).normalize()
     )
     if history_start > requested_end:
         return data.reset_index()
@@ -389,7 +389,7 @@ def get_marketcap(
     for ticker in stocks:
         value_column = f"{ticker}_MarketCap"
         stock = None
-        fx_symbol = yahoo_market_cap_fx_tickers.get(ticker)
+        fx_symbol = YAHOO_MARKET_CAP_FX_TICKERS.get(ticker)
         fx_close = None
         try:
             stock = yf.Ticker(ticker)
@@ -412,7 +412,7 @@ def get_marketcap(
             )
 
             share_parts = []
-            for share_symbol in yahoo_share_ticker_aliases.get(ticker, [ticker]):
+            for share_symbol in YAHOO_SHARE_TICKER_ALIASES.get(ticker, [ticker]):
                 share_stock = stock if share_symbol == ticker else yf.Ticker(share_symbol)
                 # Retired tickers can retain fundamentals while losing chart timezone
                 # metadata. Seed them from the current ticker before requesting shares.
@@ -1338,7 +1338,7 @@ def assert_price_outlook_current(report_date, outlook_year: int = PRICE_OUTLOOK_
         raise RuntimeError(
             f"Price outlook is for {outlook_year} but the report date is "
             f"{report_date.date()}. Publish the new Year Ahead Outlook and update "
-            "PRICE_OUTLOOK_YEAR and price_outlook_levels in data_definitions.py."
+            "PRICE_OUTLOOK_YEAR and PRICE_OUTLOOK_LEVELS in data_definitions.py."
         )
 
 
@@ -1628,7 +1628,7 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
 def calculate_moving_averages(data: pd.DataFrame, metrics: list) -> pd.DataFrame:
     """
     Add 30-day and 365-day moving averages for each metric in `metrics`
-    (data_definitions.moving_avg_metrics), as `30_day_ma_{metric}` and `365_day_ma_{metric}`.
+    (data_definitions.MOVING_AVERAGE_METRICS), as `30_day_ma_{metric}` and `365_day_ma_{metric}`.
     """
     moving_averages = {
         f"{window}_day_ma_{metric}": data[metric].rolling(window=window).mean()
