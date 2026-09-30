@@ -28,6 +28,7 @@ from data_definitions import (
     NUPL_SENTIMENT_ZONES,
     POWER_LAW_VALUATION_BANDS,
     SATS_PER_BTC,
+    fiat_money_data_top10,
 )
 
 
@@ -1250,7 +1251,8 @@ def create_asset_valuation_table(report_data, report_date=None):
         - price_close: Current Bitcoin price
         - market_cap: Current Bitcoin market cap
         - *_mc_btc_price: Calculated BTC price if matching each asset's market cap
-        - *_MarketCap or *_cap: Market cap values for comparison assets in USD
+        - *_MarketCap: Market cap values for comparison stocks in USD (fiat M0 comes
+          from data_definitions.fiat_money_data_top10)
         - gold/silver ``*_marketcap_billion_usd`` columns: legacy-named columns
           whose stored values are absolute USD, not values to rescale by one billion
 
@@ -1263,23 +1265,26 @@ def create_asset_valuation_table(report_data, report_date=None):
           reach that market cap (e.g. 1937.0 = +1937%)
         Numeric throughout; missing values are NaN. Sorted by market cap, descending.
     """
+    fiat_m0_usd = dict(zip(
+        fiat_money_data_top10["Country"], fiat_money_data_top10["US Dollar Trillion"] * 1e12
+    ))
     assets = [
         {"name": "Bitcoin", "data": "price_close", "marketcap": "market_cap"},
         # Fiat money (M0)
         {
             "name": "Switzerland M0",
             "data": "Switzerland_btc_price",
-            "marketcap": "Switzerland_cap",
+            "marketcap_usd": fiat_m0_usd["Switzerland"],
         },
         {
             "name": "UK M0",
             "data": "United_Kingdom_btc_price",
-            "marketcap": "United_Kingdom_cap",
+            "marketcap_usd": fiat_m0_usd["United Kingdom"],
         },
         {
             "name": "US M0",
             "data": "United_States_btc_price",
-            "marketcap": "United_States_cap",
+            "marketcap_usd": fiat_m0_usd["United States"],
         },
         # Precious metals
         {
@@ -1321,7 +1326,9 @@ def create_asset_valuation_table(report_data, report_date=None):
     valuation_data = []
     for asset in assets:
         marketcap_btc_price = latest_data.get(asset["data"], float("nan"))
-        marketcap_value = latest_data.get(asset["marketcap"], float("nan"))
+        marketcap_value = asset.get("marketcap_usd")
+        if marketcap_value is None:
+            marketcap_value = latest_data.get(asset["marketcap"], float("nan"))
 
         # Avoid division by zero or invalid values
         if (

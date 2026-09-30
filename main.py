@@ -89,12 +89,10 @@ data = data_format.calculate_moving_averages(data, moving_avg_metrics)
 ## Fiat / Gold Calculations
 data = data_format.calculate_btc_price_to_surpass_fiat(data, fiat_money_data_top10)
 data = data_format.calculate_metal_market_caps(data, gold_silver_supply)
-data = data_format.calculate_gold_market_cap_breakdown(data, gold_supply_breakdown)
 data = data_format.calculate_btc_price_to_surpass_metal_categories(data, gold_supply_breakdown)
 
 ## Calculate On-chain Models
 data = data_format.calculate_btc_price_for_stock_mkt_caps(data, stock_tickers)
-data = data_format.calculate_stock_to_flow_metrics(data)
 data = data_format.calculate_network_model_metrics(data, report_date)
 data = data_format.electric_price_models(data)
 

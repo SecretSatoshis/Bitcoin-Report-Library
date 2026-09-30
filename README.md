@@ -16,7 +16,7 @@ CSV run with a hashed `visual-manifest.json`; see `dashboard/README.md`.
 
 - **On-Chain Analytics**: Hash rate, difficulty, transaction metrics, UTXO age bands, address activity, miner revenue, and supply dynamics
 - **Market Data Integration**: Multi-asset price data spanning equities, ETFs, commodities, forex, and cryptocurrencies
-- **Valuation Models**: Metcalfe, time-based power law, Stock-to-Flow, Thermocap, NVT, MVRV, Reserve Risk, energy-based pricing models, and relative valuation metrics
+- **Valuation Models**: Metcalfe, time-based power law, Thermocap, NVT, MVRV, Reserve Risk, electricity-cost and Hayes production-cost models, and relative valuation metrics
 - **Mining Signals**: Hash-rate trend metrics including strategy-aligned 30/60-day Hash Ribbons
 - **Performance Tracking**: Rolling returns (7d, 90d, MTD, YTD, and YOY for Bitcoin), correlation analysis, volatility, and 4-year CAGR calculations
 - **Cycle Analysis**: ATH drawdown tracking, halving epoch comparisons, and market cycle low indexing

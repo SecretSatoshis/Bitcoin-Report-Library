@@ -46,11 +46,11 @@ class AverageCapNetworkAgeTests(unittest.TestCase):
         first_date = pd.Timestamp("2010-01-01")
         expected_age = (first_date - BITCOIN_GENESIS_DATE).days + 1
 
-        # Cumulative market cap on day one is a single day's 100.0.
+        # Cumulative market cap on day one is a single day's 100.0, over a supply of 20.
         self.assertAlmostEqual(
-            result["average_cap"].iloc[0], 100.0 / expected_age, places=9
+            result["average_cap_price"].iloc[0], 100.0 / expected_age / 20.0, places=9
         )
-        self.assertNotAlmostEqual(result["average_cap"].iloc[0], 100.0, places=3)
+        self.assertNotAlmostEqual(result["average_cap_price"].iloc[0], 5.0, places=3)
 
     def test_average_cap_is_independent_of_where_the_history_starts(self):
         """The metric is a property of the network, not of the fetch window."""
@@ -63,8 +63,8 @@ class AverageCapNetworkAgeTests(unittest.TestCase):
         elapsed = (shared_date.tz_localize(None) - BITCOIN_GENESIS_DATE).days + 1
         rows_before = (shared_date - pd.Timestamp("2010-01-01", tz="UTC")).days + 1
         self.assertAlmostEqual(
-            long_run.loc[shared_date, "average_cap"],
-            (100.0 * rows_before) / elapsed,
+            long_run.loc[shared_date, "average_cap_price"],
+            (100.0 * rows_before) / elapsed / 20.0,
             places=9,
         )
 
@@ -74,7 +74,7 @@ class AverageCapNetworkAgeTests(unittest.TestCase):
         )
         self.assertTrue(
             np.allclose(
-                result["delta_cap"], 40.0 - result["average_cap"], equal_nan=True
+                result["delta_cap_price"], 2.0 - result["average_cap_price"], equal_nan=True
             )
         )
 

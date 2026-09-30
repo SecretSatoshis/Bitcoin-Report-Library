@@ -27,8 +27,6 @@ from data_definitions import (
     BRK_METRICS,
     ELECTRICITY_BASE_TARIFF_USD_PER_KWH,
     ELECTRICITY_TARIFFS_USD_PER_KWH,
-    PUE,
-    ELEC_TO_TOTAL_COST_RATIO,
     MINER_DATA_SHEET_URL,
     API_TIMEOUT,
     SATS_PER_BTC,
@@ -1518,8 +1516,8 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
     """
     Calculate comprehensive Bitcoin on-chain valuation and network health metrics.
 
-    This function computes 40+ derived metrics including valuation models (MVRV, NVT, Thermocap,
-    Stock-to-Flow), price moving averages, profitability indicators (NUPL), and miner revenue
+    This function computes derived metrics including valuation models (MVRV, NVT, Thermocap),
+    price moving averages, profitability indicators (NUPL), and miner revenue
     multiples. These metrics are essential for Bitcoin fundamental analysis and market cycle timing.
 
     Parameters:
@@ -1584,23 +1582,6 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
 
     daily_returns = price_close.pct_change(fill_method=None)
 
-    # Some upstream rows report supply-in-profit/loss in sats rather than BTC.
-    supply_in_profit_btc = pd.Series(
-        np.where(
-            data["supply_in_profit"] > supply * 10,
-            data["supply_in_profit"] / SATS_PER_BTC,
-            data["supply_in_profit"],
-        ),
-        index=data.index,
-    )
-    supply_in_loss_btc = pd.Series(
-        np.where(
-            data["supply_in_loss"] > supply * 10,
-            data["supply_in_loss"] / SATS_PER_BTC,
-            data["supply_in_loss"],
-        ),
-        index=data.index,
-    )
 
     new_columns = {
         "RevAllTimeUSD": rev_all_time,
@@ -1650,18 +1631,12 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
         "daily_hodl_value": daily_hodl_value,
         "hodl_bank_calc": hodl_bank,
         "reserve_risk_calc": price_close / hodl_bank,
-        "cumulative_market_cap": cumulative_market_cap,
-        "days_since_start": days_since_start,
-        "average_cap": average_cap,
-        "delta_cap": delta_cap,
         "average_cap_price": average_cap / supply,
         "delta_cap_price": delta_cap / supply,
         "VtyDayRet30d": daily_returns.rolling(30).std() * np.sqrt(365),
         "VtyDayRet180d": daily_returns.rolling(180).std() * np.sqrt(365),
-        "supply_in_profit_btc": supply_in_profit_btc,
-        "supply_in_loss_btc": supply_in_loss_btc,
-        "supply_in_profit_pct": (supply_in_profit_btc / supply) * 100,
-        "supply_in_loss_pct": (supply_in_loss_btc / supply) * 100,
+        "supply_in_profit_pct": (data["supply_in_profit"] / supply) * 100,
+        "supply_in_loss_pct": (data["supply_in_loss"] / supply) * 100,
     }
 
     # Realized price: the value at which each coin last moved. BRK usually supplies it,
@@ -1749,47 +1724,6 @@ def calculate_metal_market_caps(
     return data
 
 
-def calculate_gold_market_cap_breakdown(
-    data: pd.DataFrame, gold_supply_breakdown: pd.DataFrame
-) -> pd.DataFrame:
-    """
-    Break down the gold market cap into different categories and add the results to the DataFrame.
-
-    Parameters:
-    data (pd.DataFrame): DataFrame containing existing financial data.
-    gold_supply_breakdown (pd.DataFrame): DataFrame containing breakdown percentages for gold supply.
-
-    Returns:
-    pd.DataFrame: DataFrame with added columns for each category's market cap.
-    """
-    # Use the latest value of gold market cap
-    gold_marketcap_billion_usd = data["gold_marketcap_billion_usd"].iloc[-1]
-
-    for _, row in gold_supply_breakdown.iterrows():
-        category = row["Gold Supply Breakdown"]
-        percentage_of_market = row["Percentage Of Market"]
-        category_marketcap_billion_usd = gold_marketcap_billion_usd * (
-            percentage_of_market / 100.0
-        )
-
-        # Create the metric name for the category
-        metric_name = (
-            "gold_marketcap_" + category.replace(" ", "_").lower() + "_billion_usd"
-        )
-
-        # Assign the calculated value to all rows in the new column
-        data[metric_name] = category_marketcap_billion_usd
-
-    # Explicitly check if the index is a DatetimeIndex; fix if needed
-    if not isinstance(data.index, pd.DatetimeIndex):
-        try:
-            data.index = pd.to_datetime(data.index)
-        except ValueError as e:
-            print(f"Failed to convert index back to DatetimeIndex: {e}")
-
-    return data
-
-
 def calculate_btc_price_to_surpass_metal_categories(
     data: pd.DataFrame, gold_supply_breakdown: pd.DataFrame
 ) -> pd.DataFrame:
@@ -1857,7 +1791,6 @@ def calculate_btc_price_to_surpass_fiat(
 
         # Compute the price of Bitcoin needed to surpass this country's fiat supply
         fiat_marketcap[f"{country}_btc_price"] = fiat_supply_usd / data["supply"]
-        fiat_marketcap[f"{country}_cap"] = fiat_supply_usd
 
     data = pd.concat([data, pd.DataFrame(fiat_marketcap)], axis=1)
     return data
@@ -1886,67 +1819,6 @@ def calculate_btc_price_for_stock_mkt_caps(
 
 
 ## Onchain Models Calculation
-
-
-def calculate_stock_to_flow_metrics(data):
-    """
-    Calculate Bitcoin Stock-to-Flow (S2F) valuation model using PlanB's power law regression.
-
-    Stock-to-Flow measures Bitcoin's scarcity by dividing existing supply (stock) by annual new
-    issuance (flow). PlanB's model uses the power law: Market Value = exp(14.6) * S2F^3.3, which
-    historically correlated with Bitcoin's price. The model predicts price increases as Bitcoin
-    becomes scarcer through halvings (reducing flow every 4 years).
-
-    Model Details:
-    - Intercept: 14.6 (from PlanB's regression analysis)
-    - Power coefficient: 3.3 (non-linear relationship between scarcity and value)
-    - SF ratio calculated using 365-day supply change to smooth daily volatility
-    - 365-day MA applied to predicted price for trend identification
-
-    Parameters:
-    data (pd.DataFrame): DataFrame with DatetimeIndex containing:
-                         - supply: Total Bitcoin supply (from BRK API)
-                         - price_close: Actual Bitcoin price (for multiple calculation)
-    """
-    # Initialize a dictionary to hold new columns
-    new_columns = {}
-
-    # Use PlanB's Stock-to-Flow model directly
-    # PlanB model parameters: intercept and power coefficient are pre-determined
-    intercept = 14.6
-    power = 3.3
-
-    # Calculate S2F using yearly supply difference to align with PlanB's original model.
-    # The first 365 rows have no prior-year supply to difference against. Leaving that
-    # warmup window as NaN keeps it out of the export; filling it with 0 would make the
-    # denominator zero and publish inf into SF, SF_Predicted_Market_Value and
-    # SF_Predicted_Price — and inf propagates into SF_Multiple as a plausible-looking 0.0.
-    annual_supply_growth = data["supply"].diff(periods=365)
-    annual_supply_growth = annual_supply_growth.where(annual_supply_growth > 0)
-    new_columns["SF"] = data["supply"] / annual_supply_growth
-
-    # Applying the PlanB linear regression formula
-    new_columns["SF_Predicted_Market_Value"] = (
-        np.exp(intercept) * new_columns["SF"] ** power
-    )
-
-    # Calculating the predicted market price using supply
-    new_columns["SF_Predicted_Price"] = (
-        new_columns["SF_Predicted_Market_Value"] / data["supply"]
-    )
-
-    # Apply a 365-day moving average to the predicted S2F price to smooth the curve
-    new_columns["SF_Predicted_Price_MA365"] = (
-        new_columns["SF_Predicted_Price"].rolling(window=365).mean()
-    )
-
-    # Calculating the S/F multiple using the actual price and the predicted price
-    new_columns["SF_Multiple"] = data["price_close"] / new_columns["SF_Predicted_Price"]
-
-    # Concatenate all new columns to the DataFrame at once
-    data = pd.concat([data, pd.DataFrame(new_columns)], axis=1)
-
-    return data
 
 
 def calculate_network_model_metrics(data, model_end_date=None):
@@ -1992,7 +1864,7 @@ def calculate_network_model_metrics(data, model_end_date=None):
         (result.index.normalize() - BITCOIN_GENESIS_DATE).days.astype(float),
         index=result.index,
     )
-    new_columns = {"days_since_genesis": days_since_genesis}
+    new_columns = {}
 
     power_fit = fit_mask & price.gt(0) & days_since_genesis.gt(0)
     if power_fit.sum() < 2:
@@ -2052,7 +1924,6 @@ def calculate_network_model_metrics(data, model_end_date=None):
         {
             f"{HASH_RIBBON_FAST_WINDOW}_day_ma_hash_rate": fast,
             f"{HASH_RIBBON_SLOW_WINDOW}_day_ma_hash_rate": slow,
-            "hash_ribbon_ratio": fast.div(slow.where(slow.ne(0))),
             "hash_ribbon_capitulation": capitulation,
         }
     )
@@ -2072,33 +1943,22 @@ def electric_price_models(data):
     BRK inputs:
         - hash_rate
         - difficulty
-        - inflation_rate
         - subsidy_sum_24h
+        - fees_sum_24h
         - price_close
 
     Google Sheet input:
         - cm_efficiency_j_gh: Coin Metrics Labs monthly estimated Bitcoin network
           efficiency in J/GH, forward-filled daily.
 
-    Internally derived:
-        - block_reward from Bitcoin halving dates
-
     Model outputs:
-        - daily_electricity_consumption_kwh: Daily network electricity consumption.
-        - network_power_watts: Estimated fleet power draw.
-        - miner_revenue_btc: Observed daily subsidy plus fees paid to miners.
-        - Electricity_Cost_{3c..7c}: Power expense per BTC earned under tariff scenarios.
+        - Electricity_Cost_{3c..7c}: Power expense per BTC earned (subsidy plus fees)
+          under tariff scenarios.
         - Electricity_Cost: Alias for the base $0.05/kWh power-expense scenario.
-        - Electricity_Cost_PUE_Subsidy_Only: Legacy report calculation using PUE
-          and subsidy only.
-        - Bitcoin_Production_Cost: Legacy all-in production-cost estimate.
-        - Hayes_Network_Price_Per_BTC: Hayes cost-of-production price per BTC.
-        - Energy_Value: Capriole / Charles Edwards Energy Value in USD.
-        - Energy_Value_Multiple: price_close / Energy_Value.
-        - Lagged_Energy_Value and CM_Energy_Value: Backward-compatible aliases for Energy_Value.
+        - Hayes_Network_Price_Per_BTC: Hayes cost-of-production price per BTC, using
+          the protocol block subsidy inferred from halving dates.
+        - Hayes_Network_Price_Multiple: price_close / Hayes_Network_Price_Per_BTC.
     """
-    FIAT_FACTOR = 2.0e-15
-    SECONDS_PER_YEAR = 365.25 * 24 * 60 * 60
     SECONDS_PER_DAY = 24 * 60 * 60
     SHA_256_CONSTANT = 2**32
 
@@ -2108,55 +1968,26 @@ def electric_price_models(data):
     # forward-filled daily from the Google Sheet.
     efficiency_j_gh = data["cm_efficiency_j_gh"]
 
-    # Hayes uses deterministic protocol subsidy inferred from halving dates. This is the
-    # only place block_reward is derived.
-    data["block_reward"] = _bitcoin_block_subsidy_from_time(data.index)
+    # Hayes uses deterministic protocol subsidy inferred from halving dates.
+    block_reward = _bitcoin_block_subsidy_from_time(data.index)
 
-    # H/s ÷ 1e9 gives GH/s; multiplying by J/GH gives J/s (watts).
-    data["network_power_watts"] = data["hash_rate"] / 1e9 * efficiency_j_gh
-    data["daily_electricity_consumption_kwh"] = (
-        data["network_power_watts"] * 24 / 1000
-    )
-    data["miner_revenue_btc"] = data["subsidy_sum_24h"] + data["fees_sum_24h"]
+    # H/s ÷ 1e9 gives GH/s; multiplying by J/GH gives J/s (watts), then kWh per day.
+    daily_electricity_consumption_kwh = data["hash_rate"] / 1e9 * efficiency_j_gh * 24 / 1000
+    miner_revenue_btc = data["subsidy_sum_24h"] + data["fees_sum_24h"]
 
-    valid_revenue = data["miner_revenue_btc"] > 0
     for tariff in ELECTRICITY_TARIFFS_USD_PER_KWH:
         cents = int(round(tariff * 100))
         data[f"Electricity_Cost_{cents}c"] = (
-            data["daily_electricity_consumption_kwh"] * tariff
-        ).div(
-            data["miner_revenue_btc"].where(valid_revenue)
-        )
+            daily_electricity_consumption_kwh * tariff
+        ).div(miner_revenue_btc.where(miner_revenue_btc > 0))
 
     base_cents = int(round(ELECTRICITY_BASE_TARIFF_USD_PER_KWH * 100))
     data["Electricity_Cost"] = data[f"Electricity_Cost_{base_cents}c"]
-    data["power_only_breakeven_tariff_usd_per_kwh"] = (
-        data["price_close"] * data["miner_revenue_btc"]
-    ).div(
-        data["daily_electricity_consumption_kwh"].where(
-            data["daily_electricity_consumption_kwh"] > 0
-        )
-    )
-
-    # Preserve the report's former PUE/subsidy-only calculation under an explicit
-    # name. Bitcoin_Production_Cost continues to derive from this legacy model so
-    # its historical meaning does not change.
-    legacy_total_electricity_cost = (
-        data["daily_electricity_consumption_kwh"]
-        * ELECTRICITY_BASE_TARIFF_USD_PER_KWH
-        * PUE
-    )
-    data["Electricity_Cost_PUE_Subsidy_Only"] = legacy_total_electricity_cost.div(
-        data["subsidy_sum_24h"].where(data["subsidy_sum_24h"] > 0)
-    )
-    data["Bitcoin_Production_Cost"] = (
-        data["Electricity_Cost_PUE_Subsidy_Only"] / ELEC_TO_TOTAL_COST_RATIO
-    )
 
     btc_per_day_network_expected = (
         data["hash_rate"]
         * SECONDS_PER_DAY
-        * data["block_reward"]
+        * block_reward
         / (data["difficulty"] * SHA_256_CONSTANT)
     )
 
@@ -2182,26 +2013,6 @@ def electric_price_models(data):
         np.nan,
 
     )
-
-    supply_growth_rate_s = data["inflation_rate"] / 100 / SECONDS_PER_YEAR
-    miner_efficiency_w_th = efficiency_j_gh * 1000
-    energy_input_watts = hash_rate_th_s * miner_efficiency_w_th
-
-    data["Energy_Value"] = np.where(
-        supply_growth_rate_s != 0,
-        (energy_input_watts / supply_growth_rate_s) * FIAT_FACTOR,
-        np.nan,
-    )
-
-    data["Energy_Value_Multiple"] = np.where(
-        data["Energy_Value"] != 0,
-        data["price_close"] / data["Energy_Value"],
-        np.nan,
-    )
-
-    # Backward compatibility for existing chart/table references.
-    data["Lagged_Energy_Value"] = data["Energy_Value"]
-    data["CM_Energy_Value"] = data["Energy_Value"]
 
     return data
 

@@ -172,8 +172,6 @@ fiat_money_data_top10 = pd.DataFrame(
             "India",
             "Australia",
             "Russia",
-            "Hong Kong",
-            "Global Fiat Supply",
         ],
         "US Dollar Trillion": [
             5.73,
@@ -185,8 +183,6 @@ fiat_money_data_top10 = pd.DataFrame(
             0.56,
             0.24,
             0.30,
-            0.25,
-            26.1,
         ],
     }
 )
@@ -544,9 +540,6 @@ BRK_METRICS = [
 BITCOIN_GENESIS_DATE = pd.Timestamp("2009-01-03")
 METCALFE_ADDRESS_COLUMNS = {
     "addr_count": "any_balance",
-    "addrs_over_100k_sats_addr_count": "0p001_btc",
-    "addrs_over_1m_sats_addr_count": "0p01_btc",
-    "addrs_over_10m_sats_addr_count": "0p1_btc",
 }
 HASH_RIBBON_FAST_WINDOW = 30
 HASH_RIBBON_SLOW_WINDOW = 60
@@ -555,11 +548,6 @@ HASH_RIBBON_SLOW_WINDOW = 60
 # a tariff range because miners do not pay one representative global rate.
 ELECTRICITY_TARIFFS_USD_PER_KWH = (0.03, 0.04, 0.05, 0.06, 0.07)
 ELECTRICITY_BASE_TARIFF_USD_PER_KWH = 0.05
-# Backward-compatible constant for external imports. New calculations should use
-# the explicitly named base tariff above.
-ELECTRICITY_COST = ELECTRICITY_BASE_TARIFF_USD_PER_KWH
-PUE = 1.1  # Power Usage Effectiveness (datacenter overhead factor)
-ELEC_TO_TOTAL_COST_RATIO = 0.6  # Electricity as fraction of total mining cost
 
 # Bitcoin unit conversion
 SATS_PER_BTC = 100_000_000  # Satoshis per Bitcoin

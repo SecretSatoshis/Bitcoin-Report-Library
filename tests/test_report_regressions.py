@@ -19,7 +19,6 @@ class ReportRegressionTests(unittest.TestCase):
                 "subsidy_sum_24h": [subsidy],
                 "fees_sum_24h": [fees],
                 "difficulty": [1.0e14],
-                "inflation_rate": [1.0],
                 "price_close": [100_000.0],
             },
             index=[pd.Timestamp("2024-01-01")],
@@ -28,29 +27,13 @@ class ReportRegressionTests(unittest.TestCase):
     def test_electricity_cost_uses_observed_subsidy_plus_fees_and_tariffs(self):
         result = data_format.electric_price_models(self._energy_input()).iloc[0]
 
-        expected_power_watts = 1.0e18 / 1.0e9 * 0.03
-        expected_kwh = expected_power_watts * 24 / 1000
+        expected_kwh = 1.0e18 / 1.0e9 * 0.03 * 24 / 1000
         expected_revenue = 404.0
-        self.assertEqual(result["network_power_watts"], expected_power_watts)
-        self.assertEqual(
-            result["daily_electricity_consumption_kwh"], expected_kwh
-        )
-        self.assertEqual(result["miner_revenue_btc"], expected_revenue)
 
         for cents in range(3, 8):
             expected = expected_kwh * (cents / 100) / expected_revenue
             self.assertAlmostEqual(result[f"Electricity_Cost_{cents}c"], expected)
         self.assertEqual(result["Electricity_Cost"], result["Electricity_Cost_5c"])
-
-        legacy = expected_kwh * 0.05 * 1.1 / 400.0
-        self.assertAlmostEqual(
-            result["Electricity_Cost_PUE_Subsidy_Only"], legacy
-        )
-        self.assertAlmostEqual(result["Bitcoin_Production_Cost"], legacy / 0.6)
-        self.assertAlmostEqual(
-            result["power_only_breakeven_tariff_usd_per_kwh"],
-            100_000.0 * expected_revenue / expected_kwh,
-        )
 
     def test_electricity_cost_returns_nan_for_zero_miner_revenue(self):
         result = data_format.electric_price_models(
@@ -58,7 +41,6 @@ class ReportRegressionTests(unittest.TestCase):
         ).iloc[0]
 
         self.assertTrue(pd.isna(result["Electricity_Cost"]))
-        self.assertTrue(pd.isna(result["Electricity_Cost_PUE_Subsidy_Only"]))
         numeric = pd.to_numeric(result, errors="coerce").dropna()
         self.assertFalse(np.isinf(numeric).any())
 
