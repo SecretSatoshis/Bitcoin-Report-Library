@@ -417,9 +417,8 @@ body::after {
 	padding-bottom: 90px;
 }
 
-/* The page front matter sets hide_title: true, so Evidence does not render its
-   h1.title at all and the branded hero is the only h1. This rule is a belt-and-
-   braces guard for the case where hide_title is removed. */
+/* Front matter hides Evidence's h1 so the hero is the only h1; this guards against
+   hide_title being removed. */
 .dashboard-evidence article.markdown > h1.title {
 	display: none;
 }
@@ -492,11 +491,8 @@ body::after {
 	line-height: 1.7;
 }
 
-/* Inside <noscript>, so no visitor with JavaScript ever sees it. Evidence
-   hydrates every table client-side, which means a crawler that does not run
-   scripts — most AI crawlers do not — otherwise receives nine empty tables and
-   no explanation. This gives that reader a sentence and a route to the raw
-   data. */
+/* Shown only inside <noscript>: crawlers that do not run scripts would otherwise see
+   empty tables, so they get a note and a link to the raw data. */
 .dashboard-hero-source {
 	max-width: 62ch;
 	margin: 14px 0 0;

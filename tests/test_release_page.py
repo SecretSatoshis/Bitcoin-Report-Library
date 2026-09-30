@@ -1,9 +1,4 @@
-"""Regression tests for the generated data-release landing page.
-
-The page, its sitemap and its structured data are produced by
-build_release_page.py inside the daily workflow. These assertions exist so a
-stale date or an invalid Dataset field fails the build rather than shipping.
-"""
+"""Data-release landing page, sitemap and structured data (build_release_page.py)."""
 
 from __future__ import annotations
 
@@ -19,10 +14,9 @@ BASE = "https://secretsatoshis.github.io/Bitcoin-Report-Library"
 
 
 def latest_csv_date() -> str:
-    """The release's report date, as recorded by main.py in the manifest.
+    """The report date in the release manifest.
 
-    The newest date string in any CSV is not the release date: an open week or month can
-    carry a label past the report date, which once dated the page a day into the future.
+    Not the newest date in the CSVs: an open week or month is labelled with a later end date.
     """
     manifest = ROOT / "csv" / "release_manifest.json"
     return json.loads(manifest.read_text(encoding="utf-8"))["report_date"]
@@ -38,7 +32,6 @@ class ReleasePageSeoTests(unittest.TestCase):
         self.latest = latest_csv_date()
 
     def test_date_modified_tracks_the_release(self) -> None:
-        """Catches the failure this replaced: hand-edited HTML drifting behind the data."""
         self.assertEqual(self.data["dateModified"], self.latest)
 
     def test_sitemap_lastmod_tracks_the_release(self) -> None:

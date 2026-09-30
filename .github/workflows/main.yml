@@ -81,16 +81,12 @@ jobs:
       - name: Generate and validate reports
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: |
-          # Start from an empty release directory so a retired output cannot linger in
-          # the artifact.
+          # Start empty so a retired output cannot linger in the artifact.
           rm -rf csv && mkdir csv
           uv run --no-sync python main.py
           uv run --no-sync python validate_outputs.py
           uv run --no-sync python build_release_page.py
-          # Re-check the release page against the data it was just built from.
-          # The suite above ran before generation, so it validated the previous
-          # commit's output; this catches a stale page in the same run rather
-          # than one run later.
+          # The earlier test run checked the previous release; check the new page.
           uv run --no-sync python -m unittest tests.test_release_page -v
 
       - name: Upload generated reports
@@ -118,8 +114,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # Replace, not overlay, the release directory so files this run did not publish are
-      # removed from the repository.
+      # Replace the release directory so files this run did not publish are removed.
       - name: Clear the previous release
         run: rm -rf csv
 

@@ -12,7 +12,6 @@ import sys
 import numpy as np
 import pandas as pd
 
-# Importing these modules performs no I/O.
 from candle_data import CANDLE_FILES, validate_candle_exports
 from data_definitions import FUNDAMENTALS_TEMPLATE
 from data_definitions import REPORT_DATE as CLOCK_REPORT_DATE
@@ -32,9 +31,8 @@ class RowBounds:
     maximum: int | None = None
 
 
-# Bounds are intentionally broad for long-form history, and tight for fixed-shape
-# report tables. They catch truncation, header-only files, accidental duplication,
-# and runaway exports without coupling validation to today's exact history length.
+# Row-count bounds: loose for growing histories, tight for fixed-shape tables. They catch
+# truncated, header-only, duplicated and runaway files.
 OUTPUT_RULES = {
     "cycle_low_data.csv": RowBounds(1, 100_000),
     "drawdown_data.csv": RowBounds(1, 100_000),
@@ -220,9 +218,7 @@ def _validate_dated_output(
         )
 
 
-# Exports too large to retain in memory are checked by streaming their index column
-# only. The master is large raw; holding it the way RETAINED_OUTPUTS does would be
-# wasteful when the only thing left to assert is the cutoff.
+# Large exports whose date column alone is read to check the cutoff.
 INDEX_CUTOFF_OUTPUTS = {
     "master_metrics_data.csv.gz": "time",
 }
@@ -518,10 +514,7 @@ def _validate_cycle_contracts(
                 )
 
 
-
-
-# The Dashboard price chart's simple moving averages, recomputed here independently:
-# calendar-day windows of daily closes, empty until every day in the window has a close.
+# Kept separate from report_tables.PRICE_MOVING_AVERAGES so the check is independent.
 PRICE_MOVING_AVERAGE_DAYS = {
     "50-day MA": 50,
     "3-month MA": 90,
@@ -558,8 +551,6 @@ def _validate_price_moving_averages(
             )
 
 
-
-
 def _validate_report_agreement(
     frames: dict[str, pd.DataFrame],
     expected_report_date: pd.Timestamp,
@@ -577,7 +568,6 @@ def _validate_report_agreement(
         errors,
         require_every_row=True,
     )
-
 
     history = frames.get("summary_history.csv")
     if history is not None and not history.empty:
@@ -664,10 +654,9 @@ PERFORMANCE_VALUE_COLUMNS = [
 
 
 def _validate_performance_rows(frames, errors):
-    """Every configured asset is published once, in its category, with a price and returns.
+    """Require every configured asset once, in its category, with a price and returns.
 
-    A market-data outage leaves carried-forward prices blank rather than stale, so without
-    this check a table of empty rows would still publish.
+    A market-data outage leaves blank rows rather than stale ones; this stops them publishing.
     """
     table = frames.get("performance_table.csv")
     if table is None or not {"Category", "Asset"}.issubset(table.columns):
@@ -700,7 +689,6 @@ def _validate_review_contracts(frames, output_dir, report_date, errors):
             weekly = weekly.set_index("Time")
             validate_candles(weekly, "ohlc_data.csv")
             validate_calendar(weekly.index, "ohlc_data.csv", step=7)
-            # The newest candle is the report week's, never a week the cutoff has not reached.
             report_week = report_date - pd.Timedelta(days=report_date.weekday())
             if pd.Timestamp(weekly.index.max()) != report_week:
                 raise ValueError(
@@ -833,7 +821,7 @@ def _validate_release_manifest(output_dir, expected_report_date, errors, require
         errors.append("release_manifest.json: report_date does not match report date")
     files = manifest.get("files")
     expected_files = {name for name in OUTPUT_RULES}
-    # Older frozen releases are line-only; a new bundle must be complete and hashed.
+    # Candle files are required whenever the release contains any of them.
     if any((Path(output_dir) / name).exists() for name in CANDLE_FILES) or (
         isinstance(files, dict) and any(name in files for name in CANDLE_FILES)
     ):
@@ -866,16 +854,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-# A release may be validated at most this many days after the clock's report date, so a
-# run that crosses UTC midnight still validates while a leftover manifest does not.
+# Lets a run that crosses UTC midnight validate, while an old leftover manifest does not.
 MANIFEST_MAX_LAG_DAYS = 1
 
 
 def _manifest_report_date(output_dir: str | Path, clock_report_date) -> tuple[str | None, str | None]:
-    """Return (report_date, error) from the release manifest main.py wrote.
+    """Return (report_date, error) from the manifest main.py wrote.
 
-    The pipeline's report date is fixed when main.py starts; recomputing it from the wall
-    clock here would expect the next day whenever generation crosses UTC midnight.
+    main.py fixes the report date when it starts, so the clock may already be a day ahead.
     """
     path = Path(output_dir) / "release_manifest.json"
     try:

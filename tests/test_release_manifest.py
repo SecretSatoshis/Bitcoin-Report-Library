@@ -1,4 +1,4 @@
-"""Producer contract for the shared release manifest."""
+"""Release manifest (release_manifest.py)."""
 import json
 import tempfile
 import unittest

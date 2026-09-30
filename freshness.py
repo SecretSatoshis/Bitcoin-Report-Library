@@ -1,9 +1,7 @@
 """Checks that decide whether a run may publish.
 
-Market data may bridge weekends and short holidays; on-chain data is never filled. These
-functions bound the market fill, warn on stale market or miner inputs, and refuse to
-publish when on-chain data is missing, gapped or stale, or when a hand-maintained
-reference figure is past its review date.
+Stale market or miner data only warns. Missing, gapped or stale on-chain data, an
+out-of-date price outlook or an expired reference figure fails the run.
 """
 
 import warnings
@@ -31,16 +29,12 @@ from sources import (
 )
 
 
-# Coin Metrics miner efficiency is a monthly observation. Allow at most two monthly
-# publication intervals before refusing to carry it further; freshness is validated from
-# the retained source observation date, never inferred from a repeated daily value.
+# Miner efficiency is monthly; warn once it is two publication intervals old.
 MINER_EFFICIENCY_MAX_AGE_DAYS = 62
 
 
-# On-chain series that must be present on the report-date row. BRK can answer 200 with an
-# empty or partial payload; numeric coercion turns those cells into NaN, and a blanket
-# forward fill would then republish yesterday's numbers as today's — indistinguishable
-# from a genuinely flat day. These are checked explicitly instead.
+# On-chain series that must have a value on the report date. BRK can return a partial
+# payload with a 200 status, which would otherwise surface only as NaN cells.
 REQUIRED_ONCHAIN_METRICS = [
     "price_close",
     "market_cap",
@@ -51,13 +45,18 @@ REQUIRED_ONCHAIN_METRICS = [
     "addrs_over_100k_sats_addr_count",
     "addrs_over_1m_sats_addr_count",
     "addrs_over_10m_sats_addr_count",
-    # Investor sentiment: supply in profit. NUPL is derived from market_cap and realized_cap.
+    # Investor sentiment (NUPL comes from market_cap and realized_cap)
     "supply_in_profit",
 ]
 
+# A hole in a cumulative input shifts every later total without looking wrong, and
+# supply is the divisor of every per-coin price. Neither may have an interior gap.
+CUMULATIVE_ONCHAIN_INPUTS = ["coinbase_sum_24h_usd"]
+GAP_CHECKED_ONCHAIN_INPUTS = CUMULATIVE_ONCHAIN_INPUTS + ["supply"]
+
 
 def _ordinary_market_columns(data: pd.DataFrame) -> list:
-    """Return externally observed non-miner series subject to the short fill budget."""
+    """Market columns under the ordinary fill budget: not on-chain, miner or marker columns."""
     onchain_columns = {metric for metric in BRK_METRICS if metric != "timestamp"}
     excluded = onchain_columns | set(MINER_EFFICIENCY_COLUMNS)
     return [
@@ -73,18 +72,11 @@ def warn_on_stale_market_data(
     report_date,
     max_age_days: int = MARKET_DATA_MAX_FFILL_DAYS,
 ) -> list:
-    """
-    Warn about ordinary market series whose last proven observation is too old.
+    """Warn about market series whose last real observation is older than `max_age_days`.
 
-    This check must run before `forward_fill_market_data`. Price fetchers retain
-    temporary source-date markers, so an already repeated weekend value cannot masquerade
-    as a new source observation. Monthly miner efficiency has its own explicit policy.
-
-    Stale values remain NaN after the bounded fill, but a single unavailable ticker does not
-    abort the report. The returned issue strings also make the warning machine-testable.
-
-    Returns:
-    list[str]: Stale or missing series descriptions; empty when all are fresh.
+    Must run before `forward_fill_market_data`, which drops the observation-date markers.
+    A stale ticker does not stop the run; its values stay NaN. Returns the stale and
+    missing series, empty when all are fresh.
     """
     if max_age_days < 0:
         raise ValueError("Market-data max_age_days cannot be negative")
@@ -150,17 +142,11 @@ def forward_fill_market_data(
     market_max_age_days: int = MARKET_DATA_MAX_FFILL_DAYS,
     miner_max_age_days: Optional[int] = None,
 ) -> pd.DataFrame:
-    """
-    Forward-fill only the columns that legitimately have gaps.
+    """Return a copy with market gaps filled and the observation-date markers dropped.
 
-    Ordinary market data may bridge at most `market_max_age_days` calendar days. Monthly
-    miner efficiency carries the last published estimate by default while retaining its
-    true observation date; callers may pass `miner_max_age_days` to impose a hard limit.
-    On-chain series are never filled. Historical stock market caps now vary with daily
-    prices and therefore use the same bounded policy as other market data.
-
-    Returns:
-    pd.DataFrame: Copy with bounded fills and temporary market source markers removed.
+    Market data (market caps included) is filled up to `market_max_age_days` from its
+    real observation. Miner efficiency carries its last estimate, capped only when
+    `miner_max_age_days` is given. On-chain series are never filled.
     """
     if market_max_age_days < 0 or (
         miner_max_age_days is not None and miner_max_age_days < 0
@@ -211,19 +197,11 @@ def warn_on_stale_miner_efficiency(
     report_date,
     max_age_days: int = MINER_EFFICIENCY_MAX_AGE_DAYS,
 ) -> list:
-    """
-    Validate miner-efficiency provenance and warn when its last observation is old.
+    """Check miner efficiency reaches the report date, and warn when its source is old.
 
-    The value must be present on the latest dataset row at or before the report date, its
-    retained source observation date must be no more than `max_age_days` old, and its
-    source URL provenance must be present. Repeated daily rows never reset source age.
-
-    Missing, unusable, or future-dated values still raise because there is no valid
-    estimate to use. An otherwise valid old observation is carried forward and reported
-    as a RuntimeWarning instead of aborting report generation.
-
-    Returns:
-    list[str]: Warning descriptions; empty when the observation is current.
+    Raises when the value, its source date or its source URL is missing, or the source
+    date is after the report date. An observation older than `max_age_days` only warns.
+    Returns the warnings, empty when the observation is current.
     """
     if max_age_days < 0:
         raise ValueError("Miner-efficiency max_age_days cannot be negative")
@@ -292,14 +270,7 @@ def warn_on_stale_miner_efficiency(
 
 
 def assert_onchain_freshness(data: pd.DataFrame, report_date, metrics=None) -> None:
-    """
-    Verify the report-date row actually carries on-chain data.
-
-    Raises:
-    RuntimeError: If the report date is missing from the index, or any required on-chain
-                  metric is null on that row — i.e. the pipeline is about to publish a
-                  report built on absent upstream data.
-    """
+    """Raise unless the data reaches the report date with every required on-chain value."""
     metrics = metrics or REQUIRED_ONCHAIN_METRICS
     report_date = pd.to_datetime(report_date).normalize()
 
@@ -310,8 +281,7 @@ def assert_onchain_freshness(data: pd.DataFrame, report_date, metrics=None) -> N
             "Upstream fetch returned nothing usable."
         )
 
-    # Every report table reads the exact report-date row, so any lag must fail here with
-    # the real cause rather than later as a KeyError or a "missing fundamental".
+    # Every table reads the report-date row; failing here names the real cause.
     as_of = available.max()
     if as_of != report_date:
         raise RuntimeError(
@@ -331,27 +301,11 @@ def assert_onchain_freshness(data: pd.DataFrame, report_date, metrics=None) -> N
         )
 
 
-# Series that feed a cumulative sum. A hole in one of these is not a missing day — it
-# permanently shifts every subsequent total, and the resulting curve looks entirely
-# plausible, so it has to be caught at ingest rather than eyeballed downstream.
-CUMULATIVE_ONCHAIN_INPUTS = ["coinbase_sum_24h_usd"]
-
-
-# Series that every `*_btc_price` and per-coin metric divides by. They are never filled,
-# so a hole must fail ingest rather than publish a gap (or, worse, a repeated value).
-GAP_CHECKED_ONCHAIN_INPUTS = CUMULATIVE_ONCHAIN_INPUTS + ["supply"]
-
 
 def assert_price_outlook_current(report_date, outlook_year: int = PRICE_OUTLOOK_YEAR) -> None:
-    """
-    Verify the published case levels forecast the year the report belongs to.
+    """Raise when the price outlook is not for the report date's year.
 
-    The bull/base/bear levels are hand-maintained and revised once a year. Without this
-    check, the first run of a new year silently republishes last year's forecast — and
-    both the dashboard cards and the homepage tracker label it with the new year.
-
-    Raises:
-    RuntimeError: If the outlook year does not match the report date's year.
+    Otherwise the first run of a new year would publish last year's levels as current.
     """
     report_date = pd.to_datetime(report_date).normalize()
     if int(outlook_year) != report_date.year:
@@ -365,16 +319,7 @@ def assert_price_outlook_current(report_date, outlook_year: int = PRICE_OUTLOOK_
 def assert_reference_data_fresh(
     report_date, vintages=None, max_age_days: int = REFERENCE_DATA_MAX_AGE_DAYS
 ) -> None:
-    """
-    Verify the hand-maintained reference figures have been re-checked recently enough.
-
-    These are broadcast across the entire daily history, so a stale figure is presented as
-    though it held in 2010. Unlike the fetched sources there is nothing to observe their
-    age from — only the vintage a maintainer recorded when last confirming them.
-
-    Raises:
-    RuntimeError: If any reference figure is older than the budget on the report date.
-    """
+    """Raise when a hand-maintained reference figure's recorded check date is too old."""
     vintages = REFERENCE_DATA_VINTAGES if vintages is None else vintages
     report_date = pd.to_datetime(report_date).normalize()
 
@@ -406,17 +351,9 @@ def assert_reference_data_fresh(
 def assert_no_internal_onchain_gaps(
     data: pd.DataFrame, report_date, columns=None
 ) -> None:
-    """
-    Verify gap-checked on-chain inputs have no holes between first and last observation.
+    """Raise when a gap-checked input has a hole between its first and last observation.
 
-    Leading nulls before a series begins are expected and contribute zero. A gap *inside*
-    the observed range is not recoverable by zero-filling: `RevAllTimeUSD` and every
-    thermocap series derived from it would be understated for all later dates with no
-    visible artefact. `supply` is checked for the same reason: it is never filled, and
-    every per-coin price series divides by it.
-
-    Raises:
-    RuntimeError: If any monitored column has an internal gap on or before the report date.
+    Leading nulls before a series starts are allowed.
     """
     columns = columns or GAP_CHECKED_ONCHAIN_INPUTS
     report_date = pd.to_datetime(report_date).normalize()

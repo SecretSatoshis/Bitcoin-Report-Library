@@ -1,19 +1,5 @@
-"""
-Data definitions and configuration for Bitcoin analytics pipeline.
-
-This module contains all static configuration, ticker lists, reference data,
-and API settings used throughout the Bitcoin report generation system.
-
-Sections:
-    - Market Data: Yahoo tickers by group, history start dates, the report date
-    - Reference Data: hand-maintained fiat and metal figures, the price outlook, and the
-      review dates that fail the build when they go stale
-    - Report Configuration: columns that get changes, averages and CAGRs; the fundamentals
-      template
-    - BRK API: the on-chain series fetched
-    - Model Parameters: network-model anchors and electricity tariffs
-    - Investor Sentiment: NUPL zones and power-law valuation bands
-"""
+"""Pipeline configuration: tickers, report date, hand-maintained reference data, the
+columns each calculation covers, BRK series, model parameters and sentiment bands."""
 import pandas as pd
 
 
@@ -21,7 +7,7 @@ import pandas as pd
 # MARKET DATA CONFIGURATION
 # =============================================================================
 
-# Asset TICKERS organized by category for yfinance API calls
+# Yahoo tickers by group. Market caps are built for `stocks` only.
 TICKERS = {
     "stocks": [
         "AAPL",
@@ -77,33 +63,27 @@ TICKERS = {
     ],
 }
 
-# Stock TICKERS extracted for market cap calculations
 STOCK_TICKERS = TICKERS["stocks"]
 
-# Start date for historical TradFi data (format: YYYY-MM-DD)
+# Start of the fetched market and on-chain history (candles start at genesis).
 MARKET_DATA_START_DATE = "2010-01-01"
 
-# Yahoo's historical shares-outstanding feed is useful and reasonably complete from 2015
-# onward. Keep the broader price history above, but do not invent stock market caps before
-# Yahoo supplies a historical share count.
+# Yahoo's share-count history is reliable from 2015; market caps start there.
 MARKET_CAP_HISTORY_START_DATE = "2015-01-01"
 
-# Yahoo keys historical share counts to the ticker that was active at the time. Prices for
-# the current symbols already span these renames, so only the shares feed needs stitching.
+# Former tickers whose share counts are stitched onto the current one. Yahoo prices
+# already span the rename.
 YAHOO_SHARE_TICKER_ALIASES = {
     "META": ["FB", "META"],
 }
 
-# Yahoo reports historical Close and shares in each listing's trading currency. Convert
-# non-USD listings before publishing the project's ``*_MarketCap`` columns, whose contract
-# is absolute USD. TSM is a USD-traded ADR and therefore needs no conversion here.
+# FX pairs that convert non-USD listings to USD market caps. TSM is a USD-traded ADR.
 YAHOO_MARKET_CAP_FX_TICKERS = {
     "2222.SR": "SARUSD=X",
     "005930.KS": "KRWUSD=X",
 }
 
-# The report represents the last completed UTC day. GitHub-hosted runners currently use
-# UTC, but making the clock explicit keeps local and CI runs identical across timezones.
+# The last completed UTC day, whatever the machine's timezone.
 REPORT_DATE = (
     pd.Timestamp.now(tz="UTC").normalize().tz_localize(None)
     - pd.Timedelta(days=1)
@@ -114,24 +94,15 @@ REPORT_DATE = (
 # REFERENCE DATA
 # =============================================================================
 
-# Vintages for the hand-maintained reference figures below. Every other input in this
-# pipeline carries a source observation date and an age budget; these are scalars typed in
-# by hand, broadcast across the whole daily history, and published as `{Country}_btc_price`
-# and the gold market-cap series — so they need the same treatment.
-#
-# NOTE: the repository history was squashed at the public baseline (2026-08-22), so these
-# dates record when the figures were last confirmed present, not when they were sourced.
-# Bump each one to the day you actually re-check the underlying figure.
+# When each hand-maintained figure below was last checked. The build fails once one is
+# older than REFERENCE_DATA_MAX_AGE_DAYS; bump the date whenever you re-check a figure.
+# The 2026-08-22 dates are the public baseline, not the original sourcing dates.
 FIAT_MONEY_AS_OF = pd.Timestamp("2026-08-22")
 PRECIOUS_METALS_AS_OF = pd.Timestamp("2026-08-22")
 GOLD_BREAKDOWN_AS_OF = pd.Timestamp("2026-08-22")
-# The power-law valuation bands (POWER_LAW_VALUATION_BANDS, below) are fixed thresholds.
-# Re-check them against the latest spread of the multiple once a year and bump this date.
 POWER_LAW_BANDS_AS_OF = pd.Timestamp("2026-09-29")
 
-# How far behind the report date a reference figure may fall before the build fails.
-# Above-ground gold grows ~1.7%/yr and global M0 moves considerably faster, so a figure
-# more than a year old is materially wrong, not merely dusty.
+# Gold supply grows ~1.7% a year and M0 faster, so a year-old figure is materially off.
 REFERENCE_DATA_MAX_AGE_DAYS = 365
 
 REFERENCE_DATA_VINTAGES = {
@@ -142,8 +113,7 @@ REFERENCE_DATA_VINTAGES = {
 }
 
 
-# Global fiat money supply (M0) by country in USD trillions
-# Source: Central bank data. Vintage: FIAT_MONEY_AS_OF.
+# M0 money supply by country, USD trillions (central bank data).
 FIAT_MONEY_SUPPLY = pd.DataFrame(
     {
         "Country": [
@@ -171,17 +141,15 @@ FIAT_MONEY_SUPPLY = pd.DataFrame(
     }
 )
 
-# Above-ground precious metals supply in troy ounces
-# Gold: ~6.1B oz, Silver: ~30.9B oz (World Gold Council estimates)
-# Vintage: PRECIOUS_METALS_AS_OF.
+# Above-ground supply in troy ounces (World Gold Council estimates).
 GOLD_SILVER_SUPPLY = pd.DataFrame(
     {
         "Metal": ["Gold", "Silver"],
-        "Supply in Billion Troy Ounces": [6100000000, 30900000000],
+        "Supply Troy Ounces": [6_100_000_000, 30_900_000_000],
     }
 )
 
-# Gold market allocation by use case (World Gold Council). Vintage: GOLD_BREAKDOWN_AS_OF.
+# Share of above-ground gold by use (World Gold Council).
 GOLD_SUPPLY_BREAKDOWN = pd.DataFrame(
     {
         "Gold Supply Breakdown": [
@@ -194,16 +162,12 @@ GOLD_SUPPLY_BREAKDOWN = pd.DataFrame(
     }
 )
 
-# The calendar year the case levels below forecast. Published once a year in the Year
-# Ahead Outlook. `assert_price_outlook_current` fails the build when this falls behind
-# the report date, so a stale forecast cannot be presented as the current one — the
-# homepage tracker and the dashboard both label these levels with this year.
+# The year the case levels below forecast, set by the annual Year Ahead Outlook. The
+# build fails once the report date moves past it.
 PRICE_OUTLOOK_YEAR = 2026
 
-# Fixed price outlook levels used by the dashboard and weekly report.
-# `color` is the single source of truth for case styling — the dashboard reads it for
-# both the headline cards and the chart's reference lines, so they cannot drift apart.
-# Values are the brand cypherpunk red/gold/green.
+# Price outlook levels for the dashboard and weekly report. The dashboard styles its
+# cards and chart lines from `color`.
 PRICE_OUTLOOK_LEVELS = pd.DataFrame(
     [
         {"label": "Bull Case", "price": 160000, "type": "case", "color": "#00FF88"},
@@ -253,8 +217,7 @@ PRICE_OUTLOOK_LEVELS = pd.DataFrame(
 # REPORT CONFIGURATION
 # =============================================================================
 
-# Columns that get a rolling 4-year CAGR. Chart Library's CAGR charts read these
-# from the master file; nothing reads any other CAGR.
+# Columns that get a rolling 4-year CAGR (Chart Library's CAGR charts).
 CAGR_COLUMNS = [
     "price_close",
     "SPY_close",
@@ -267,7 +230,7 @@ CAGR_COLUMNS = [
     "WGMI_close",
 ]
 
-# Metrics that get 30-day and 365-day moving averages (Chart Library lines)
+# Metrics that get 30-day and 365-day moving averages (Chart Library lines).
 MOVING_AVERAGE_METRICS = [
     "hash_rate",
     "daily_active_addresses_sending",
@@ -278,8 +241,8 @@ MOVING_AVERAGE_METRICS = [
     "nvt_price",
 ]
 
-# Price columns that get 7-day, 90-day, MTD and YTD changes. These feed the
-# performance tables, Chart Library's return comparisons and the quarterly report.
+# Price columns that get 7-day, 90-day, MTD and YTD changes (performance table, Chart
+# Library return comparisons, quarterly report).
 CHANGE_COLUMNS = [
     "price_close",
     # Equity ETFs
@@ -304,10 +267,10 @@ CHANGE_COLUMNS = [
     "WGMI_close",
 ]
 
-# Only Bitcoin's year-over-year change is read (Chart Library's YoY chart).
+# Columns that get a year-over-year change (Chart Library's YoY chart).
 YOY_COLUMNS = ["price_close"]
 
-# Column names for correlation analysis
+# Columns correlated with Bitcoin over 7, 30, 90 and 365 days.
 CORRELATION_COLUMNS = [
     "price_close",
     "AAPL_close",
@@ -355,7 +318,7 @@ CORRELATION_COLUMNS = [
     "MSTR_close",
 ]
 
-# Template for weekly fundamentals table: {section: {label: (column, format_type)}}
+# Fundamentals table rows: {section: {label: (column, format_type)}}.
 FUNDAMENTALS_TEMPLATE = {
     "Network Performance": {
         "Total Address Count": ("addrs_over_1sat_addr_count", "number"),
@@ -392,8 +355,6 @@ FUNDAMENTALS_TEMPLATE = {
 # BRK API CONFIGURATION
 # =============================================================================
 
-# BRK v0.2+ uses the canonical /api/series/bulk endpoint.
-# The legacy /api/metrics/bulk route still exists, but is deprecated.
 BRK_BULK_URL = "https://bitview.space/api/series/bulk"
 
 BRK_METRICS = [
@@ -431,9 +392,8 @@ BRK_METRICS = [
     "supply_in_profit",
     "supply_in_loss",
     "sopr_24h",
-    # Hash price
     "hash_price_ths",
-    # Total non-zero address count used by the headline Metcalfe model.
+    # Non-zero address count (Metcalfe model)
     "addr_count",
     # Address counts by threshold (cumulative)
     "addrs_over_1sat_addr_count",
@@ -449,7 +409,7 @@ BRK_METRICS = [
     "addrs_over_100btc_addr_count",
     "addrs_over_1k_btc_addr_count",
     "addrs_over_10k_btc_addr_count",
-    # Address activity metrics (24h rolling average of unique active addresses)
+    # Unique active addresses per day
     "active_addrs_average_24h",
     # UTXO age band supply
     "utxos_under_1m_old_supply",
@@ -467,9 +427,9 @@ BRK_METRICS = [
 # MODEL PARAMETERS
 # =============================================================================
 
-# Strategy-aligned network model anchors. Metcalfe scale and the power-law
-# scale/exponent are fitted through the report date; these values define only
-# the fixed inputs and equation structure.
+# Network model inputs. The Metcalfe and power-law coefficients are fitted through the
+# report date; these are the fixed parts. Keys of METCALFE_ADDRESS_COLUMNS are address
+# columns, values the published suffix.
 BITCOIN_GENESIS_DATE = pd.Timestamp("2009-01-03")
 METCALFE_ADDRESS_COLUMNS = {
     "addr_count": "any_balance",
@@ -477,19 +437,18 @@ METCALFE_ADDRESS_COLUMNS = {
 HASH_RIBBON_FAST_WINDOW = 30
 HASH_RIBBON_SLOW_WINDOW = 60
 
-# Bitcoin mining electricity-cost assumptions. Power expense is published across
-# a tariff range because miners do not pay one representative global rate.
+# Electricity tariffs (USD/kWh) for the mining cost models. A range is published because
+# miners do not pay one global rate.
 ELECTRICITY_TARIFFS_USD_PER_KWH = (0.03, 0.04, 0.05, 0.06, 0.07)
 ELECTRICITY_BASE_TARIFF_USD_PER_KWH = 0.05
 
-# Bitcoin unit conversion
-SATS_PER_BTC = 100_000_000  # Satoshis per Bitcoin
+SATS_PER_BTC = 100_000_000
 
 # =============================================================================
 # EXTERNAL DATA SOURCES
 # =============================================================================
 
-# Google Sheets URL for miner efficiency data
+# Coin Metrics monthly miner efficiency
 MINER_DATA_SHEET_URL = "https://docs.google.com/spreadsheets/d/1GXaY6XE2mx5jnCu5uJFejwV95a0gYDJYHtDE0lmkGeA/edit?usp=sharing"
 
 
@@ -497,7 +456,7 @@ MINER_DATA_SHEET_URL = "https://docs.google.com/spreadsheets/d/1GXaY6XE2mx5jnCu5
 # API CONFIGURATION
 # =============================================================================
 
-# Default timeout for HTTP requests (seconds)
+# HTTP request timeout, seconds
 API_TIMEOUT = 30
 
 
@@ -505,10 +464,8 @@ API_TIMEOUT = 30
 # INVESTOR SENTIMENT
 # =============================================================================
 
-# Fear & Greed is the NUPL zone (net unrealized profit/loss, calculated from BRK market cap
-# and realized cap) using the widely published emotion-cycle bands. The label comes from the
-# 7-day average so it does not flicker at a boundary on a single day's move. Each entry is
-# (upper bound, label); the last applies above.
+# Market sentiment label: the NUPL emotion-cycle zone of the 7-day average NUPL, averaged
+# so one day's move cannot flip it. Entries are (upper bound, label).
 NUPL_SENTIMENT_ZONES = [
     (0.0, "Capitulation"),
     (0.25, "Hope / Fear"),
@@ -518,11 +475,9 @@ NUPL_SENTIMENT_ZONES = [
 ]
 NUPL_SENTIMENT_WINDOW_DAYS = 7
 
-# Valuation is price against the power-law fair value (`power_law_price_multiple`), banded
-# at standard deviations around the fair-value line: -1, 0, +1 and +2 sigma, where sigma is
-# the log10 spread of the multiple since 2015 (0.2388 as reviewed on 2026-09-29). The
-# thresholds are fixed so labels never drift on their own. POWER_LAW_BANDS_AS_OF records the
-# last review; the build fails once it is more than a year old.
+# Valuation label from `power_law_price_multiple`, banded at -1, 0, +1 and +2 standard
+# deviations of the multiple's log10 spread since 2015 (0.2388 at the last review). The
+# thresholds are fixed; re-check them yearly and bump POWER_LAW_BANDS_AS_OF.
 POWER_LAW_VALUATION_BANDS = [
     (0.58, "Undervalued"),
     (1.00, "Below Fair Value"),

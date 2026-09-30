@@ -352,7 +352,7 @@ class RelativePriceTests(unittest.TestCase):
         self.assertNotIn("United_States_cap", result)
 
     def test_metal_caps_use_the_latest_price_and_split_by_category(self):
-        supply = pd.DataFrame({"Metal": ["Gold", "Silver"], "Supply in Billion Troy Ounces": [10.0, 100.0]})
+        supply = pd.DataFrame({"Metal": ["Gold", "Silver"], "Supply Troy Ounces": [10.0, 100.0]})
         breakdown = pd.DataFrame({"Gold Supply Breakdown": ["Jewellery", "Other"], "Percentage Of Market": [60.0, 40.0]})
         caps = metrics.calculate_metal_market_caps(self.frame(), supply)
         # The latest gold close is carried forward over the missing final value.
@@ -366,6 +366,16 @@ class RelativePriceTests(unittest.TestCase):
     def test_stock_price_divides_market_cap_by_bitcoin_supply(self):
         result = metrics.calculate_btc_price_for_stock_mkt_caps(self.frame(), ["AAA"])
         self.assertEqual(result["AAA_mc_btc_price"].iloc[0], 20.0)
+
+    def test_zero_supply_publishes_nan_not_infinity(self):
+        frame = self.frame()
+        frame.iloc[0, frame.columns.get_loc("supply")] = 0.0
+        fiat = pd.DataFrame({"Country": ["United States"], "US Dollar Trillion": [5.0]})
+        fiat_prices = metrics.calculate_btc_price_to_surpass_fiat(frame, fiat)
+        stock_prices = metrics.calculate_btc_price_for_stock_mkt_caps(frame, ["AAA"])
+        self.assertTrue(pd.isna(fiat_prices["United_States_btc_price"].iloc[0]))
+        self.assertTrue(pd.isna(stock_prices["AAA_mc_btc_price"].iloc[0]))
+        self.assertEqual(stock_prices["AAA_mc_btc_price"].iloc[1], 20.0)
 
 
 class MovingAverageTests(unittest.TestCase):

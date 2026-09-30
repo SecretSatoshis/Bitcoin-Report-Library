@@ -1,4 +1,4 @@
-"""Small shared contracts for source time series and published candles."""
+"""Shared checks for daily date indexes and OHLC candles."""
 import numpy as np
 import pandas as pd
 
@@ -16,7 +16,7 @@ def validate_calendar(index, label, step=1):
 
 
 def validate_candles(frame, label):
-    """Require finite, positive candles whose High and Low bound Open and Close, one per date."""
+    """Require one finite, positive candle per date, with High and Low bounding Open and Close."""
     columns = OHLC_COLUMNS
     if frame.empty or not set(columns).issubset(frame.columns):
         raise ValueError(f"{label}: missing OHLC candles/columns")
@@ -31,7 +31,7 @@ def validate_candles(frame, label):
 
 
 def assert_ohlc_usable(ohlc_data: pd.DataFrame, label: str = "OHLC") -> None:
-    """Raise before publication when an OHLC frame has no complete numeric candle."""
+    """Raise when an OHLC frame is empty, missing a column or holds an invalid candle."""
     if ohlc_data is None or ohlc_data.empty:
         raise RuntimeError(f"{label} data is empty; refusing to overwrite OHLC outputs")
 

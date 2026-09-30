@@ -55,8 +55,8 @@ _Headline metrics — market, on-chain, and sentiment._
     withAggregates,
     yearCols,
   } from '$lib/seasonalChart.js';
-  // Trend-based sparkline colors: green if metric grew over the window, red if it shrank.
-  // Data is sorted DESC so row 0 is "today" — pct_change there reflects the full window.
+  // Sparkline colour: green if the metric grew over the window, red if it shrank. Rows
+  // are newest first, so row 0's pct_change covers the whole window.
   const POS = '#00FF88';
   const NEG = '#FF3B30';
   const FALLBACK = '#F7931A';
@@ -69,18 +69,13 @@ _Headline metrics — market, on-chain, and sentiment._
   $: revenueColor   = btc_miner_revenue?.length ? (btc_miner_revenue[0].pct_change >= 0 ? POS : NEG) : FALLBACK;
   $: volumeColor    = btc_tx_volume?.length     ? (btc_tx_volume[0].pct_change     >= 0 ? POS : NEG) : FALLBACK;
   // ─── Seasonal returns chart helpers ──────────────────────────────────
-  // Every date label and series list is derived from the data, never from the
-  // viewer's clock. A browser-clock year flips on Jan 1 before the pipeline has
-  // published a column for it, which silently drops the current-year styling and
-  // annotation; a browser-clock month is wrong for anyone whose local date is
-  // ahead of the 00:30 UTC refresh.
+  // Dates and years come from the data, never the viewer's clock, which can be ahead of
+  // the latest release.
   $: dataMonthName = data_date?.[0]?.month_name ?? '';
   $: dataYearLabel = data_date?.[0]?.year_label ?? '';
 
-  // Day 366 exists only in leap years, so its Median/Average would be computed from
-  // leap years alone — a phantom spike at the right edge. Cap the YTD chart at 365.
   $: mtdPlot = withAggregates(mtd_history, 'day');
-  $: ytdPlot = withAggregates((ytd_history || []).filter(r => r.day_of_year <= 365), 'day_of_year');
+  $: ytdPlot = withAggregates(ytd_history, 'day_of_year');
 
   $: mtdCurrentYear = currentYearFrom(mtd_history, 'day');
   $: ytdCurrentYear = currentYearFrom(ytd_history, 'day_of_year');
@@ -96,8 +91,7 @@ _Headline metrics — market, on-chain, and sentiment._
   $: mtdLatest = buildLatestPoints(mtdPlot, 'day', mtdCurrentYear);
   $: ytdLatest = buildLatestPoints(ytdPlot, 'day_of_year', ytdCurrentYear);
 
-  // The outlook year travels with the levels in price_outlook.csv. Label the forecast
-  // with that year, never the data year, so last year's levels cannot pass as current.
+  // Label the forecast with its own outlook_year, so last year's levels cannot pass as current.
   $: outlookYear = price_outlook?.length ? String(price_outlook[0].outlook_year) : '';
   $: outlookYearMismatch = Boolean(outlookYear && dataYearLabel && outlookYear !== dataYearLabel);
 
@@ -302,8 +296,8 @@ _Compare Bitcoin and other assets’ returns across the same periods._
 
 _Price vs on-chain valuation models and moving averages._
 
-<!-- Raw heading so the anchor is stable: a markdown heading's id is slugged from the
-     unevaluated expression text, which produced #secret-satoshis-datayearlabel-price-outlook. -->
+<!-- HTML heading for a stable #price-outlook anchor; a markdown heading's id would be
+     slugged from the unevaluated {outlookYear} expression. -->
 <h3 class="markdown" id="price-outlook">Secret Satoshis {outlookYear} Price Outlook</h3>
 
 {#if outlookYearMismatch}
@@ -507,13 +501,11 @@ _Returns by holding period._
 
 
 <!-- ─────────────────────────────────────────────────────────────────────────
-     Queries — placed at the bottom so they don't break up the dashboard view.
-     Evidence resolves them regardless of position in the file.
+     Queries. Evidence resolves them wherever they sit in the file.
      ───────────────────────────────────────────────────────────────────────── -->
 
 ```sql data_date
--- Month and year labels come from the data, not the viewer's clock, so headings can
--- never name a period the chart isn't showing.
+-- Month and year labels come from the data, so headings match what the charts show.
 select
   strftime(max(cast(date as date)), '%b %-d, %Y') as date_label,
   strftime(max(cast(date as date)), '%Y-%m-%d') as date_iso,
@@ -524,8 +516,7 @@ where Metric = 'Bitcoin Price USD'
 ```
 
 ```sql btc_price
--- Join observations by date so each comparison is against exactly 30 calendar days
--- earlier, independent of source row count or ordering. The latest row is displayed.
+-- Compare each value with the one exactly 30 calendar days earlier; the latest row is shown.
 with src as (
   select cast(date as date) as date, Value as price
   from bitcoin_report_library.summary_history
@@ -710,8 +701,7 @@ order by
 ```
 
 ```sql btc_with_models
--- Moving averages come precomputed from the Report Library (calendar-day windows of
--- daily closes; incomplete windows stay null), so the chart and newsletter share them.
+-- Moving averages are precomputed by the Report Library, so the chart and newsletter match.
 select
   cast(date as date) as date,
   "BTC Price",
@@ -824,17 +814,15 @@ from bitcoin_report_library.fundamentals_table
 ```
 
 ```sql mtd_history
--- See ytd_history: aggregates are recomputed chart-side over visible historical years.
+-- See ytd_history.
 select * exclude ("Median", "Average")
 from bitcoin_report_library.mtd_returns_history
 order by day
 ```
 
 ```sql ytd_history
--- Every year column is selected, including outliers. The chart decides which years to
--- draw (see HIDDEN_YEARS in components/seasonalChart.js), keeps the current year visible, and recomputes
--- Median/Average over visible historical years only. The CSV's own aggregate columns
--- cover hidden/current years and are deliberately not used here.
+-- The CSV's Median/Average include hidden and current years, so they are dropped here and
+-- recomputed by the chart (components/seasonalChart.js) over the visible past years.
 select * exclude ("Median", "Average")
 from bitcoin_report_library.ytd_returns_history
 order by day_of_year

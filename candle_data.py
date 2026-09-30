@@ -1,4 +1,5 @@
-"""Report-owned, cutoff-frozen Bitcoin candles and period metric observations."""
+"""Daily, weekly and monthly Bitcoin candles cut off at the report date, and the master
+data rows at each week and month close."""
 from pathlib import Path
 
 import numpy as np
@@ -15,7 +16,7 @@ def _cutoff_daily_candles(daily, report_date, label):
     daily = daily.copy()
     daily.index = pd.to_datetime(daily.index)
     daily = daily.loc[daily.index <= cutoff]
-    # BRK represents the pre-market era as all-zero candles. Never hide later gaps.
+    # Drop the all-zero pre-market candles; a gap after them still fails validation.
     nonzero = daily[['Open', 'High', 'Low', 'Close']].ne(0).any(axis=1)
     daily = daily.loc[nonzero.idxmax():] if nonzero.any() else daily.iloc[:0]
     validate_candles(daily, label)
@@ -30,7 +31,7 @@ def period_candles(daily, interval, frequency):
     records = []
     for period, rows in daily.groupby(daily.index.to_period(frequency)):
         start, end = period.start_time.normalize(), period.end_time.normalize()
-        # The initial incomplete historical bucket has no true period open.
+        # Skip the first period when the history starts partway through it.
         if rows.index[0] != start:
             continue
         observed = rows.index[-1]
@@ -47,8 +48,7 @@ def period_candles(daily, interval, frequency):
 def weekly_ohlc(daily, report_date, start=None):
     """Monday-start weekly OHLC through the report date, indexed by week start ("Time").
 
-    The open week's Close is the report-date close, never a later partial-day price.
-    ``start`` keeps every week that ends on or after it, so the week containing it is kept.
+    The open week closes at the report-date close. Weeks ending before ``start`` are dropped.
     """
     daily = _cutoff_daily_candles(daily, report_date, 'Weekly OHLC source candles')
     weeks = period_candles(daily, 'weekly', 'W-SUN')
@@ -75,7 +75,7 @@ def build_candle_tables(daily, master, report_date):
         result = period_candles(daily, interval, frequency)
         candles.append(result)
         if filename:
-            # Select exact rows, not groupby.last(), which skips null observations.
+            # reindex, not groupby().last(), which would skip nulls to an earlier row.
             snapshot = master.reindex(pd.DatetimeIndex(result.observation_date)).copy()
             snapshot.index = pd.DatetimeIndex(result.period_start, name='time')
             tables[filename] = snapshot

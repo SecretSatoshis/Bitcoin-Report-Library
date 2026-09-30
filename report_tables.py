@@ -1,15 +1,14 @@
-"""
-Report tables: every published summary table, built from the merged daily frame.
+"""Every published report table, built from the merged daily frame.
 
-    - Summary: snapshot cards, 30-day history, investor sentiment
+    - Summary: snapshot, 30-day history, investor sentiment
     - Fundamentals: network metrics with weekly detail and 52-week range
     - Performance: Bitcoin against equity, sector, macro and Bitcoin-industry assets
-    - Returns: ROI by time frame, MTD/YTD comparisons, indexed return paths, monthly heatmap
+    - Returns: ROI, MTD/YTD comparisons, indexed return paths, monthly heatmap
     - OHLC: weekly candles and the report-date summary
     - Relative value: Bitcoin's price at other assets' market caps
 
-Functions return DataFrames; main.py writes them. Values are numeric except the
-fundamentals table, whose rows mix units and are published as formatted text.
+main.py writes the tables. Values are numeric except in the fundamentals table, whose
+rows mix units and are published as formatted text.
 """
 
 import pandas as pd
@@ -27,8 +26,7 @@ from data_definitions import (
 )
 
 
-# Earliest year in the MTD/YTD comparisons and return paths. Earlier Bitcoin data is too
-# thin and volatile for a meaningful comparison.
+# Earliest year in the MTD/YTD comparisons and return paths; earlier data is too thin.
 RETURN_HISTORY_MIN_YEAR = 2014
 
 
@@ -45,10 +43,8 @@ def _last_positive_before(price_series, boundary):
     return prior.iloc[-1] if not prior.empty else np.nan
 
 
-# Price moving averages: simple means over calendar-day windows of daily closes. A
-# window missing any daily close stays empty rather than averaging fewer days. The
-# 3-month, 1-year and 200-week averages are drawn on the Dashboard price chart; the
-# 50-day and 200-day averages are published for other consumers of the dataset.
+# Simple moving averages over calendar-day windows; a window missing any close stays
+# empty. The dashboard draws the 3-month, 1-year and 200-week lines.
 PRICE_MOVING_AVERAGES = {
     "50-day MA": 50,
     "3-month MA": 90,
@@ -104,25 +100,12 @@ def add_price_moving_averages(frame, price_column="BTC Price"):
 def create_indexed_returns_history(
     price_series, report_date, period, min_year=RETURN_HISTORY_MIN_YEAR
 ):
-    """Create a wide, price-indexed MTD or YTD history through an as-of date.
+    """Each year's MTD or YTD price path, rebased to the current period's starting price.
 
-    Each calendar year's period return is measured from the final positive close
-    strictly before its month/year boundary, then rebased to the current period's
-    equivalent boundary close. Row 0 records that shared baseline, preserving the
-    first day's move at row 1. Historical years remain complete while the current
-    year is capped at ``report_date``. YTD rows use a common 365-day calendar ordinal:
-    February 29 is omitted and dates after it are shifted back one position, keeping
-    the same month/day aligned across leap and common years.
-
-    Parameters:
-    price_series (pd.Series): Daily prices with a DatetimeIndex.
-    report_date (str or datetime): Canonical report as-of date.
-    period (str): Either ``"mtd"`` or ``"ytd"``.
-    min_year (int): Earliest calendar year to include.
-
-    Returns:
-    pd.DataFrame: Year columns plus historical Median and Average columns, indexed by
-                  day of month (MTD) or common day of year (YTD).
+    Every year starts from its last close before the period began; row 0 is that shared
+    baseline. The current year stops at ``report_date``. YTD rows use a 365-day calendar
+    (February 29 dropped) so dates line up across leap years. Returns one column per year
+    plus Median and Average of past years, indexed by day of month or day of year.
     """
     if not isinstance(price_series, pd.Series):
         raise TypeError("price_series must be a pandas Series.")
@@ -212,12 +195,8 @@ def create_indexed_returns_history(
 def create_summary_history(
     report_data, report_date, metrics, comparison_days=30
 ):
-    """Create long-form daily metric history over an inclusive calendar window.
-
-    A 30-day comparison requires both endpoints, so a complete daily source produces
-    31 observations per metric. The window is anchored to the latest available row on
-    or before ``report_date`` and never includes later data.
-    """
+    """Long-form daily values of each metric over the `comparison_days` before the report
+    date, both endpoints included (31 rows per metric for 30 days)."""
     if not isinstance(report_data.index, pd.DatetimeIndex):
         raise ValueError("report_data index must be a DatetimeIndex.")
     if comparison_days < 0:
@@ -250,17 +229,8 @@ def create_summary_history(
 
 
 def calculate_roi_table(data, report_date, price_column="price_close"):
-    """
-    Calculates the return on investment (ROI) for Bitcoin over various time frames from the report date.
-
-    Parameters:
-    data (pd.DataFrame): DataFrame containing price data with a DateTime index.
-    report_date (str or datetime): The date for which to calculate ROI.
-    price_column (str): The column name for Bitcoin price data.
-
-    Returns:
-    pd.DataFrame: DataFrame containing Time Frame, ROI (%), Start Date, and BTC Price.
-    """
+    """Bitcoin's return from 1 day to 10 years before the report date: Time Frame, ROI (%),
+    Start Date and BTC Price (the start price)."""
     if price_column not in data.columns:
         raise ValueError(
             f"The price column '{price_column}' does not exist in the data."
@@ -290,7 +260,6 @@ def calculate_roi_table(data, report_date, price_column="price_close"):
     current_date = available_dates.max()
     current_price = data.loc[current_date, price_column]
 
-    # Pre-compute the 'Start Date' and 'BTC Price' for each period
     start_dates = {
         period: current_date - offset
         for period, offset in period_offsets.items()
@@ -315,7 +284,6 @@ def calculate_roi_table(data, report_date, price_column="price_close"):
         )
         start_dates[period] = actual_start_date
 
-    # Combine the ROI, Start Dates, and BTC Prices into a DataFrame
     roi_table = pd.DataFrame(
         {
             "Time Frame": period_offsets.keys(),
@@ -328,7 +296,7 @@ def calculate_roi_table(data, report_date, price_column="price_close"):
 
 
 def _format_fundamental_value(value, format_type):
-    """Format fundamentals table values for report-ready CSV output."""
+    """Format one fundamentals value for display; blank when missing."""
     if pd.isna(value):
         return ""
 
@@ -351,35 +319,12 @@ def _format_fundamental_value(value, format_type):
 
 
 def create_fundamentals_table(df, metrics_template, report_date=None):
-    """
-    Generates a fundamentals metrics table with current/prior values, week-over-week
-    change, daily Monday–Sunday breakdown, and 52-week range for each metric.
+    """One row per `metrics_template` metric: Section, Metric, Current Value, 7 Days Ago,
+    7 Day Change (%), a Monday-Sunday column for each day of the report week, 52W Low
+    and 52W High.
 
-    Each metric is grouped by section (Network Performance, Network Security, etc.).
-    Pre-formatted strings are used for value columns (since metrics have varied
-    format types — number, currency, percent), while the 7 Day % Change is kept
-    numeric so the dashboard can color-code it as a delta.
-
-    Parameters:
-    df (pd.DataFrame): DataFrame with DatetimeIndex containing all columns specified
-                       in metrics_template. Must have at least 14 days of data.
-    metrics_template (dict): {section_name: {metric_label: (column_name, format_type)}}
-    report_date (str or datetime, optional): As-of date. Anchors this table to the same
-                       row every other report table uses; without it the table reads the
-                       latest available row and can publish a different "current" price
-                       than summary/performance in the same run.
-
-    Returns:
-    pd.DataFrame: Columns:
-        - Section: Group label (Network Performance, etc.)
-        - Metric: Display name
-        - Current Value: Report-date formatted value
-        - 7 Days Ago: Value 7 calendar days before the report date
-        - 7 Day Change (%): (current / 7 days ago - 1) * 100, in percentage points
-                            (e.g. 6.83 = 6.83%)
-        - Monday..Sunday: Daily values for the report week
-        - 52W Low: Min over last 365 days
-        - 52W High: Max over last 365 days
+    Values are formatted text because rows mix units; 7 Day Change (%) stays numeric so
+    the dashboard can colour it. Without `report_date`, the latest row is used.
     """
     table_data = []
 
@@ -399,13 +344,7 @@ def create_fundamentals_table(df, metrics_template, report_date=None):
                 raise ValueError(f"Fundamental {column_name} is missing on {latest_date.date()}")
             seven_days_ago = series.get(latest_date - timedelta(days=7), np.nan)
 
-            # Spot-to-spot change between the two values displayed beside it. This column
-            # previously compared a 7-day mean against the prior 7-day mean, which is a
-            # legitimate statistic but not the delta of the adjacent columns — it disagreed
-            # in sign on noisy series (e.g. transaction count up 13% spot, mean down 0.5%)
-            # while being rendered as those columns' delta.
-            # Percentage points, matching every other published "(%)" column
-            # (Return (%), ROI (%), drawdown_pct). See csv/SCHEMA.md.
+            # Change between the two values shown beside it, in percentage points.
             pct_change = (
                 ((current / seven_days_ago) - 1) * 100
                 if pd.notna(seven_days_ago) and seven_days_ago != 0
@@ -440,10 +379,11 @@ def create_fundamentals_table(df, metrics_template, report_date=None):
     return pd.DataFrame(table_data)
 
 
-## Summary and Performance Tables
+# --- Summary and performance tables ---
 
 
 def _row_asof(df, report_date):
+    """The latest row on or before the report date."""
     report_date = pd.to_datetime(report_date).normalize()
     df = df.sort_index()
     available_dates = df.index[df.index <= report_date]
@@ -453,12 +393,12 @@ def _row_asof(df, report_date):
 
 
 def _band_label(value, bands):
-    """Return the label of the first (upper bound, label) band the value falls below."""
+    """Label of the first (upper bound, label) band the value is below."""
     return next(label for upper, label in bands if value < upper)
 
 
 def _nupl_sentiment(report_data, report_date):
-    """Fear & Greed label: the NUPL zone of the trailing 7-day average NUPL."""
+    """Market sentiment label: the NUPL zone of the trailing 7-day average NUPL."""
     report_date = pd.to_datetime(report_date).normalize()
     window = pd.to_numeric(
         report_data["nupl"].sort_index().loc[:report_date], errors="coerce"
@@ -471,44 +411,30 @@ def _nupl_sentiment(report_data, report_date):
 
 
 def _power_law_valuation(power_law_multiple):
-    """Valuation label: price against the power-law fair value, in standard-deviation bands."""
+    """Valuation label: the POWER_LAW_VALUATION_BANDS band of the power-law multiple."""
     if pd.isna(power_law_multiple) or power_law_multiple <= 0:
         raise RuntimeError("Power-law price multiple is required for the valuation label")
     return _band_label(power_law_multiple, POWER_LAW_VALUATION_BANDS)
 
 
 def create_summary_table(report_data, report_date):
-    """
-    Generates a summary table for Bitcoin's key metrics with categorized column headers.
-
-    Parameters:
-    - report_data (pd.DataFrame): DataFrame containing historical Bitcoin data, indexed by date.
-    - report_date (str or pd.Timestamp): Specific date for which the summary is generated.
-
-    Returns:
-    - pd.DataFrame: DataFrame containing a summary of Bitcoin metrics for the specified report date.
-    """
-
+    """Report-date snapshot of the headline metrics: Metric, Value and Category."""
     latest = _row_asof(report_data, report_date)
 
-    # Extract key metrics from report_data
     price_usd = latest["price_close"]
     market_cap = latest["market_cap"]
     sats_per_dollar = SATS_PER_BTC / price_usd
 
     bitcoin_supply = latest["supply"]
-    # These labels also identify raw daily series in summary_history.csv. Keep the
-    # snapshot definition identical instead of silently substituting a 30-day mean.
+    # Daily values, matching the same series in summary_history.csv.
     miner_revenue = latest["coinbase_sum_24h_usd"]
     tx_volume = latest["transfer_volume_sum_24h_usd"]
-    # Investor sentiment comes entirely from BRK on-chain data.
     supply_in_profit_pct = latest["supply_in_profit"] / latest["supply"] * 100
     if pd.isna(supply_in_profit_pct) or not 0 <= supply_in_profit_pct <= 100:
         raise RuntimeError("Supply in profit is required for the report-date summary snapshot")
     market_sentiment = _nupl_sentiment(report_data, report_date)
     bitcoin_valuation = _power_law_valuation(latest.get("power_law_price_multiple", np.nan))
 
-    # Define categories for organization
     categorized_data = {
         "Market Data": {
             "Bitcoin Price USD": price_usd,
@@ -539,8 +465,8 @@ def create_summary_table(report_data, report_date):
     return weekly_summary_df
 
 
-# Performance table rows by category, in published order. Bitcoin appears once, in its own
-# category; each dashboard and newsletter group shows it alongside its own assets.
+# Performance table rows by category, in published order. Consumers show the Bitcoin row
+# alongside each group.
 PERFORMANCE_GROUPS = {
     "Bitcoin": [("Bitcoin - [BTC]", "price_close")],
     "Equity Market Indexes": [
@@ -576,23 +502,9 @@ def _build_performance_table(
     correlation_results: dict,
     asset_groups: dict,
 ) -> pd.DataFrame:
-    """
-    Build one performance row per asset: price, 7-day/MTD/YTD/90-day returns, 52-week
-    range and 90-day correlation with Bitcoin.
-
-    Parameters:
-    - report_data (pd.DataFrame): Historical data with each asset's close and change columns.
-    - report_date (str or pd.Timestamp): As-of cutoff; metrics use the newest
-      available row on or before this date.
-    - correlation_results (dict): Correlation frames keyed "price_close_{days}_days".
-    - asset_groups (dict): {category: [(label, ticker), ...]}; ticker "price_close" is Bitcoin.
-
-    Returns:
-    - pd.DataFrame: One row per asset, in group order.
-    """
-    # Resolve the as-of row once. Market closures or an upstream gap can leave no
-    # exact report-date label; every current value and the 52-week window must then
-    # use the same newest observation on or before the requested cutoff.
+    """One row per asset, in group order: price, 7-day/MTD/YTD/90-day returns, 52-week
+    range and 90-day correlation with Bitcoin. Ticker "price_close" is Bitcoin."""
+    # Every value and the 52-week window use the same latest row on or before the cutoff.
     report_date = pd.to_datetime(report_date).normalize()
     report_data = report_data.sort_index()
     available_dates = report_data.index[report_data.index <= report_date]
@@ -603,7 +515,6 @@ def _build_performance_table(
     if isinstance(latest, pd.DataFrame):
         latest = latest.iloc[-1]
 
-    # 52-week window for high/low calculations, anchored to that same as-of row.
     year_ago = actual_report_date - pd.Timedelta(days=365)
 
     rows = []
@@ -621,7 +532,6 @@ def _build_performance_table(
                 "90 Day Return (%)": latest[f"{price_col}_90_change"],
                 "52 Week High": window.max() if len(window) else None,
                 "52 Week Low": window.min() if len(window) else None,
-                # Bitcoin's correlation with itself is 1.
                 "90 Day BTC Correlation": 1 if ticker == "price_close" else
                     correlation_results["price_close_90_days"].loc["price_close", price_col],
             })
@@ -636,34 +546,18 @@ def create_full_performance_table(report_data, report_date, correlation_results)
 
 
 def monthly_heatmap(data, report_date=None):
-    """
-    Creates monthly and yearly Bitcoin returns heatmap data with statistical aggregations.
+    """Bitcoin's monthly and yearly returns from 2012, in percentage points.
 
-    This function generates a matrix of monthly returns organized by year (rows) and month (columns),
-    with an additional yearly return column. It includes statistical rows (4-year average, median,
-    average) and handles incomplete current month data by calculating month-to-date returns.
-
-    Parameters:
-    data (pd.DataFrame): DataFrame with DatetimeIndex and 'price_close' column. Data is filtered
-                         to start from 2012-01-01 within the function.
-    report_date (str or datetime, optional): As-of date used to cap current-period returns.
-
-    Returns:
-    pd.DataFrame: Heatmap matrix with:
-        - Rows: Years (2012+), plus "4-Year Average", "Median", "Average"
-        - Columns: Month names (Jan-Dec) plus "Yearly"
-        - Values: Percentage points (5.0 = 5% gain, -3.0 = 3% loss)
-        - Yearly matches ytd_return_comparison.csv (prior year close -> latest)
-        - Current incomplete month shows MTD return
-        - Statistical rows exclude incomplete current-period data
+    Rows are years plus "4-Year Average", "Median" and "Average"; columns are Jan-Dec and
+    "Yearly". Each return runs from the prior period's last close, so the current month
+    and year show MTD and YTD. The summary rows leave out incomplete periods.
     """
     data = data.sort_index()
     if report_date is not None:
         report_date = pd.to_datetime(report_date).normalize()
         data = data.loc[:report_date]
 
-    # Retain pre-2012 prices for the January 2012/year-2012 boundary lookup, but only
-    # publish period rows from 2012 onward.
+    # Pre-2012 prices are kept only as the starting close for January 2012.
     all_prices = _positive_price_series(data["price_close"])
     display_prices = all_prices.loc[all_prices.index >= pd.Timestamp("2012-01-01")]
     if display_prices.empty:
@@ -682,16 +576,11 @@ def monthly_heatmap(data, report_date=None):
 
     heatmap_data = pd.Series(monthly_returns).unstack().reindex(columns=range(1, 13))
 
-    # Get the last date in the data to check if the current month is complete
     last_date = display_prices.index[-1]
     current_year, current_month = last_date.year, last_date.month
-
-    # Check if the current month is incomplete
     is_incomplete_month = last_date.day != (last_date + MonthEnd(0)).day
 
-    # Yearly uses the same prior-calendar-close denominator as the monthly cells and
-    # ytd_return_comparison.csv. Consequently, compounding a complete year's monthly
-    # cells now agrees with its Yearly value.
+    # Same prior-close basis as the monthly cells, so a full year's months compound to it.
     yearly_returns = {}
     for year, year_prices in display_prices.groupby(display_prices.index.year):
         prior_year_close = _last_positive_before(
@@ -701,7 +590,7 @@ def monthly_heatmap(data, report_date=None):
             yearly_returns[year] = (year_prices.iloc[-1] / prior_year_close) - 1
     heatmap_data[13] = pd.Series(yearly_returns)
 
-    # Create a copy excluding incomplete current-period data for the statistical rows
+    # The summary rows leave out the incomplete month and year.
     heatmap_data_excluded = heatmap_data.copy()
     if current_year in heatmap_data.index:
         if is_incomplete_month:
@@ -709,28 +598,20 @@ def monthly_heatmap(data, report_date=None):
         if (last_date.month, last_date.day) != (12, 31):
             heatmap_data_excluded.loc[current_year, 13] = pd.NA
 
-    # Add the "4-Year Average" row — the four most recent years that actually have data
-    # for each column. Slicing the last four *rows* instead averages only three values
-    # for any month the current year has not reached yet, while still labelling the
-    # result a four-year average.
+    # The four most recent years with a value in each column, not the last four rows.
     heatmap_data.loc["4-Year Average"] = heatmap_data_excluded.apply(
         lambda col: col.dropna().tail(4).mean(), axis=0
     )
 
-    # Add the "Median" row, excluding the incomplete month
     heatmap_data.loc["Median"] = heatmap_data_excluded.apply(
         lambda col: col[~col.isna()].median(), axis=0
     )
 
-    # Add the "Average" row, excluding the incomplete month
     heatmap_data.loc["Average"] = heatmap_data_excluded.apply(
         lambda col: col[~col.isna()].mean(), axis=0
     )
 
-    # Publish in percentage points, matching every other percentage column in csv/.
     heatmap_data = heatmap_data * 100
-
-    # Rename columns to month names
     month_names = [calendar.month_abbr[i] for i in range(1, 13)] + ["Yearly"]
     heatmap_data.columns = month_names
     heatmap_data.index.name = "time"
@@ -738,16 +619,13 @@ def monthly_heatmap(data, report_date=None):
     return heatmap_data
 
 
-## OHLC and period return tables
+# --- OHLC and period return tables ---
 
 
 def weekly_ohlc_table(ohlc_data):
-    """
-    Weekly OHLC candles for ohlc_data.csv, indexed by Monday week start.
+    """Weekly candles for ohlc_data.csv, indexed by Monday week start.
 
-    Rows are aggregated from daily BRK candles through the report date
-    (candle_data.weekly_ohlc), so the open week's Close is the report-date close, not a
-    finalized weekly close. Raises before anything is written if the candles are unusable.
+    The open week's Close is the report-date close. Raises if a candle is invalid.
     """
     assert_ohlc_usable(ohlc_data, "Weekly OHLC")
     table = ohlc_data[OHLC_COLUMNS].copy()
@@ -756,12 +634,9 @@ def weekly_ohlc_table(ohlc_data):
 
 
 def create_report_ohlc_summary(daily_ohlc_data, report_date):
-    """
-    One-row report-date OHLC context from daily candles.
+    """One row: the report-date daily candle and the week-to-date candle through it.
 
-    The daily close is the canonical report-date close. The weekly fields are week-to-date
-    values from daily candles through the report date, so they never include movement after
-    the report date. Raises if the report date or any day of its week is missing.
+    Raises if the report date or any earlier day of its week is missing.
     """
     assert_ohlc_usable(daily_ohlc_data, "Daily OHLC")
     daily = daily_ohlc_data[OHLC_COLUMNS].copy()
@@ -798,17 +673,11 @@ def create_report_ohlc_summary(daily_ohlc_data, report_date):
 
 
 def create_period_returns_table(report_data, report_date, period):
-    """
-    Month-to-date or year-to-date return comparison for mtd/ytd_return_comparison.csv.
+    """Current-year MTD or YTD return and a "Median Projection" row.
 
-    Every year's period return is measured from the final positive close before the
-    period began (the month for "mtd", January 1 for "ytd"). The table publishes two rows:
-    the current year, and a "Median Projection" that applies the median historical full-
-    period return (current year excluded) to the current period's start price.
-
-    Returns:
-    pd.DataFrame: Year, Start Price ($), End Price ($), Return (%), and Report Date
-                  Return (%), the return to the same calendar date in each year.
+    Returns run from the last close before the period began. The projection applies the
+    median full-period return of past years to this period's start price. Report Date
+    Return (%) is the return to the report's calendar date.
     """
     if period not in {"mtd", "ytd"}:
         raise ValueError("period must be either 'mtd' or 'ytd'.")
@@ -836,8 +705,7 @@ def create_period_returns_table(report_data, report_date, period):
         if year < RETURN_HISTORY_MIN_YEAR or year_prices.empty or pd.isna(start_price):
             continue
         end_price = year_prices.iloc[-1]
-        # Match the calendar date, not the day of year: after February a leap year's
-        # ordinal runs one ahead of a common year's.
+        # Match the calendar date; day-of-year shifts by one after February in leap years.
         same_date = year_prices[
             (year_prices.index.month == report_date.month)
             & (year_prices.index.day == report_date.day)
@@ -856,9 +724,7 @@ def create_period_returns_table(report_data, report_date, period):
     )
     table.index.name = "Year"
 
-    # The projection is a benchmark for the current period, so it excludes the current
-    # period: including it would fold today's partial return into the median it is
-    # compared against.
+    # The benchmark excludes the current, partial period.
     historical = table.drop(index=report_date.year, errors="ignore")
     median_return = historical["Return (%)"].median()
     median_row = pd.DataFrame(
@@ -874,32 +740,11 @@ def create_period_returns_table(report_data, report_date, period):
 
 
 def create_asset_valuation_table(report_data, report_date=None):
-    """
-    Generates relative valuation comparison table showing Bitcoin price if it matched other asset market caps.
+    """Bitcoin's price if its market cap matched each asset (M0 supplies, gold, silver,
+    large stocks), with the move needed to get there.
 
-    This function calculates what Bitcoin's price would be if its market cap equaled various
-    benchmark assets including stocks (AAPL, NVDA, META, AMZN), precious metals (gold, silver),
-    and fiat money supplies (US M0, UK M0, gold reserves). It shows the percentage move required
-    for Bitcoin to reach each valuation milestone.
-
-    Parameters:
-    report_data (pd.DataFrame): DataFrame with report-date row containing:
-        - price_close: Current Bitcoin price
-        - market_cap: Current Bitcoin market cap
-        - *_mc_btc_price: Calculated BTC price if matching each asset's market cap
-        - *_MarketCap: Market cap values for comparison stocks in USD (fiat M0 comes
-          from data_definitions.FIAT_MONEY_SUPPLY)
-        - gold/silver ``*_marketcap_billion_usd`` columns: legacy-named columns
-          whose stored values are absolute USD, not values to rescale by one billion
-
-    Returns:
-    pd.DataFrame: Table with columns:
-        - Asset: Name of comparison asset (Bitcoin, stocks, gold, fiat currencies)
-        - Market Cap (USD): Current market cap of the asset in USD
-        - Market Cap BTC Price: What Bitcoin price would be at that market cap
-        - BTC % Move to Marketcap BTC Price: Percentage points of gain/loss needed to
-          reach that market cap (e.g. 1937.0 = +1937%)
-        Numeric throughout; missing values are NaN. Sorted by market cap, descending.
+    Columns: Asset, Market Cap (USD), Market Cap BTC Price and BTC % Move to Marketcap BTC
+    Price (percentage points). Sorted by market cap, largest first.
     """
     fiat_m0_usd = dict(zip(
         FIAT_MONEY_SUPPLY["Country"], FIAT_MONEY_SUPPLY["US Dollar Trillion"] * 1e12
@@ -966,7 +811,6 @@ def create_asset_valuation_table(report_data, report_date=None):
         if marketcap_value is None:
             marketcap_value = latest_data.get(asset["marketcap"], float("nan"))
 
-        # Avoid division by zero or invalid values
         if (
             pd.notna(bitcoin_price)
             and pd.notna(marketcap_btc_price)
@@ -976,10 +820,6 @@ def create_asset_valuation_table(report_data, report_date=None):
         else:
             percent_move = np.nan
 
-        # Published as numbers, not pre-formatted strings. Formatting belongs to the
-        # consumer: strings forced every reader to strip "$", "," and "%" before doing
-        # arithmetic, and rounding the percentage to whole points here made Bitcoin's own
-        # reference row indistinguishable from any asset within half a point of it.
         valuation_data.append(
             {
                 "Asset": asset["name"],

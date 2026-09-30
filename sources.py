@@ -2,12 +2,12 @@
 
 Sources:
     - BRK (Bitview): on-chain series and daily OHLC candles
-    - Yahoo Finance: equity, ETF, index, commodity and dollar-index closes, and historical
+    - Yahoo Finance: stock, ETF, index, futures and dollar-index closes, and historical
       stock market caps (close x shares outstanding)
     - Google Sheets: Coin Metrics monthly miner efficiency
 
-Market fetchers keep each value's true observation date in a temporary column so the
-freshness checks can measure real source age rather than trusting a carried-forward value.
+Market fetchers keep each value's real observation date in a temporary column so the
+freshness checks measure true source age, not the age of a carried-forward value.
 """
 
 import csv
@@ -34,59 +34,42 @@ from data_definitions import (
 from data_validation import OHLC_COLUMNS, assert_ohlc_usable, validate_calendar
 
 
-# Ordinary market feeds should bridge weekends and short exchange holidays, not outages.
-# Five calendar days covers those expected gaps while ensuring a stalled source becomes NaN.
+# Bridges weekends and short exchange holidays; a source stalled longer becomes NaN.
 MARKET_DATA_MAX_FFILL_DAYS = 5
 
 
-# Yahoo publishes shares outstanding on each issuer's filing cadence, not daily, so this
-# series needs its own budget rather than the ordinary market one. Observed source ages
-# across the tracked tickers run from same-day (NVDA, MU) to 162 days (2222.SR, which
-# files semi-annually); 220 days clears a semi-annual filer plus its lag while still
-# refusing a share count that has gone quiet for the better part of a year. A share count
-# carried indefinitely silently understates market cap by the issuer's dilution since.
+# Share counts follow each issuer's filing cadence, not a daily one. 220 days covers a
+# semi-annual filer plus its reporting lag (2222.SR runs ~162 days); an older count would
+# understate market cap by any dilution since.
 SHARES_OUTSTANDING_MAX_AGE_DAYS = 220
 
 
+# Miner efficiency keeps its source date and URL in the published data.
 MINER_EFFICIENCY_VALUE_COLUMN = "cm_efficiency_j_gh"
-
-
 MINER_EFFICIENCY_SOURCE_DATE_COLUMN = "cm_efficiency_source_date"
-
-
 MINER_EFFICIENCY_SOURCE_URL_COLUMN = "cm_efficiency_source_url"
-
-
 MINER_EFFICIENCY_COLUMNS = [
     MINER_EFFICIENCY_VALUE_COLUMN,
     MINER_EFFICIENCY_SOURCE_DATE_COLUMN,
     MINER_EFFICIENCY_SOURCE_URL_COLUMN,
 ]
 
-
-
-
 BRK_BULK_MAX_ATTEMPTS = 3
-
-
 BRK_BULK_INITIAL_BACKOFF_SECONDS = 1.0
-
-
+# Errors that retrying the same request cannot fix: the request is split or the series
+# reported missing instead.
 BRK_SEMANTIC_ERROR_CODES = {
     "weight_exceeded",
     "series_not_found",
     "metric_not_found",
 }
 
-
-# Temporary provenance columns survive source reindexing and the merge into the BRK
-# calendar. `forward_fill_market_data` uses them to enforce total source age, then removes
-# them so the published schema is unchanged. Miner provenance is intentionally retained.
+# Prefix of the temporary per-column observation dates on market data. They survive the
+# merge, drive the freshness checks, and are dropped by `forward_fill_market_data`.
 _SOURCE_OBSERVATION_DATE_PREFIX = "__source_observation_date__"
 
-# Failures Yahoo and its transport raise for unavailable or malformed data. A coding error
-# (AttributeError, NameError, ...) is deliberately not caught, so it fails the run instead
-# of looking like a ticker with no data.
+# Errors Yahoo raises for unavailable or malformed data. Coding errors (AttributeError,
+# NameError) are not listed, so they fail the run instead of looking like missing data.
 YAHOO_DATA_ERRORS = (
     YFException, requests.RequestException, ValueError, KeyError, IndexError, TypeError, OSError,
 )
@@ -97,17 +80,10 @@ def _source_observation_column(value_column: str) -> str:
 
 
 def get_brk_ohlc(start: str = "2009-01-03") -> pd.DataFrame:
-    """
-    Fetch historical Bitcoin OHLC data from BRK.
+    """Daily Bitcoin OHLC candles from BRK, indexed by date ("Time").
 
-    The pipeline fetches daily candles only; weekly and monthly candles are aggregated
-    from them (candle_data.period_candles) so every period is cut off at the report date.
-
-    Parameters:
-    start (str): Start date for the series query.
-
-    Returns:
-    pd.DataFrame: DataFrame indexed by BRK date labels with Open, High, Low, Close columns.
+    Leading all-zero candles from before Bitcoin had a price are dropped. Weekly and
+    monthly candles are built from these in candle_data.
     """
     base_url = "https://bitview.space/api/series"
     index = "day1"
@@ -147,7 +123,7 @@ def get_brk_ohlc(start: str = "2009-01-03") -> pd.DataFrame:
         df.set_index("Time", inplace=True)
         df = df.astype(float)
         validate_calendar(df.index, f"BRK {index} OHLC")
-        # BRK's pre-market history is all-zero; internal invalid candles still fail.
+        # Drop the all-zero pre-market history; an invalid candle after it still fails.
         nonzero = df.ne(0).any(axis=1)
         df = df.loc[nonzero.idxmax():] if nonzero.any() else df.iloc[:0]
         assert_ohlc_usable(df, label=f"BRK {index} OHLC")
@@ -160,22 +136,13 @@ def get_brk_ohlc(start: str = "2009-01-03") -> pd.DataFrame:
 
 
 def get_price(tickers: dict, start_date: str) -> pd.DataFrame:
+    """Daily closes for every ticker in `tickers`, in one batched Yahoo download.
+
+    Returns a frame with a `time` column and one `{ticker}_close` column per ticker,
+    each with its observation-date marker.
     """
-    Fetches historical close prices for all tickers using a single yf.download() batch call.
-
-    Batching all tickers into one request is significantly faster than fetching each ticker
-    individually.
-
-    Parameters:
-    tickers (dict): Dictionary with categories as keys and ticker lists as values.
-    start_date (str): Start date for fetching historical data (format: 'YYYY-MM-DD').
-
-    Returns:
-    pd.DataFrame: DataFrame containing close prices for all tickers with 'time' column.
-    """
-    # Anchor on the UTC clock, not the local one, so a local run and a CI run request
-    # the same window. yfinance treats `end` as exclusive, so this asks for everything
-    # through the current UTC day.
+    # Use the UTC date so local and CI runs request the same window. `end` is exclusive,
+    # so this requests everything before the current UTC day.
     end_date = pd.Timestamp.now(tz="UTC").normalize().tz_localize(None).strftime(
         "%Y-%m-%d"
     )
@@ -184,10 +151,8 @@ def get_price(tickers: dict, start_date: str) -> pd.DataFrame:
     if not fetch_tickers:
         return pd.DataFrame(columns=["time"])
 
-    # Continuous daily index for reindexing (fills weekends/holidays via ffill)
     date_range = pd.date_range(start=start_date, end=end_date, freq="D")
 
-    # Single batch download — orders of magnitude faster than per-ticker loop
     try:
         raw = yf.download(
             fetch_tickers,
@@ -213,7 +178,7 @@ def get_price(tickers: dict, start_date: str) -> pd.DataFrame:
             col[_source_observation_column(value_column)] = pd.Series(
                 col.index, index=col.index
             ).where(col[value_column].notna())
-            # Index is already tz-naive with auto_adjust=True; reindex to fill gaps
+            # Put trading days on the daily calendar, bridging weekends and holidays.
             col = col.reindex(date_range).ffill(limit=MARKET_DATA_MAX_FFILL_DAYS)
             data_frames.append(col)
         except KeyError:
@@ -222,9 +187,8 @@ def get_price(tickers: dict, start_date: str) -> pd.DataFrame:
     if not data_frames:
         return pd.DataFrame(columns=["time"])
 
-    # Consolidate the many per-ticker blocks before adding the time column. Without
-    # the copy, reset_index has to insert into a highly fragmented frame and pandas
-    # emits a PerformanceWarning on every full pipeline run.
+    # copy() consolidates the per-ticker blocks; otherwise reset_index raises pandas'
+    # fragmentation PerformanceWarning.
     data = pd.concat(data_frames, axis=1).copy().reset_index()
     data.rename(columns={"index": "time"}, inplace=True)
     data["time"] = pd.to_datetime(data["time"]).dt.tz_localize(None)
@@ -236,8 +200,8 @@ def _normalize_yahoo_series(values: pd.Series) -> pd.Series:
     values = pd.Series(values).copy()
     index = pd.DatetimeIndex(pd.to_datetime(values.index))
     if index.tz is not None:
-        # Preserve Yahoo's exchange-local date. tz_convert(None) can move midnight to the
-        # prior/next date, which is especially harmful on a split effective date.
+        # Keep the exchange-local date. tz_convert(None) can shift midnight to another
+        # day, which misplaces split dates.
         index = index.tz_localize(None)
     values.index = index.normalize()
     return pd.to_numeric(values, errors="coerce").dropna()
@@ -264,8 +228,8 @@ def _select_yahoo_share_observations(
             distances = np.abs(np.log(positive / target))
             selected[observation_date] = float(positive[np.argmin(distances)])
         else:
-            # Alias histories are concatenated old ticker first and current ticker last, so
-            # the current ticker wins on a non-split overlap date.
+            # Alias histories are concatenated oldest ticker first, so the current
+            # ticker wins a shared date.
             selected[observation_date] = float(candidates[-1])
 
     return pd.Series(selected, dtype="float64").sort_index()
@@ -351,8 +315,8 @@ def _yahoo_shares(stock, ticker: str, stock_splits: pd.Series, price_timezone,
     share_parts = []
     for share_symbol in YAHOO_SHARE_TICKER_ALIASES.get(ticker, [ticker]):
         share_stock = stock if share_symbol == ticker else yf.Ticker(share_symbol)
-        # Retired tickers can retain fundamentals while losing chart timezone
-        # metadata. Seed them from the current ticker before requesting shares.
+        # A retired ticker can lack timezone metadata, which the shares request needs.
+        # Borrow it from the current ticker.
         if (
             share_symbol != ticker
             and price_timezone is not None
@@ -374,11 +338,9 @@ def _yahoo_shares(stock, ticker: str, stock_splits: pd.Series, price_timezone,
 
 
 def _fresh_shares_on_price_dates(shares: pd.Series, close: pd.Series) -> pd.Series:
-    """Shares carried onto each price date, blank once the last filing is past its budget.
+    """Shares carried onto each price date; NaN once the last filing is past its budget.
 
-    The true filing date travels with the value so staleness is measured from the
-    observation, never inferred from a repeated daily figure. Beyond the budget the market
-    cap becomes NaN rather than silently understating the issuer's dilution.
+    Age is measured from the filing date, not from the last row the value was carried to.
     """
     combined_index = shares.index.union(close.index).sort_values()
     on_price_dates = shares.reindex(combined_index).ffill().reindex(close.index)
@@ -458,14 +420,11 @@ def _live_market_cap_fallback(stock, ticker: str, fx_close, requested_end: pd.Ti
 def get_marketcap(
     tickers: dict, start_date: str, end_date: Optional[str] = None
 ) -> pd.DataFrame:
-    """
-    Build Yahoo-only historical stock market caps as Close times shares outstanding.
+    """Daily `{ticker}_MarketCap` in USD: Yahoo close x split-adjusted shares outstanding.
 
-    The existing `TICKER_MarketCap` schema is retained. Values remain null before Yahoo's
-    first historical share observation, and renamed ticker histories are stitched under the
-    current ticker. Non-USD listings are converted with Yahoo's historical FX close before
-    publication. A current Yahoo scalar is used only on the final requested date if the
-    historical calculation is unavailable; it is never broadcast backward.
+    Values are NaN before Yahoo's first share observation. Renamed tickers are stitched
+    under the current ticker, and non-USD listings are converted at the historical FX
+    close. If no history can be built, Yahoo's live market cap fills the final date only.
     """
     stocks = list(tickers.get("stocks", []))
     requested_start = pd.to_datetime(start_date).normalize()
@@ -509,9 +468,7 @@ def get_marketcap(
         if not data[value_column].notna().any():
             current_market_cap = _live_market_cap_fallback(stock, ticker, fx_close, requested_end)
             if current_market_cap is not None:
-                # A live intraday quote in a column otherwise made of settled daily
-                # closes. It is confined to the final row and never broadcast backward,
-                # but it should not pass unremarked in the run log.
+                # A live quote among settled closes: final row only, and logged.
                 warnings.warn(
                     f"{value_column} on {requested_end.date()} is Yahoo's live scalar "
                     "market cap, not a settled close: no historical share series was "
@@ -525,41 +482,18 @@ def get_marketcap(
 
 
 def get_miner_data(google_sheet_url: str = "") -> pd.DataFrame:
-    """
-    Fetch Coin Metrics monthly Bitcoin network efficiency data from Google Sheets.
+    """Coin Metrics monthly network efficiency (J/GH) from Google Sheets, filled daily.
 
-    The Google Sheet is expected to contain monthly observations with:
-        - time: Month timestamp
-        - cm_efficiency_j_gh: Coin Metrics estimated Bitcoin network efficiency in J/GH
-
-    If the sheet instead contains `efficiency_j_th`, this function converts it to
-    `cm_efficiency_j_gh` by dividing by 1,000.
-
-    The monthly series is forward-filled to daily frequency so it can be merged
-    with daily BRK/on-chain data.
-
-    Parameters:
-    google_sheet_url (str): Google Sheets URL to extract data from.
-                            Defaults to MINER_DATA_SHEET_URL from config.
-
-    Each daily row retains the date of the actual monthly source observation and the
-    configured sheet export URL. Those fields let freshness validation distinguish a
-    proven observation from a value repeated merely for daily alignment.
-
-    The latest monthly observation is carried forward until the sheet publishes a new
-    value. Its original observation date and URL remain attached so the pipeline can
-    warn clearly when that estimate is older than the normal monthly update cadence.
-
-    Returns:
-    pd.DataFrame: Daily DataFrame with `time`, `cm_efficiency_j_gh`,
-                  `cm_efficiency_source_date`, and `cm_efficiency_source_url`.
-                  Returns an empty DataFrame with that schema on error.
+    The sheet needs a `time` column and `cm_efficiency_j_gh` (or `efficiency_j_th`,
+    converted). Each daily row keeps its source observation date and URL so the freshness
+    check can measure the estimate's real age. Returns an empty frame with the same
+    columns if the sheet cannot be read.
     """
     if not google_sheet_url:
         google_sheet_url = MINER_DATA_SHEET_URL
 
     try:
-        # Convert Google Sheets sharing URL to CSV export URL.
+        # Sharing URL -> CSV export URL.
         csv_export_url = google_sheet_url.replace("/edit?usp=sharing", "/export?format=csv")
         csv_export_url = csv_export_url.split("#")[0]
         if "/edit?" in csv_export_url:
@@ -595,9 +529,6 @@ def get_miner_data(google_sheet_url: str = "") -> pd.DataFrame:
         df = df[["time"] + MINER_EFFICIENCY_COLUMNS]
         df = df.drop_duplicates(subset=["time"], keep="last")
 
-        # Monthly Coin Metrics efficiency is the best available estimate for each day
-        # until the next monthly observation. Provenance is carried with the value so
-        # an old estimate remains visible rather than masquerading as a new observation.
         df = df.set_index("time").resample("D").ffill().reset_index()
 
         return df
@@ -636,20 +567,10 @@ def _brk_fetch_csv(
     max_attempts=BRK_BULK_MAX_ATTEMPTS,
     initial_backoff_seconds=BRK_BULK_INITIAL_BACKOFF_SECONDS,
 ):
-    """
-    Fetch series from BRK bulk API as CSV.
+    """Fetch series from the BRK bulk API as CSV; returns (header, rows).
 
-    Parameters:
-    metrics (list): List of series names to fetch.
-    index (str): Index type for the API request.
-    start (int | str): Starting range bound for data retrieval.
-    timeout (int): Request timeout in seconds. Defaults to the shared `API_TIMEOUT`.
-    verbose (bool): If True, print debug information.
-    max_attempts (int): Bounded total attempts for transient failures.
-    initial_backoff_seconds (float): First exponential-backoff delay.
-
-    Returns:
-    tuple: (header, data_rows) - CSV header and data rows.
+    Connection errors, 429s and 5xx responses are retried with exponential backoff, up to
+    `max_attempts` in total.
     """
     if verbose:
         print(f"[BRK] fetching {len(metrics)} metrics: {metrics}")
@@ -685,8 +606,6 @@ def _brk_fetch_csv(
 
         code = _brk_error_code(r) if not r.ok else None
         transient_status = r.status_code == 429 or 500 <= r.status_code <= 599
-        # Semantic errors need recursive splitting or explicit missing-series handling;
-        # retrying the identical oversized/invalid request would only delay that path.
         should_retry = transient_status and code not in BRK_SEMANTIC_ERROR_CODES
         if should_retry and attempt < max_attempts:
             delay = initial_backoff_seconds * (2 ** (attempt - 1))
@@ -699,8 +618,7 @@ def _brk_fetch_csv(
             continue
         break
 
-    # The loop either obtained a response or re-raised the final connection exception.
-    assert r is not None
+    assert r is not None  # the loop re-raises its final connection error
 
     if verbose:
         print(f"[BRK] status={r.status_code} bytes={len(r.text)}")
@@ -743,16 +661,10 @@ def _brk_fetch_csv_resilient(
     max_attempts=BRK_BULK_MAX_ATTEMPTS,
     initial_backoff_seconds=BRK_BULK_INITIAL_BACKOFF_SECONDS,
 ):
-    """
-    Fetch a BRK bulk CSV request, recursively splitting oversized or invalid chunks.
+    """Fetch a BRK bulk request, splitting it in half on an oversized or invalid chunk.
 
-    Parameters:
-    missing (list | None): If provided, names of series BRK could not resolve are
-                           appended here so the caller can fail loudly rather than
-                           silently publishing an all-NaN column.
-
-    Returns:
-    list[tuple]: One or more (header, rows) responses.
+    Returns a list of (header, rows) responses. Series BRK cannot resolve are appended
+    to `missing` when it is given.
     """
     try:
         return [
@@ -817,22 +729,16 @@ def get_brk_onchain(
     index: str = "dateindex",
     verbose: bool = False,
 ) -> pd.DataFrame:
-    """
-    Pull BRK metrics, align by timestamp (included in every chunk), and return a pandas
-    DataFrame with a 'time' column using native BRK field names.
+    """Every BRK_METRICS series from `start_date`, with a `time` column and BRK's names.
 
-    BRK also returns the partial, in-progress UTC day. The returned frame is not truncated;
-    main.py applies the report-date cutoff to its own exports.
+    Series are fetched in chunks and joined on `timestamp`. The partial current UTC day
+    is included; main.py applies the report-date cutoff.
     """
-
-    metric_list = BRK_METRICS[:]  # copy
+    metric_list = BRK_METRICS[:]
     if "timestamp" not in metric_list:
         metric_list = ["timestamp"] + metric_list
 
-    # Query from the requested start date instead of genesis to reduce BRK request weight.
-    query_start = start_date
-
-    # Start with reasonably sized chunks; resilient fetcher splits again if needed.
+    # Chunks that are still too large are split again by the resilient fetcher.
     chunk_size = 8
     non_ts = [m for m in metric_list if m != "timestamp"]
     chunks = [
@@ -849,7 +755,7 @@ def get_brk_onchain(
         responses = _brk_fetch_csv_resilient(
             chunk,
             index=index,
-            start=query_start,
+            start=start_date,
             timeout=API_TIMEOUT,
             verbose=verbose,
             missing=missing_series,
@@ -874,10 +780,8 @@ def get_brk_onchain(
                 if c not in ordered_cols:
                     ordered_cols.append(c)
 
-    # A series BRK could not resolve used to be backfilled as an all-NaN column, which
-    # then vanished from the fundamentals table via its `len(series) == 0` skip — the
-    # report shipped a row short with no error anywhere. Fail loudly instead: a renamed
-    # or retired upstream series is a code change, not a data condition.
+    # A missing series means it was renamed or retired upstream: fail rather than
+    # publish an empty column.
     returned = set(ordered_cols[1:])
     unresolved = sorted(set(missing_series) | {m for m in non_ts if m not in returned})
     if unresolved:
@@ -910,29 +814,14 @@ def get_data(
     tickers: dict,
     start_date: str,
 ) -> pd.DataFrame:
+    """Fetch every source and left-join it onto the BRK daily calendar.
+
+    `tickers` is data_definitions.TICKERS; market caps are built for its `stocks` group.
     """
-    Primary data orchestration function that fetches and merges all data sources into unified dataset.
-
-    This is the main entry point for data ingestion. It fetches every source, normalizes
-    timestamps to UTC midnight, and left-joins them onto the BRK daily calendar.
-
-    Data Sources Integrated:
-    1. BRK (Bitview) API: Bitcoin price and on-chain metrics
-    2. Yahoo Finance: Stock/ETF/index/commodity/forex prices via yfinance
-    3. Yahoo Finance: Market capitalizations for public companies
-    4. Google Sheets: Monthly Coin Metrics Bitcoin network efficiency data, forward-filled daily (J/GH)
-
-    Parameters:
-    tickers (dict): Asset ticker dictionary from data_definitions.py with keys:
-                    'stocks', 'etfs', 'indices', 'commodities', 'forex'.
-    start_date (str): Historical data start date in 'YYYY-MM-DD' format. Typically '2010-01-01'
-                      to capture maximum history from Yahoo Finance. BRK data starts ~2009.
-    """
-    # Fetch data
     coindata = get_brk_onchain(start_date)
     prices = get_price(tickers, start_date)
     marketcaps = get_marketcap(tickers, start_date)
-    miner_data = get_miner_data()  # Monthly Coin Metrics network efficiency, forward-filled daily
+    miner_data = get_miner_data()
 
     datasets = [
         ("coindata", coindata),
@@ -948,9 +837,7 @@ def get_data(
             dataset.set_index("time", inplace=True)
             processed_datasets[name] = dataset
 
-    # coindata is the base frame every other source is left-joined onto — it defines the
-    # index. Look it up by name: positional access would silently fall through to the
-    # next available source and anchor the whole pipeline to yfinance's trading-day index.
+    # BRK defines the calendar; no other source can stand in for it.
     if "coindata" not in processed_datasets:
         raise RuntimeError(
             "BRK on-chain data (coindata) is missing or empty — it is the base frame for "
@@ -963,14 +850,13 @@ def get_data(
     for name, dataset in processed_datasets.items():
         if name == "coindata":
             continue
-        # Two sources producing the same column is a configuration error. pandas would
-        # rename both copies with _x/_y suffixes and silently change the schema.
+        # pandas would rename a shared column to _x/_y, silently changing the schema.
         overlap = sorted(set(data.columns) & set(dataset.columns))
         if overlap:
             raise RuntimeError(f"Sources returned duplicate columns: {', '.join(overlap)}")
         data = pd.merge(data, dataset, left_index=True, right_index=True, how="left")
 
-    # Optional assets retain a stable schema when their providers return no data.
+    # Keep a column for every configured ticker even when Yahoo returned nothing.
     optional = [f"{ticker}_close" for group in tickers.values() for ticker in group]
     optional += [f"{ticker}_MarketCap" for ticker in tickers.get("stocks", [])]
     data = data.reindex(columns=list(dict.fromkeys([*data.columns, *optional])))

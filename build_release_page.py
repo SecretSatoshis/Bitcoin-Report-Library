@@ -1,8 +1,7 @@
-"""Generate the public data-release landing page, sitemap and structured data.
+"""Generate the data-release landing page, sitemap and structured data.
 
-Run from the daily pipeline so the page and its dateModified track the release
-rather than the moment someone last edited HTML by hand. Everything here is
-derived from the CSVs on disk — no hardcoded dates.
+The daily workflow runs this after each release. Everything is derived from the manifest
+and the CSVs on disk.
 """
 
 from __future__ import annotations
@@ -57,10 +56,7 @@ def describe(path: Path, cutoff: str | None = None) -> dict:
         header = next(reader, [])
         for row in reader:
             rows += 1
-            # Some compact summary tables place their date after metric columns (for
-            # example roi_table.csv uses its third column). Search every cell so the
-            # public per-file coverage cannot silently become incomplete when a CSV's
-            # column order changes.
+            # Dates can sit in any column (roi_table.csv's is third), so check every cell.
             for cell in row:
                 value = cell.strip()
                 if len(value) != 10 or not DATE.fullmatch(value):
@@ -114,8 +110,7 @@ def structured(files: list[dict], first: str, last: str) -> dict:
         "temporalCoverage": f"{first}/{last}",
         "keywords": ["Bitcoin", "on-chain data", "market data", "open data", "BTC"],
         "creator": {"@type": "Organization", "name": "Secret Satoshis", "url": f"{SITE}/"},
-        # The pipeline is GPL-3.0; the market data it ingests is third-party and
-        # keeps its publishers' terms. The licence belongs on the code.
+        # The GPL-3.0 licence covers the code, not the third-party data.
         "isBasedOn": {
             "@type": "SoftwareSourceCode",
             "name": "Bitcoin Report Library",

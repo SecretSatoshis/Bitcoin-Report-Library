@@ -1,17 +1,12 @@
 /**
- * Data sync script for Bitcoin Report Dashboard (Evidence.dev)
+ * Sync the dashboard's CSVs from the Report Library.
  *
- * Modes:
- *   --local   Copy CSVs directly from ../csv/ (Report Library local output).
- *   (default) Download CSVs from GitHub Pages.
+ *   --local   Copy from ../../csv (a local Report Library run).
+ *   (default) Download from GitHub Pages.
  *
- * Currently scoped to the CSVs the dashboard actually uses.
- * Wide files (master_metrics_data) are intentionally excluded —
- * they cause Evidence's CSV plugin to hang on type inference.
- *
- * Every sync stages one complete release, verifies every file against that release's
- * manifest, and only then replaces the datasource folder in a single step. A failure at
- * any point leaves the existing dashboard sources untouched.
+ * Each sync stages one complete release, checks every file against its manifest, then
+ * swaps the datasource folder in one step. A failure leaves the current sources untouched.
+ * The wide master file is not synced: Evidence's CSV plugin hangs on its type inference.
  */
 
 import {
@@ -47,15 +42,12 @@ const PREVIOUS_DIR = path.resolve(__dirname, "../.sync-previous");
 const RELEASE_MANIFEST = "release_manifest.json";
 const CANDLE_ARCHIVE = "bitcoin_candles.csv.gz";
 
-// GitHub Pages deploys a release about a minute after the commit that also triggers the
-// production dashboard build, then serves files with a 10-minute CDN cache. Remote sync
-// therefore waits until Pages serves at least the release contained in this checkout.
+// Pages deploys about a minute after the commit that starts the production build and
+// caches files for 10 minutes, so remote sync waits for this checkout's release.
 const RELEASE_WAIT_MS = 12 * 60 * 1000;
 const RELEASE_POLL_MS = 15 * 1000;
 
-// Only the CSVs the dashboard actually queries. ohlc_data.csv and
-// report_ohlc_summary.csv were fetched and ingested on every build but are referenced
-// nowhere on the page — they belong to the weekly recap workflow, not here.
+// Only the files the dashboard queries.
 const CSV_FILES = [
   "summary_table.csv",
   "summary_history.csv",
@@ -81,8 +73,7 @@ function httpsGet(url, redirectsLeft = MAX_REDIRECTS) {
   return new Promise((resolve, reject) => {
     const req = https.get(url, { timeout: REQUEST_TIMEOUT_MS }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        // Drain the redirect body so the socket can be reused, and cap the depth —
-        // an unbounded chain would otherwise recurse until the process dies.
+        // Drain the redirect body so the socket is reused; the depth cap stops a loop.
         res.resume();
         if (redirectsLeft <= 0) {
           reject(new Error(`Too many redirects for ${url}`));
@@ -99,8 +90,7 @@ function httpsGet(url, redirectsLeft = MAX_REDIRECTS) {
       resolve(res);
     });
 
-    // Without an explicit timeout a hung socket never errors, so the build blocks
-    // until the platform kills it rather than failing in seconds.
+    // A hung socket never errors on its own; fail fast instead of stalling the build.
     req.on("timeout", () => {
       req.destroy(new Error(`Timed out after ${REQUEST_TIMEOUT_MS}ms for ${url}`));
     });
@@ -115,8 +105,7 @@ async function readRemoteJson(url) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
-// Every release carries a manifest. A missing or incomplete one fails the sync; it is
-// never a reason to skip hash verification.
+// A missing or incomplete manifest fails the sync.
 function loadManifest(payload) {
   if (!payload || payload.schema_version !== 1
       || typeof payload.release_id !== "string"
@@ -196,9 +185,8 @@ function stageLocal() {
   return manifest;
 }
 
-// The release committed alongside this dashboard checkout, if the checkout has one.
-// Production builds clone the whole repository, so this is the release whose commit
-// triggered the build. A developer checkout may simply be older than Pages, which is fine.
+// The release committed in this checkout, if any. In production that is the release
+// whose commit triggered the build; a local checkout may be older than Pages.
 function checkoutRelease() {
   try {
     const manifest = readLocalManifest();
@@ -208,9 +196,8 @@ function checkoutRelease() {
   }
 }
 
-// A report date can be released more than once (a manual rerun regenerates the same
-// day), so a release is only current when it is at least as new by date and, on the
-// same date, by generation time. Both are ISO strings that compare chronologically.
+// A rerun can republish the same report date, so ties are broken by generation time.
+// Both are ISO strings, which sort chronologically.
 function isAtLeast(remote, minimum) {
   if (!minimum) return true;
   if (remote.report_date !== minimum.report_date) {
@@ -306,11 +293,10 @@ async function stageRemote() {
   return manifest;
 }
 
-// Replace the whole datasource folder in one step, so Evidence only ever sees one
-// complete, hash-verified release — never a mix of an old and a new one. Files dropped
-// from CSV_FILES disappear with the old folder instead of lingering in the build.
+// Swap the whole datasource folder at once, so Evidence never sees a mix of releases and
+// files dropped from CSV_FILES disappear.
 function publishStaged() {
-  // Evidence ingests the narrow candle table, never the gzip archive or wide snapshots.
+  // Evidence reads the decompressed candle table.
   const archive = path.join(STAGING_DIR, CANDLE_ARCHIVE);
   writeFileSync(path.join(STAGING_DIR, "bitcoin_candles.csv"), gunzipSync(readFileSync(archive)));
   rmSync(archive);

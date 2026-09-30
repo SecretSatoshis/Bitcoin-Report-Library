@@ -9,13 +9,10 @@ RELEASE_MANIFEST_VERSION = 1
 
 
 def write_release_manifest(output_dir, report_date, filenames=None):
-    """Write the immutable metadata contract shared by downstream consumers.
+    """Write the manifest after every file is written, and return it.
 
-    The manifest is created only after every CSV export has completed. `filenames` lists
-    exactly the files this run published (main.py passes it), so a leftover file in the
-    directory is never mistaken for part of the release; without it, every CSV present is
-    listed. Each record is small and JSON-friendly so browser and Python consumers can
-    validate the same release without importing the producer's code.
+    `filenames` lists the files this run published, so a leftover file is never listed;
+    without it, every CSV in the directory is. The file is replaced atomically.
     """
     output = Path(output_dir)
     if filenames is None:

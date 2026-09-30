@@ -2,26 +2,19 @@
 // historical years, the colour ramp, ECharts series options and endpoint labels.
 // Pure functions; pages/index.md wires them to its queries.
 
-// Years hidden from the seasonal charts. 2017's magnitude compresses every other
-// year into a flat band at the bottom of the plot. It is excluded from the chart
-// only — it stays in the CSV, and the Median/Average lines are recomputed below
-// over the visible historical years. The current year is plotted separately but
-// excluded from those reference aggregates while it is still incomplete.
+// Years left off the seasonal charts (still in the CSV). 2017's scale flattens every
+// other year.
 const HIDDEN_YEARS = ['2017'];
 
 const _isYearCol = (c) => /^\d{4}$/.test(c);
 
-// Off-white for Median, cypherpunk green for Average, Bitcoin-orange for current
-// year. Those three are reserved, so the historical palette must avoid orange and
-// green entirely or a past year reads as this year.
-const _medianColor = '#e4e4ef'; // brand text (legible on dark)
+// Reserved colours for Median, Average and the current year. The historical palette
+// avoids orange and green so no past year reads as this year.
+const _medianColor = '#e4e4ef';
 const _averageColor = '#00FF88';
 const _currentColor = '#F7931A';
 
-// Historical years use one cool-blue recency ramp: the oldest visible year is
-// darkest and the newest is brightest. This keeps every trajectory on the chart
-// without suggesting that each year is a separate category. Exact year identity
-// comes from the interactive legend and hover focus, so shade is not the only cue.
+// Past years share one blue ramp, oldest darkest; the legend and hover identify each year.
 function _historicalShade(index, total) {
   const t = total <= 1 ? 1 : index / (total - 1);
   const saturation = Math.round(44 + t * 28);
@@ -37,17 +30,14 @@ export function yearCols(rows, xKey, { includeHidden = false } = {}) {
     .sort();
 }
 
-// The current year is the newest year column present in the data — including a
-// hidden one, so the label stays honest even if the newest year were hidden.
+// The newest year column, counting hidden years.
 export function currentYearFrom(rows, xKey) {
   const all = yearCols(rows, xKey, { includeHidden: true });
   return all.length ? all[all.length - 1] : '';
 }
 
-// Recompute Median/Average across the visible *historical* years. The newest year
-// remains plotted, but is excluded from the aggregates while it is incomplete.
-// The CSV ships precomputed columns covering every year including hidden/current
-// ones, so those aggregate columns are deliberately ignored here.
+// Median and Average across the visible past years; the current year is plotted but
+// left out of them.
 export function withAggregates(rows, xKey) {
   const plottedYears = yearCols(rows, xKey);
   if (!rows?.length || !plottedYears.length) return [];
@@ -74,9 +64,6 @@ export function withAggregates(rows, xKey) {
 }
 
 export function buildColorMap(years, currentYear) {
-  // Colour follows the year, not its position in the list: the newest historical
-  // years take the first palette slots, so a year keeps its hue across both charts
-  // and does not repaint when the series count changes.
   const historical = years.filter((n) => _isYearCol(n) && n !== currentYear).sort();
   const shades = new Map(historical.map((yr, i) => [yr, _historicalShade(i, historical.length)]));
   return Object.fromEntries(
@@ -93,10 +80,8 @@ export function buildColorMap(years, currentYear) {
   );
 }
 
-// Per-series presentation: recent historical years gain a little weight and
-// opacity, while current year + Median + Average remain the strongest references.
-// Hover restores a historical line to full opacity and reveals its year at the
-// endpoint; the scrollable legend still names every year and can toggle any line.
+// Current year, Median and Average are the strongest lines; recent past years are a
+// little heavier than older ones. Hovering a line brings it forward and labels its year.
 export function buildSeriesOptions(years, currentYear) {
   const historical = years.filter((name) => _isYearCol(name) && name !== currentYear).sort();
   const historicalRank = new Map(historical.map((yr, i) => [yr, i]));
@@ -174,7 +159,7 @@ export function fmtUsd(n) {
 }
 export function buildLatestPoints(rows, xKey, currentYear) {
   if (!rows?.length || !currentYear) return { current: [], average: [] };
-  // last row where current year col is not null (= today)
+  // Latest row with a current-year value (the report date)
   let currentRow = null;
   for (let i = rows.length - 1; i >= 0; i--) {
     if (rows[i][currentYear] != null) {
@@ -182,7 +167,7 @@ export function buildLatestPoints(rows, xKey, currentYear) {
       break;
     }
   }
-  // last row of the full Average series (end of month / end of year)
+  // Last row of the Average series (end of month or year)
   let endRow = null;
   for (let i = rows.length - 1; i >= 0; i--) {
     if (rows[i]['Average'] != null) {
