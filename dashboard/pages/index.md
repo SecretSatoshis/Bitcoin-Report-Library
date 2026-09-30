@@ -613,13 +613,13 @@ where Metric = 'Bitcoin Supply in Profit (%)'
 ```
 
 ```sql btc_sentiment
-select Value as sentiment
+select Label as sentiment
 from bitcoin_report_library.summary_table
 where Metric = 'Bitcoin Market Sentiment'
 ```
 
 ```sql btc_valuation
-select Value as valuation
+select Label as valuation
 from bitcoin_report_library.summary_table
 where Metric = 'Bitcoin Valuation'
 ```

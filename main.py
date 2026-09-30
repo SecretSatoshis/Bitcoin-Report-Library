@@ -21,6 +21,7 @@ import metrics
 import report_tables
 import sources
 from candle_data import write_candle_tables
+from publication import format_float, round_for_publication
 from release_manifest import write_release_manifest
 from data_definitions import (
     CAGR_COLUMNS,
@@ -93,6 +94,8 @@ correlation_results = metrics.create_btc_correlation_data(
 
 # Sources include the partial current UTC day. Cut it here so no export includes it.
 report_data = report_data.loc[:REPORT_DATE]
+# Round once, before any table is built, so every file derives from the published values.
+report_data = round_for_publication(report_data)
 
 
 # --- Build tables ---
@@ -141,10 +144,12 @@ indexed_tables = {
 # Nothing is written until every table has built, so a failed run leaves csv/ untouched.
 
 for filename, table in tables.items():
-    table.to_csv(f"csv/{filename}", index=False)
+    table.to_csv(f"csv/{filename}", index=False, float_format=format_float)
 for filename, table in indexed_tables.items():
-    table.to_csv(f"csv/{filename}")
-report_data.to_csv("csv/master_metrics_data.csv.gz", index=True, compression="gzip")
+    table.to_csv(f"csv/{filename}", float_format=format_float)
+report_data.to_csv(
+    "csv/master_metrics_data.csv.gz", compression="gzip", float_format=format_float
+)
 candle_files = write_candle_tables(daily_ohlc, report_data, REPORT_DATE)
 
 # Consumers verify files against the manifest before using them.

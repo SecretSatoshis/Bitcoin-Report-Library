@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from data_validation import validate_calendar, validate_candles
+from publication import format_float
 
 CANDLE_FILES = ('bitcoin_candles.csv.gz', 'weekly_metrics_data.csv.gz', 'monthly_metrics_data.csv.gz')
 
@@ -79,7 +80,8 @@ def write_candle_tables(daily, master, report_date, output_dir='csv'):
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     for filename, frame in tables.items():
-        frame.to_csv(output / filename, index=filename != CANDLE_FILES[0], compression='gzip', date_format='%Y-%m-%d')
+        frame.to_csv(output / filename, index=filename != CANDLE_FILES[0], compression='gzip',
+                     date_format='%Y-%m-%d', float_format=format_float)
     return tables
 
 

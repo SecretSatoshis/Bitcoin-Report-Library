@@ -311,14 +311,17 @@ class ReturnAndSummaryTableTests(unittest.TestCase):
         # so a single day's move does not flip the label.
         data = self._summary_input([0.6] * 6 + [0.2], multiple=0.594)
         result = report_tables.create_summary_table(data, "2024-01-07").set_index("Metric")
-        sentiment = result[result["Category"] == "Investor Sentiment"]["Value"]
+        sentiment = result[result["Category"] == "Investor Sentiment"]
 
         self.assertEqual(list(sentiment.index), [
             "Bitcoin Supply in Profit (%)", "Bitcoin Market Sentiment", "Bitcoin Valuation",
         ])
-        self.assertEqual(sentiment["Bitcoin Supply in Profit (%)"], 70.0)
-        self.assertEqual(sentiment["Bitcoin Market Sentiment"], "Belief / Denial")
-        self.assertEqual(sentiment["Bitcoin Valuation"], "Below Fair Value")
+        self.assertEqual(sentiment.loc["Bitcoin Supply in Profit (%)", "Value"], 70.0)
+        self.assertEqual(sentiment.loc["Bitcoin Market Sentiment", "Label"], "Belief / Denial")
+        self.assertEqual(sentiment.loc["Bitcoin Valuation", "Label"], "Below Fair Value")
+        # Value is numeric throughout; text lives only in Label.
+        self.assertTrue(pd.api.types.is_float_dtype(result["Value"]))
+        self.assertTrue(result.loc[["Bitcoin Market Sentiment", "Bitcoin Valuation"], "Value"].isna().all())
 
     def test_sentiment_and_valuation_band_edges(self):
         cases = [(-0.1, "Capitulation"), (0.0, "Hope / Fear"), (0.36, "Optimism / Anxiety"),

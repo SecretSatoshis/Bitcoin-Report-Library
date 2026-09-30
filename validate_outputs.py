@@ -85,7 +85,7 @@ REQUIRED_COLUMNS = {
     "report_ohlc_summary.csv": {"date", "daily_close"},
     "roi_table.csv": {"Time Frame", "ROI (%)", "Start Date", "Start Price"},
     "summary_history.csv": {"Metric", "date", "Value"},
-    "summary_table.csv": {"Metric", "Value", "Category"},
+    "summary_table.csv": {"Metric", "Value", "Label", "Category"},
     "ytd_return_comparison.csv": {
         "Year", "End Price ($)", "Return (%)", "Report Date Return (%)",
     },
@@ -630,14 +630,15 @@ def _validate_investor_sentiment(summary, master_path, report_date, errors):
             "Bitcoin Market Sentiment": _nupl_sentiment(master, report_date),
             "Bitcoin Valuation": _power_law_valuation(latest["power_law_price_multiple"]),
         }
-        values = summary.set_index("Metric")["Value"]
+        rows = summary.set_index("Metric")
         for metric, value in expected.items():
-            if metric not in values.index:
+            if metric not in rows.index:
                 raise ValueError(f"missing {metric!r}")
-            observed = values[metric]
+            is_label = isinstance(value, str)
+            observed = rows.loc[metric, "Label" if is_label else "Value"]
             matches = (
-                np.isclose(float(observed), value, rtol=1e-9)
-                if isinstance(value, float) else str(observed) == value
+                str(observed) == value if is_label
+                else np.isclose(float(observed), value, rtol=1e-9)
             )
             if not matches:
                 raise ValueError(f"{metric!r} is {observed!r}, expected {value!r}")
@@ -707,8 +708,9 @@ def _validate_review_contracts(frames, output_dir, report_date, errors):
             master = pd.read_csv(master_path, usecols=columns, parse_dates=["date"]).set_index("date")
             expected = create_fundamentals_table(master, FUNDAMENTALS_TEMPLATE, report_date)
             change = "7 Day Change (%)"
+            # Published values carry 10 significant digits (publication.py).
             if not np.allclose(pd.to_numeric(fundamentals[change], errors="coerce"),
-                               expected[change], rtol=1e-10, atol=1e-10, equal_nan=True):
+                               expected[change], rtol=1e-9, atol=1e-9, equal_nan=True):
                 raise ValueError("7 Day Change (%) differs from source")
             fundamentals = fundamentals.drop(columns=[change])
             expected = expected.drop(columns=[change])

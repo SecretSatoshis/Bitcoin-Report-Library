@@ -413,7 +413,10 @@ def _power_law_valuation(power_law_multiple):
 
 
 def create_summary_table(report_data, report_date):
-    """Report-date snapshot of the headline metrics: Metric, Value and Category."""
+    """Report-date snapshot of the headline metrics: Metric, Value, Label and Category.
+
+    Value holds the numbers; the two sentiment rows carry text in Label instead.
+    """
     latest = _row_asof(report_data, report_date)
 
     price_usd = latest["price_close"]
@@ -451,13 +454,14 @@ def create_summary_table(report_data, report_date):
     summary_rows = []
     for category, metrics in categorized_data.items():
         for metric, value in metrics.items():
-            summary_rows.append(
-                {"Metric": metric, "Value": value, "Category": category}
-            )
-
-    weekly_summary_df = pd.DataFrame(summary_rows)
-
-    return weekly_summary_df
+            is_label = isinstance(value, str)
+            summary_rows.append({
+                "Metric": metric,
+                "Value": np.nan if is_label else value,
+                "Label": value if is_label else None,
+                "Category": category,
+            })
+    return pd.DataFrame(summary_rows, columns=["Metric", "Value", "Label", "Category"])
 
 
 # Performance table rows by category, in published order. Consumers show the Bitcoin row
