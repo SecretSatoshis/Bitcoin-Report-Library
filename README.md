@@ -15,7 +15,7 @@ CSV run with a hashed `visual-manifest.json`; see `dashboard/README.md`.
 ## Features
 
 - **On-Chain Analytics**: Hash rate, difficulty, transaction metrics, UTXO age bands, address activity, miner revenue, and supply dynamics
-- **Market Data Integration**: Multi-asset price data spanning equities, ETFs, commodities, forex, and cryptocurrencies
+- **Market Data Integration**: Multi-asset price data spanning equities, ETFs, indices, commodities and the US dollar index
 - **Valuation Models**: Metcalfe, time-based power law, Thermocap, NVT, MVRV, Reserve Risk, electricity-cost and Hayes production-cost models, and relative valuation metrics
 - **Mining Signals**: Hash-rate trend metrics including strategy-aligned 30/60-day Hash Ribbons
 - **Performance Tracking**: Rolling returns (7d, 90d, MTD, YTD, and YOY for Bitcoin), correlation analysis, volatility, and 4-year CAGR calculations
@@ -122,14 +122,14 @@ visualization. Run this pipeline first when Chart Library is configured with a l
 | Source | Data Type | Endpoint |
 |--------|-----------|----------|
 | **BRK (Bitview) API** | On-chain metrics, difficulty, supply data | `bitview.space/api` |
-| **Yahoo Finance** | Equities, ETFs, indices, commodities, forex | `yfinance` library |
+| **Yahoo Finance** | Equities, ETFs, indices, commodities, US dollar index | `yfinance` library |
 | **Google Sheets** | Miner efficiency data | CSV export |
 
 ## Configuration
 
 All configuration is centralized in `data_definitions.py`:
 
-- **Tickers**: Asset symbols organized by category (stocks, ETFs, indices, commodities, forex, crypto)
+- **Tickers**: Asset symbols organized by category (stocks, ETFs, indices, commodities, forex)
 - **Reference Data**: Fiat money supply, precious metals supply, and gold allocation breakdown, each with an explicit reviewed vintage and maximum age
 - **API Settings**: Configured BRK series, endpoint URLs, timeout values
 - **Model Parameters**: Metcalfe address bands, Bitcoin genesis anchor, Hash Ribbon windows, electricity-tariff scenarios, mining overhead assumptions, trading days, and unit conversions
