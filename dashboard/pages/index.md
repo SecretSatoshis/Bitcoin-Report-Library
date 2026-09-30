@@ -46,11 +46,22 @@ _Headline metrics — market, on-chain, and sentiment._
 
 <script>
   import PriceOutlookChart from '$lib/PriceOutlookChart.svelte';
+  import {
+    buildColorMap,
+    buildLatestPoints,
+    buildSeriesOptions,
+    currentYearFrom,
+    fmtUsd,
+    withAggregates,
+    yearCols,
+  } from '$lib/seasonalChart.js';
   // Trend-based sparkline colors: green if metric grew over the window, red if it shrank.
   // Data is sorted DESC so row 0 is "today" — pct_change there reflects the full window.
   const POS = '#00FF88';
   const NEG = '#FF3B30';
   const FALLBACK = '#F7931A';
+  // Heatmap cells: red losses, near-black flat, green gains.
+  const HEATMAP_SCALE = ['#FF3B30', '#0A0A0A', '#00FF88'];
   $: priceColor     = btc_price?.length         ? (btc_price[0].pct_change         >= 0 ? POS : NEG) : FALLBACK;
   $: marketcapColor = btc_marketcap?.length     ? (btc_marketcap[0].pct_change     >= 0 ? POS : NEG) : FALLBACK;
   $: satsColor      = sats_per_dollar?.length   ? (sats_per_dollar[0].pct_change   <= 0 ? POS : NEG) : FALLBACK;
@@ -66,218 +77,24 @@ _Headline metrics — market, on-chain, and sentiment._
   $: dataMonthName = data_date?.[0]?.month_name ?? '';
   $: dataYearLabel = data_date?.[0]?.year_label ?? '';
 
-  // Years hidden from the seasonal charts. 2017's magnitude compresses every other
-  // year into a flat band at the bottom of the plot. It is excluded from the chart
-  // only — it stays in the CSV, and the Median/Average lines are recomputed below
-  // over the visible historical years. The current year is plotted separately but
-  // excluded from those reference aggregates while it is still incomplete.
-  const HIDDEN_YEARS = ['2017'];
-
-  const _isYearCol = (c) => /^\d{4}$/.test(c);
-
-  // Off-white for Median, cypherpunk green for Average, Bitcoin-orange for current
-  // year. Those three are reserved, so the historical palette must avoid orange and
-  // green entirely or a past year reads as this year.
-  const _medianColor = '#e4e4ef';                         // brand text (legible on dark)
-  const _averageColor = '#00FF88';
-  const _currentColor = '#F7931A';
-
-  // Historical years use one cool-blue recency ramp: the oldest visible year is
-  // darkest and the newest is brightest. This keeps every trajectory on the chart
-  // without suggesting that each year is a separate category. Exact year identity
-  // comes from the interactive legend and hover focus, so shade is not the only cue.
-  function _historicalShade(index, total) {
-    const t = total <= 1 ? 1 : index / (total - 1);
-    const saturation = Math.round(44 + (t * 28));
-    const lightness = Math.round(34 + (t * 40));
-    return `hsl(214, ${saturation}%, ${lightness}%)`;
-  }
-
-  function _yearCols(rows, xKey, { includeHidden = false } = {}) {
-    if (!rows?.length) return [];
-    return Object.keys(rows[0])
-      .filter(c => c !== xKey && _isYearCol(c))
-      .filter(c => includeHidden || !HIDDEN_YEARS.includes(c))
-      .sort();
-  }
-
-  // The current year is the newest year column present in the data — including a
-  // hidden one, so the label stays honest even if the newest year were hidden.
-  function _currentYearFrom(rows, xKey) {
-    const all = _yearCols(rows, xKey, { includeHidden: true });
-    return all.length ? all[all.length - 1] : '';
-  }
-
-  // Recompute Median/Average across the visible *historical* years. The newest year
-  // remains plotted, but is excluded from the aggregates while it is incomplete.
-  // The CSV ships precomputed columns covering every year including hidden/current
-  // ones, so those aggregate columns are deliberately ignored here.
-  function _withAggregates(rows, xKey) {
-    const plottedYears = _yearCols(rows, xKey);
-    if (!rows?.length || !plottedYears.length) return [];
-    const currentYear = _currentYearFrom(rows, xKey);
-    const historicalYears = plottedYears.filter(y => y !== currentYear);
-    return rows.map(r => {
-      const out = { [xKey]: r[xKey] };
-      for (const y of plottedYears) out[y] = r[y];
-      const vals = historicalYears
-        .map(y => r[y])
-        .filter(v => v != null && !isNaN(v))
-        .map(Number)
-        .sort((a, b) => a - b);
-      if (vals.length) {
-        const mid = Math.floor(vals.length / 2);
-        out.Median = vals.length % 2 ? vals[mid] : (vals[mid - 1] + vals[mid]) / 2;
-        out.Average = vals.reduce((s, v) => s + v, 0) / vals.length;
-      } else {
-        out.Median = null;
-        out.Average = null;
-      }
-      return out;
-    });
-  }
-
-  function _buildColorMap(years, currentYear) {
-    // Colour follows the year, not its position in the list: the newest historical
-    // years take the first palette slots, so a year keeps its hue across both charts
-    // and does not repaint when the series count changes.
-    const historical = years
-      .filter(n => _isYearCol(n) && n !== currentYear)
-      .sort();
-    const shades = new Map(
-      historical.map((yr, i) => [yr, _historicalShade(i, historical.length)])
-    );
-    return Object.fromEntries(
-      years.map(name => [
-        name,
-        name === 'Median'  ? _medianColor :
-        name === 'Average' ? _averageColor :
-        name === currentYear ? _currentColor :
-        shades.get(name) ?? _medianColor
-      ])
-    );
-  }
-
   // Day 366 exists only in leap years, so its Median/Average would be computed from
   // leap years alone — a phantom spike at the right edge. Cap the YTD chart at 365.
-  $: mtdPlot = _withAggregates(mtd_history, 'day');
-  $: ytdPlot = _withAggregates((ytd_history || []).filter(r => r.day_of_year <= 365), 'day_of_year');
+  $: mtdPlot = withAggregates(mtd_history, 'day');
+  $: ytdPlot = withAggregates((ytd_history || []).filter(r => r.day_of_year <= 365), 'day_of_year');
 
-  $: mtdCurrentYear = _currentYearFrom(mtd_history, 'day');
-  $: ytdCurrentYear = _currentYearFrom(ytd_history, 'day_of_year');
+  $: mtdCurrentYear = currentYearFrom(mtd_history, 'day');
+  $: ytdCurrentYear = currentYearFrom(ytd_history, 'day_of_year');
 
-  $: mtdYears = [..._yearCols(mtd_history, 'day'), 'Median', 'Average'];
-  $: ytdYears = [..._yearCols(ytd_history, 'day_of_year'), 'Median', 'Average'];
-  $: mtdSeriesColors = _buildColorMap(mtdYears, mtdCurrentYear);
-  $: ytdSeriesColors = _buildColorMap(ytdYears, ytdCurrentYear);
+  $: mtdYears = [...yearCols(mtd_history, 'day'), 'Median', 'Average'];
+  $: ytdYears = [...yearCols(ytd_history, 'day_of_year'), 'Median', 'Average'];
+  $: mtdSeriesColors = buildColorMap(mtdYears, mtdCurrentYear);
+  $: ytdSeriesColors = buildColorMap(ytdYears, ytdCurrentYear);
 
-  // Per-series presentation: recent historical years gain a little weight and
-  // opacity, while current year + Median + Average remain the strongest references.
-  // Hover restores a historical line to full opacity and reveals its year at the
-  // endpoint; the scrollable legend still names every year and can toggle any line.
-  function _buildSeriesOptions(years, currentYear) {
-    const historical = years
-      .filter(name => _isYearCol(name) && name !== currentYear)
-      .sort();
-    const historicalRank = new Map(historical.map((yr, i) => [yr, i]));
-    const legendData = [
-      currentYear,
-      ...historical.slice().reverse(),
-      'Median',
-      'Average'
-    ].filter(Boolean);
+  $: mtdEchartsOptions = buildSeriesOptions(mtdYears, mtdCurrentYear);
+  $: ytdEchartsOptions = buildSeriesOptions(ytdYears, ytdCurrentYear);
 
-    return {
-      legend: {
-        show: true,
-        type: 'scroll',
-        data: legendData,
-        top: 4,
-        left: 'center',
-        right: 20,
-        itemWidth: 18,
-        itemHeight: 3,
-        itemGap: 14,
-        textStyle: {
-          color: '#9090a8',
-          fontFamily: 'JetBrains Mono',
-          fontSize: 10
-        },
-        pageIconColor: '#F7931A',
-        pageIconInactiveColor: '#3a3a50',
-        pageTextStyle: { color: '#9090a8' }
-      },
-      grid: { top: 62, containLabel: true },
-      tooltip: { trigger: 'axis', confine: true },
-      series: years.map(name => {
-        const wide = (name === 'Median' || name === 'Average' || name === currentYear);
-        const rank = historicalRank.get(name);
-        const isHistorical = rank != null;
-        const recency = rank == null || historical.length <= 1
-          ? 1
-          : rank / (historical.length - 1);
-        const historicalOpacity = 0.76 + (recency * 0.16);
-        const historicalColor = isHistorical
-          ? _historicalShade(rank, historical.length)
-          : undefined;
-        const lineStyle = {
-          width: wide ? 2.5 : 1 + (recency * 0.7),
-          opacity: isHistorical ? historicalOpacity : 1
-        };
-        if (name === 'Median') lineStyle.type = 'dashed';
-        return {
-          z: wide ? 3 : 1,
-          lineStyle,
-          triggerEvent: isHistorical ? 'line' : false,
-          endLabel: isHistorical ? { show: false } : undefined,
-          emphasis: {
-            focus: 'series',
-            lineStyle: { width: wide ? 3.5 : 2.5, opacity: 1 },
-            endLabel: isHistorical ? {
-              show: true,
-              formatter: '{a}',
-              color: historicalColor,
-              backgroundColor: 'rgba(8, 8, 12, 0.9)',
-              borderRadius: 3,
-              padding: [3, 5],
-              align: 'right',
-              distance: 4,
-              fontFamily: 'JetBrains Mono',
-              fontSize: 10,
-              fontWeight: 600
-            } : undefined
-          },
-          blur: { lineStyle: { opacity: 0.12 } }
-        };
-      })
-    };
-  }
-  $: mtdEchartsOptions = _buildSeriesOptions(mtdYears, mtdCurrentYear);
-  $: ytdEchartsOptions = _buildSeriesOptions(ytdYears, ytdCurrentYear);
-
-  function _fmtUsd(n) {
-    if (n == null || isNaN(n)) return '';
-    return '$' + Math.round(Number(n)).toLocaleString();
-  }
-  function _buildLatestPoints(rows, xKey, currentYear) {
-    if (!rows?.length || !currentYear) return { current: [], average: [] };
-    // last row where current year col is not null (= today)
-    let currentRow = null;
-    for (let i = rows.length - 1; i >= 0; i--) {
-      if (rows[i][currentYear] != null) { currentRow = rows[i]; break; }
-    }
-    // last row of the full Average series (end of month / end of year)
-    let endRow = null;
-    for (let i = rows.length - 1; i >= 0; i--) {
-      if (rows[i]['Average'] != null) { endRow = rows[i]; break; }
-    }
-    return {
-      current: currentRow ? [{ x: currentRow[xKey], y: currentRow[currentYear], label: `${currentYear} · ${_fmtUsd(currentRow[currentYear])}` }] : [],
-      average: endRow     ? [{ x: endRow[xKey],     y: endRow['Average'], label: `Average · ${_fmtUsd(endRow['Average'])}` }]  : [],
-    };
-  }
-  $: mtdLatest = _buildLatestPoints(mtdPlot, 'day', mtdCurrentYear);
-  $: ytdLatest = _buildLatestPoints(ytdPlot, 'day_of_year', ytdCurrentYear);
+  $: mtdLatest = buildLatestPoints(mtdPlot, 'day', mtdCurrentYear);
+  $: ytdLatest = buildLatestPoints(ytdPlot, 'day_of_year', ytdCurrentYear);
 
   // The outlook year travels with the levels in price_outlook.csv. Label the forecast
   // with that year, never the data year, so last year's levels cannot pass as current.
@@ -497,7 +314,7 @@ _Price vs on-chain valuation models and moving averages._
 {#each outlookCaseLevels as c (c.name)}
   <div class="price-outlook-case" style="--case-color: {c.color}">
     <span class="case-label">{c.name}</span>
-    <strong class="case-price">{_fmtUsd(c.price)}</strong>
+    <strong class="case-price">{fmtUsd(c.price)}</strong>
   </div>
 {/each}
 </div>
@@ -520,19 +337,19 @@ _Monthly returns by year._
 
 <DataTable data={monthly_returns_agg} rows=all compact=true rowShading=false>
   <Column id=time title="Period" width=120 align=center />
-  <Column id=Jan title="Jan" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=Feb title="Feb" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=Mar title="Mar" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=Apr title="Apr" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=May title="May" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=Jun title="Jun" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=Jul title="Jul" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=Aug title="Aug" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=Sep title="Sep" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=Oct title="Oct" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=Nov title="Nov" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=Dec title="Dec" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=Yearly title="Yearly" fmt='#,##0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-80} colorMid={0} colorMax={150} align=center />
+  <Column id=Jan title="Jan" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=Feb title="Feb" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=Mar title="Mar" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=Apr title="Apr" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=May title="May" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=Jun title="Jun" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=Jul title="Jul" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=Aug title="Aug" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=Sep title="Sep" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=Oct title="Oct" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=Nov title="Nov" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=Dec title="Dec" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=Yearly title="Yearly" fmt='#,##0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-80} colorMid={0} colorMax={150} align=center />
 </DataTable>
 
 </div>
@@ -543,19 +360,19 @@ _Monthly returns by year._
 
 <DataTable data={monthly_returns_years} rows=all compact=true rowShading=false>
   <Column id=time title="Year" width=120 align=center />
-  <Column id=Jan title="Jan" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=Feb title="Feb" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=Mar title="Mar" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=Apr title="Apr" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=May title="May" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=Jun title="Jun" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=Jul title="Jul" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=Aug title="Aug" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=Sep title="Sep" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=Oct title="Oct" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=Nov title="Nov" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=Dec title="Dec" fmt='#,##0.0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-40} colorMid={0} colorMax={40} align=center />
-  <Column id=Yearly title="Yearly" fmt='#,##0"%"' contentType=colorscale colorScale={['#FF3B30', '#0A0A0A', '#00FF88']} colorMin={-80} colorMid={0} colorMax={150} align=center />
+  <Column id=Jan title="Jan" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=Feb title="Feb" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=Mar title="Mar" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=Apr title="Apr" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=May title="May" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=Jun title="Jun" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=Jul title="Jul" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=Aug title="Aug" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=Sep title="Sep" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=Oct title="Oct" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=Nov title="Nov" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=Dec title="Dec" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
+  <Column id=Yearly title="Yearly" fmt='#,##0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-80} colorMid={0} colorMax={150} align=center />
 </DataTable>
 
 </div>
@@ -1015,7 +832,7 @@ order by day
 
 ```sql ytd_history
 -- Every year column is selected, including outliers. The chart decides which years to
--- draw (see HIDDEN_YEARS), keeps the current year visible, and recomputes
+-- draw (see HIDDEN_YEARS in components/seasonalChart.js), keeps the current year visible, and recomputes
 -- Median/Average over visible historical years only. The CSV's own aggregate columns
 -- cover hidden/current years and are deliberately not used here.
 select * exclude ("Median", "Average")
