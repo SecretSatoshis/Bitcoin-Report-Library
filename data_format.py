@@ -16,7 +16,6 @@ import requests
 import pandas as pd
 import numpy as np
 import yfinance as yf
-from datetime import datetime
 from io import StringIO
 import time
 import csv, io
@@ -105,7 +104,7 @@ def assert_ohlc_usable(ohlc_data: pd.DataFrame, label: str = "OHLC") -> None:
     validate_candles(ohlc_data, label)
 
 
-def get_brk_ohlc(index: str = "day1", start: str = "2009-01-03") -> pd.DataFrame:
+def get_brk_ohlc(start: str = "2009-01-03") -> pd.DataFrame:
     """
     Fetch historical Bitcoin OHLC data from BRK.
 
@@ -113,13 +112,13 @@ def get_brk_ohlc(index: str = "day1", start: str = "2009-01-03") -> pd.DataFrame
     from them (candle_data.period_candles) so every period is cut off at the report date.
 
     Parameters:
-    index (str): BRK index to fetch, such as "day1" or "week1".
     start (str): Start date for the series query.
 
     Returns:
     pd.DataFrame: DataFrame indexed by BRK date labels with Open, High, Low, Close columns.
     """
     base_url = "https://bitview.space/api/series"
+    index = "day1"
     params = {"start": start}
 
     try:
@@ -156,11 +155,10 @@ def get_brk_ohlc(index: str = "day1", start: str = "2009-01-03") -> pd.DataFrame
         df.set_index("Time", inplace=True)
         df = df.astype(float)
         from data_validation import validate_calendar
-        validate_calendar(df.index, f"BRK {index} OHLC", step=7 if index == "week1" else 1)
-        if index == "day1":
-            # BRK's pre-market history is all-zero; internal invalid candles still fail.
-            nonzero = df.ne(0).any(axis=1)
-            df = df.loc[nonzero.idxmax():] if nonzero.any() else df.iloc[:0]
+        validate_calendar(df.index, f"BRK {index} OHLC")
+        # BRK's pre-market history is all-zero; internal invalid candles still fail.
+        nonzero = df.ne(0).any(axis=1)
+        df = df.loc[nonzero.idxmax():] if nonzero.any() else df.iloc[:0]
         assert_ohlc_usable(df, label=f"BRK {index} OHLC")
         return df
 
@@ -928,7 +926,6 @@ def get_brk_onchain(
     data = {}
     ordered_cols = ["timestamp"]
 
-    raw_parts = []  # keep each raw CSV response if you want to debug / concatenate
     missing_series = []
 
     for chunk in chunks:
@@ -941,9 +938,7 @@ def get_brk_onchain(
             missing=missing_series,
         )
 
-        for header, rows, raw_csv in responses:
-            raw_parts.append(raw_csv.strip())
-
+        for header, rows, _raw_csv in responses:
             if not header or header[0] != "timestamp" or len(set(header)) != len(header):
                 raise RuntimeError("BRK bulk: invalid or duplicate headers")
             seen_timestamps = set()
@@ -1516,9 +1511,10 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
     """
     Calculate comprehensive Bitcoin on-chain valuation and network health metrics.
 
-    This function computes derived metrics including valuation models (MVRV, NVT, Thermocap),
-    price moving averages, profitability indicators (NUPL), and miner revenue
-    multiples. These metrics are essential for Bitcoin fundamental analysis and market cycle timing.
+    This function computes derived metrics including valuation models (MVRV, NVT, Thermocap,
+    realized-cap multiples), price moving averages, NUPL, supply profitability, reserve risk,
+    average/delta cap and volatility. Only columns a consumer reads are published; the
+    intermediates behind them (all-time miner revenue, adjusted BDD, HODL bank) stay local.
 
     Parameters:
     data (pd.DataFrame): DataFrame with DatetimeIndex containing BRK API on-chain metrics.
@@ -1538,7 +1534,6 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
     # have aborted the run already.
     rev_all_time = miner_revenue_usd.fillna(0).cumsum()
     nvt_adj = market_cap / transfer_volume
-    nvt_adj_90 = market_cap / transfer_volume.rolling(90).mean()
 
     # Early source rows carry a 0.0 price placeholder from before Bitcoin had a market
     # price. Dividing by those publishes inf, which downstream consumers cannot chart:
@@ -1546,14 +1541,9 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
     # non-finite floats as null. Treat non-positive prices as missing instead.
     positive_price = price_close.where(price_close > 0)
 
-    mvrv_ratio = market_cap / realized_cap
+    mvrv_ratio = market_cap / realized_cap  # published as CapMVRVCur
     nvt_price = (nvt_adj.rolling(window=365 * 2).median() * transfer_volume) / supply
-    nvt_price_adj = (nvt_adj_90.rolling(window=365).median() * transfer_volume) / supply
-    nvt_price_multiple = price_close / nvt_price
     ma_200_day = price_close.rolling(window=200).mean()
-
-    miner_revenue_1y = miner_revenue_usd.rolling(window=365).sum()
-    miner_revenue_4y = miner_revenue_usd.rolling(window=4 * 365).sum()
 
     # BRK provides utxos_over_1y_old_supply in BTC; divide by circulating supply for %
     supply_pct_1_year_plus = (data["utxos_over_1y_old_supply"] / supply) * 100
@@ -1561,7 +1551,6 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
 
     # Reserve Risk pipeline: adjusted BDD -> VOCD -> MVOCD -> HODL bank -> reserve risk
     adjusted_bdd = data["coindays_destroyed_sum_24h"] / supply
-    adjusted_bdd_mean = adjusted_bdd.expanding().mean()
     vocd = price_close * adjusted_bdd
     mvocd = vocd.rolling(window=30).median()
     daily_hodl_value = (price_close - mvocd).clip(lower=0)
@@ -1584,38 +1573,23 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
 
 
     new_columns = {
-        "RevAllTimeUSD": rev_all_time,
-        "NVTAdj": nvt_adj,
-        "NVTAdj90": nvt_adj_90,
         "sat_per_dollar": SATS_PER_BTC / positive_price,
-        "mvrv_ratio": mvrv_ratio,
         "CapMVRVCur": mvrv_ratio,
         "nupl": (market_cap - realized_cap) / market_cap,
         "nvt_price": nvt_price,
-        "nvt_price_adj": nvt_price_adj,
-        "nvt_price_multiple": nvt_price_multiple,
-        "nvt_price_multiple_ma": nvt_price_multiple.rolling(window=14).mean(),
         "7_day_ma_price_close": price_close.rolling(window=7).mean(),
         "50_day_ma_price_close": price_close.rolling(window=50).mean(),
         "200_day_ma_price_close": ma_200_day,
         "200_week_ma_price_close": price_close.rolling(window=200 * 7).mean(),
         "200_day_multiple": price_close / ma_200_day,
-        "thermocap_multiple": market_cap / rev_all_time,
         "thermocap_price": rev_all_time / supply,
         "thermocap_price_multiple_4": (4 * rev_all_time) / supply,
         "thermocap_price_multiple_8": (8 * rev_all_time) / supply,
         "thermocap_price_multiple_16": (16 * rev_all_time) / supply,
         "thermocap_price_multiple_32": (32 * rev_all_time) / supply,
-        "miner_revenue_1_Year": miner_revenue_1y,
-        "miner_revenue_4_Year": miner_revenue_4y,
-        "ss_multiple_1": market_cap / miner_revenue_1y,
-        "ss_price_1": miner_revenue_1y / supply,
-        "ss_multiple_4": market_cap / miner_revenue_4y,
-        "ss_price_4": miner_revenue_4y / supply,
         "realizedcap_multiple_2": (2 * realized_cap) / supply,
         "realizedcap_multiple_3": (3 * realized_cap) / supply,
         "realizedcap_multiple_5": (5 * realized_cap) / supply,
-        "realizedcap_multiple_7": (7 * realized_cap) / supply,
         "supply_pct_1_year_plus": supply_pct_1_year_plus,
         "pct_supply_issued": supply / 21000000,
         "pct_fee_of_reward": (data["fees_sum_24h"] / data["coinbase_sum_24h"]) * 100,
@@ -1623,13 +1597,8 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
         "liquid_supply": supply - illiquid_supply,
         # active_addrs_average_24h is already a daily total — no block-count scaling.
         "daily_active_addresses_sending": data["active_addrs_average_24h"],
-        "adjusted_bdd": adjusted_bdd,
-        "adjusted_bdd_mean": adjusted_bdd_mean,
-        "adjusted_bdd_above_avg": adjusted_bdd > adjusted_bdd_mean,
         "vocd": vocd,
         "mvocd": mvocd,
-        "daily_hodl_value": daily_hodl_value,
-        "hodl_bank_calc": hodl_bank,
         "reserve_risk_calc": price_close / hodl_bank,
         "average_cap_price": average_cap / supply,
         "delta_cap_price": delta_cap / supply,

@@ -29,13 +29,13 @@ class ReviewFixTests(unittest.TestCase):
         dates = FakeResponse(json_data=dict(base, data=['2024-01-01', '2024-01-02']))
         good = FakeResponse(json_data=dict(base, data=[[100,110,90,105]]*2))
         with patch.object(ingest.requests, 'get', side_effect=[dates, good]):
-            self.assertEqual(len(ingest.get_brk_ohlc('day1')), 2)
+            self.assertEqual(len(ingest.get_brk_ohlc()), 2)
         for payload in (dict(base, index='hour1', data=[[100,110,90,105]]*2),
                         dict(base, start=20, end=22, data=[[100,110,90,105]]*2),
                         dict(base, data=[[100,90,110,100]]*2)):
             with patch.object(ingest.requests, 'get', side_effect=[dates, FakeResponse(json_data=payload)]):
                 with self.assertRaises(RuntimeError):
-                    ingest.get_brk_ohlc('day1')
+                    ingest.get_brk_ohlc()
 
     def test_missing_week_candle_cannot_replace_output(self):
         candles = pd.DataFrame([[100,110,90,105]]*3, columns=ingest.OHLC_COLUMNS,

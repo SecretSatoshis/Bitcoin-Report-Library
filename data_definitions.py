@@ -11,7 +11,6 @@ Sections:
     - API Configuration: BRK metrics, URLs, and request settings
     - Model Parameters: Electric price model constants
 """
-import datetime
 import pandas as pd
 
 
@@ -39,6 +38,9 @@ tickers = {
         "005930.KS",
         "V",
         "JPM",
+    ],
+    # Price only (performance table); no market cap is built for these.
+    "bitcoin_equities": [
         "COIN",
         "XYZ",
         "MSTR",
@@ -87,7 +89,6 @@ market_cap_history_start_date = "2015-01-01"
 # the current symbols already span these renames, so only the shares feed needs stitching.
 yahoo_share_ticker_aliases = {
     "META": ["FB", "META"],
-    "XYZ": ["SQ", "XYZ"],
 }
 
 # Yahoo reports historical Close and shares in each listing's trading currency. Convert
@@ -476,11 +477,6 @@ ELECTRICITY_BASE_TARIFF_USD_PER_KWH = 0.05
 
 # Bitcoin unit conversion
 SATS_PER_BTC = 100_000_000  # Satoshis per Bitcoin
-
-# Trading days per year by asset class
-STOCK_TRADING_DAYS = 252  # Traditional financial markets
-CRYPTO_TRADING_DAYS = 365  # Cryptocurrency markets (24/7)
-
 
 # =============================================================================
 # EXTERNAL DATA SOURCES

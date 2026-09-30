@@ -35,18 +35,19 @@ class CustomOnchainContractTests(unittest.TestCase):
     def test_current_report_metric_names_and_formulas_remain_stable(self):
         result = data_format.calculate_custom_on_chain_metrics(self.source_frame())
 
-        self.assertEqual(result["RevAllTimeUSD"].iloc[0], 1.0)
-        self.assertEqual(result["RevAllTimeUSD"].iloc[1], 1.0)
-        self.assertTrue(pd.isna(result["NVTAdj90"].iloc[88]))
-        self.assertEqual(result["NVTAdj90"].iloc[89], 10.0)
+        # All-time miner revenue treats the leading gap as zero: 1.0 over a supply of 20.
+        self.assertEqual(result["thermocap_price"].iloc[0], 0.05)
+        self.assertEqual(result["thermocap_price"].iloc[1], 0.05)
         self.assertTrue(pd.isna(result["nvt_price"].iloc[728]))
         self.assertEqual(result["nvt_price"].iloc[729], 5.0)
 
         self.assertEqual(result["pct_supply_issued"].iloc[-1], 20.0 / 21_000_000)
         self.assertEqual(result["illiquid_supply"].iloc[-1], 12.0)
         self.assertEqual(result["liquid_supply"].iloc[-1], 8.0)
-        self.assertIn("miner_revenue_1_Year", result)
-        self.assertIn("miner_revenue_4_Year", result)
+        # Intermediates stay local; only columns a consumer reads are published.
+        for unpublished in ("RevAllTimeUSD", "NVTAdj90", "miner_revenue_1_Year", "mvrv_ratio", "hodl_bank_calc"):
+            self.assertNotIn(unpublished, result)
+        self.assertEqual(result["CapMVRVCur"].iloc[-1], 2.5)
 
         self.assertEqual(result["realized_price"].iloc[0], 7.0)
         self.assertEqual(result["realized_price"].iloc[2], 2.0)

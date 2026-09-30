@@ -73,7 +73,7 @@ def describe(path: Path, cutoff: str | None = None) -> dict:
     stem = path.name.removesuffix(".gz").removesuffix(".csv")
     return {
         "name": path.name,
-        "label": stem.replace("_", " ").replace("brk ", "BRK ").strip().capitalize(),
+        "label": stem.replace("_", " ").strip().capitalize(),
         "format": "application/gzip" if is_gzip(path) else "text/csv",
         "columns": len(header),
         "rows": rows,

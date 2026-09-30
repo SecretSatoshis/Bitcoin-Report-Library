@@ -2,7 +2,6 @@ import tempfile
 """Regression tests for source ingestion and freshness controls."""
 
 import unittest
-from datetime import datetime as real_datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -153,10 +152,7 @@ class IngestionReliabilityTests(unittest.TestCase):
         )
         marker = data_format._source_observation_column("SPY_close")
 
-        with patch.object(data_format.yf, "download", return_value=raw), patch.object(
-            data_format, "datetime"
-        ) as datetime_mock:
-            datetime_mock.today.return_value = real_datetime(2024, 1, 10)
+        with patch.object(data_format.yf, "download", return_value=raw):
             result = data_format.get_price(
                 {"stocks": ["SPY"]}, start_date="2024-01-01"
             ).set_index("time")

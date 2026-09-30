@@ -5,7 +5,6 @@ looking but incorrect published number, so a silent regression here is expensive
 """
 
 import unittest
-import warnings
 
 import numpy as np
 import pandas as pd

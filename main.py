@@ -17,8 +17,6 @@ if __name__ != "__main__":
     )
 
 # Import Packages
-import os
-
 import pandas as pd
 import warnings
 import sys
@@ -71,7 +69,7 @@ data_format.warn_on_stale_miner_efficiency(data, report_date)
 ## BRK OHLC data — daily candles are the single source; weekly candles are aggregated
 ## from them so the open week is cut off at the report date like every other export.
 daily_ohlc_start = "2009-01-03"
-daily_ohlc_data = data_format.get_brk_ohlc(index="day1", start=daily_ohlc_start)
+daily_ohlc_data = data_format.get_brk_ohlc(start=daily_ohlc_start)
 daily_ohlc_data.index = pd.to_datetime(daily_ohlc_data.index)
 if daily_ohlc_data.index.tz is not None:
     daily_ohlc_data.index = daily_ohlc_data.index.tz_convert(None)
@@ -252,11 +250,6 @@ report_data.to_csv("csv/master_metrics_data.csv.gz", index=True, compression="gz
 
 from candle_data import write_candle_tables
 write_candle_tables(daily_ohlc_data, report_data, report_date)
-
-## Remove old uncompressed master if it exists (prevent stale 99MB file in repo)
-old_master = "csv/master_metrics_data.csv"
-if os.path.exists(old_master):
-    os.remove(old_master)
 
 # --- Chart-Ready CSV Exports --- #
 # These datasets are consumed by Bitcoin-Chart-Library for visualization
