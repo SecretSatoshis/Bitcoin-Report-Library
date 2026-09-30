@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bitcoin Data Release | Secret Satoshis</title>
-<meta name="description" content="The daily Secret Satoshis Bitcoin data release: 22 CSV files covering price, supply, mining, network activity and valuation, regenerated each day by an open pipeline.">
+<meta name="description" content="The daily Secret Satoshis Bitcoin data release: 21 CSV files covering price, supply, mining, network activity and valuation, regenerated each day by an open pipeline.">
 <link rel="canonical" href="https://secretsatoshis.github.io/Bitcoin-Report-Library/">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta name="theme-color" content="#08080c">
@@ -13,7 +13,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Secret Satoshis">
 <meta property="og:title" content="Bitcoin Data Release | Secret Satoshis">
-<meta property="og:description" content="The daily Secret Satoshis Bitcoin data release: 22 CSV files covering price, supply, mining, network activity and valuation, regenerated each day by an open pipeline.">
+<meta property="og:description" content="The daily Secret Satoshis Bitcoin data release: 21 CSV files covering price, supply, mining, network activity and valuation, regenerated each day by an open pipeline.">
 <meta property="og:url" content="https://secretsatoshis.github.io/Bitcoin-Report-Library/">
 <meta property="og:image" content="https://secretsatoshis.com/assets/images/social-card.jpg">
 <meta property="og:image:alt" content="Secret Satoshis — AI-Native Bitcoin Market Intelligence">
@@ -99,20 +99,14 @@
     {
       "@type": "DataDownload",
       "encodingFormat": "text/csv",
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/mtd_price_paths.csv",
+      "name": "Mtd price paths"
+    },
+    {
+      "@type": "DataDownload",
+      "encodingFormat": "text/csv",
       "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/mtd_return_comparison.csv",
       "name": "Mtd return comparison"
-    },
-    {
-      "@type": "DataDownload",
-      "encodingFormat": "text/csv",
-      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/mtd_returns_history.csv",
-      "name": "Mtd returns history"
-    },
-    {
-      "@type": "DataDownload",
-      "encodingFormat": "text/csv",
-      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/ohlc_data.csv",
-      "name": "Ohlc data"
     },
     {
       "@type": "DataDownload",
@@ -171,14 +165,14 @@
     {
       "@type": "DataDownload",
       "encodingFormat": "text/csv",
-      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/ytd_return_comparison.csv",
-      "name": "Ytd return comparison"
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/ytd_price_paths.csv",
+      "name": "Ytd price paths"
     },
     {
       "@type": "DataDownload",
       "encodingFormat": "text/csv",
-      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/ytd_returns_history.csv",
-      "name": "Ytd returns history"
+      "contentUrl": "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/ytd_return_comparison.csv",
+      "name": "Ytd return comparison"
     }
   ]
 }
@@ -211,7 +205,7 @@
     <p class="eyebrow"><span>//</span> Open Data</p>
     <h1>Bitcoin Data Release</h1>
     <p>
-      The daily Secret Satoshis Bitcoin data release. 22 CSV files covering price, market
+      The daily Secret Satoshis Bitcoin data release. 21 CSV files covering price, market
       capitalisation, supply, mining, network activity, valuation models and multi-asset
       performance, regenerated each day by an open pipeline and read directly by
       <a href="https://dashboard.secretsatoshis.com/">the Market Dashboard</a>,
@@ -272,7 +266,7 @@
           <td class="f"><a href="csv/master_metrics_data.csv.gz">Master metrics data</a><br><code>master_metrics_data.csv.gz</code></td>
           <td>2010-01-01 → 2026-09-29</td>
           <td class="num">6,116</td>
-          <td class="num">306</td>
+          <td class="num">300</td>
           <td class="num">10.7 MB</td>
         </tr>
         <tr>
@@ -284,10 +278,17 @@
         </tr>
         <tr>
           <td class="f"><a href="csv/monthly_metrics_data.csv.gz">Monthly metrics data</a><br><code>monthly_metrics_data.csv.gz</code></td>
-          <td>2010-09-01 → 2026-09-01</td>
+          <td>2010-09-01 → 2026-09-29</td>
           <td class="num">193</td>
-          <td class="num">306</td>
-          <td class="num">414 KB</td>
+          <td class="num">301</td>
+          <td class="num">413 KB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/mtd_price_paths.csv">Mtd price paths</a><br><code>mtd_price_paths.csv</code></td>
+          <td>—</td>
+          <td class="num">31</td>
+          <td class="num">14</td>
+          <td class="num">7 KB</td>
         </tr>
         <tr>
           <td class="f"><a href="csv/mtd_return_comparison.csv">Mtd return comparison</a><br><code>mtd_return_comparison.csv</code></td>
@@ -297,23 +298,9 @@
           <td class="num">0 KB</td>
         </tr>
         <tr>
-          <td class="f"><a href="csv/mtd_returns_history.csv">Mtd returns history</a><br><code>mtd_returns_history.csv</code></td>
-          <td>—</td>
-          <td class="num">31</td>
-          <td class="num">16</td>
-          <td class="num">8 KB</td>
-        </tr>
-        <tr>
-          <td class="f"><a href="csv/ohlc_data.csv">Ohlc data</a><br><code>ohlc_data.csv</code></td>
-          <td>2016-12-26 → 2026-09-28</td>
-          <td class="num">510</td>
-          <td class="num">5</td>
-          <td class="num">23 KB</td>
-        </tr>
-        <tr>
           <td class="f"><a href="csv/onchain_price_models.csv">Onchain price models</a><br><code>onchain_price_models.csv</code></td>
-          <td>2010-01-01 → 2026-09-29</td>
-          <td class="num">6,116</td>
+          <td>2010-08-16 → 2026-09-29</td>
+          <td class="num">5,889</td>
           <td class="num">14</td>
           <td class="num">1.0 MB</td>
         </tr>
@@ -368,10 +355,17 @@
         </tr>
         <tr>
           <td class="f"><a href="csv/weekly_metrics_data.csv.gz">Weekly metrics data</a><br><code>weekly_metrics_data.csv.gz</code></td>
-          <td>2010-08-16 → 2026-09-28</td>
+          <td>2010-08-16 → 2026-09-29</td>
           <td class="num">842</td>
-          <td class="num">306</td>
+          <td class="num">301</td>
           <td class="num">1.7 MB</td>
+        </tr>
+        <tr>
+          <td class="f"><a href="csv/ytd_price_paths.csv">Ytd price paths</a><br><code>ytd_price_paths.csv</code></td>
+          <td>—</td>
+          <td class="num">366</td>
+          <td class="num">14</td>
+          <td class="num">83 KB</td>
         </tr>
         <tr>
           <td class="f"><a href="csv/ytd_return_comparison.csv">Ytd return comparison</a><br><code>ytd_return_comparison.csv</code></td>
@@ -379,13 +373,6 @@
           <td class="num">2</td>
           <td class="num">5</td>
           <td class="num">0 KB</td>
-        </tr>
-        <tr>
-          <td class="f"><a href="csv/ytd_returns_history.csv">Ytd returns history</a><br><code>ytd_returns_history.csv</code></td>
-          <td>—</td>
-          <td class="num">366</td>
-          <td class="num">16</td>
-          <td class="num">96 KB</td>
         </tr>
         </tbody>
       </table>

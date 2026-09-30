@@ -55,19 +55,13 @@
     <priority>0.5</priority>
   </url>
   <url>
+    <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/mtd_price_paths.csv</loc>
+    <lastmod>2026-09-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/mtd_return_comparison.csv</loc>
-    <lastmod>2026-09-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.5</priority>
-  </url>
-  <url>
-    <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/mtd_returns_history.csv</loc>
-    <lastmod>2026-09-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.5</priority>
-  </url>
-  <url>
-    <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/ohlc_data.csv</loc>
     <lastmod>2026-09-29</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.5</priority>
@@ -127,13 +121,13 @@
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/ytd_return_comparison.csv</loc>
+    <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/ytd_price_paths.csv</loc>
     <lastmod>2026-09-29</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/ytd_returns_history.csv</loc>
+    <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/ytd_return_comparison.csv</loc>
     <lastmod>2026-09-29</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.5</priority>
