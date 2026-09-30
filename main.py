@@ -93,7 +93,6 @@ correlation_results = metrics.create_btc_correlation_data(
 
 # Sources include the partial current UTC day. Cut it here so no export includes it.
 report_data = report_data.loc[:REPORT_DATE]
-report_data.index.name = "date"
 
 
 # --- Build tables ---

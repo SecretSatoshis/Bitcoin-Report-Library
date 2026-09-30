@@ -32,16 +32,17 @@ class CustomOnchainContractTests(unittest.TestCase):
             },
             index=index,
         )
-        frame.loc[index[1], "coinbase_sum_24h_usd"] = np.nan
+        frame.loc[index[0], "coinbase_sum_24h_usd"] = np.nan
         frame.loc[index[2], "realized_price"] = np.nan
         return frame
 
     def test_current_report_metric_names_and_formulas_remain_stable(self):
         result = metrics.calculate_custom_on_chain_metrics(self.source_frame())
 
-        # All-time miner revenue treats the leading gap as zero: 1.0 over a supply of 20.
-        self.assertEqual(result["thermocap_price"].iloc[0], 0.05)
+        # All-time miner revenue is blank before its first value, then accumulates.
+        self.assertTrue(pd.isna(result["thermocap_price"].iloc[0]))
         self.assertEqual(result["thermocap_price"].iloc[1], 0.05)
+        self.assertEqual(result["thermocap_price"].iloc[2], 0.10)
         self.assertTrue(pd.isna(result["nvt_price"].iloc[728]))
         self.assertEqual(result["nvt_price"].iloc[729], 5.0)
 
@@ -226,7 +227,6 @@ class ElectricityAndChangeTests(unittest.TestCase):
         for cents in range(3, 8):
             expected = expected_kwh * (cents / 100) / expected_revenue
             self.assertAlmostEqual(result[f"electricity_cost_{cents}c"], expected)
-        self.assertNotIn("Electricity_Cost", result)
 
     def test_electricity_cost_returns_nan_for_zero_miner_revenue(self):
         result = metrics.electric_price_models(
@@ -320,8 +320,7 @@ class NetworkModelTests(unittest.TestCase):
         self.assertAlmostEqual(parameters["metcalfe_scale"] / 3e-4, 1.0, places=9)
         self.assertTrue(np.allclose(result["metcalfe_price_multiple"], 1.0))
         # Fitted constants go to the manifest, not into repeated columns.
-        for constant in ("power_law_exponent", "power_law_scale", "metcalfe_scale_any_balance",
-                         "metcalfe_value_any_balance"):
+        for constant in parameters:
             self.assertNotIn(constant, result)
 
     def test_rows_after_the_report_date_do_not_move_the_fit(self):

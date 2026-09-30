@@ -238,7 +238,6 @@ MOVING_AVERAGE_METRICS = [
     "transfer_volume_sum_24h_usd",
     "subsidy_sum_24h",
     "coinbase_sum_24h_usd",
-    "nvt_price",
 ]
 
 # Price columns that get 7-day, 90-day, MTD and YTD changes (performance table, Chart
@@ -409,7 +408,7 @@ BRK_METRICS = [
     "addrs_over_100btc_addr_count",
     "addrs_over_1k_btc_addr_count",
     "addrs_over_10k_btc_addr_count",
-    # Unique active addresses per day
+    # Unique active addresses per day, published as daily_active_addresses_sending
     "active_addrs_average_24h",
     # UTXO age band supply
     "utxos_under_1m_old_supply",

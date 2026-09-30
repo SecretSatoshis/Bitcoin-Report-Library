@@ -246,7 +246,7 @@ class MasterCutoffValidationTests(unittest.TestCase):
     def write(self, tmpdir, name, last_date):
         frame = pd.DataFrame(
             {
-                "time": pd.date_range(end=last_date, periods=5, freq="D"),
+                "date": pd.date_range(end=last_date, periods=5, freq="D"),
                 "value": 1.0,
             }
         )
@@ -266,7 +266,7 @@ class MasterCutoffValidationTests(unittest.TestCase):
             validator._validate_index_cutoff(
                 tmpdir,
                 "master_metrics_data.csv.gz",
-                "time",
+                "date",
                 pd.Timestamp("2026-08-27"),
                 errors,
             )
@@ -286,7 +286,7 @@ class MasterCutoffValidationTests(unittest.TestCase):
             validator._validate_index_cutoff(
                 tmpdir,
                 "master_metrics_data.csv.gz",
-                "time",
+                "date",
                 pd.Timestamp("2026-08-27"),
                 errors,
             )
@@ -301,11 +301,11 @@ class MasterCutoffValidationTests(unittest.TestCase):
 
 class ReleaseSourceAgreementTests(unittest.TestCase):
     def test_release_rejects_an_inconsistent_candle(self):
-        summary = {f'{prefix} {column}':[value] for prefix in ('Daily','Week-to-Date')
-                   for column,value in zip(('Open','High','Low','Close'), (100,110,90,105))}
-        summary.update({'Week Start':['2026-09-07'], 'Week-to-Date Days':[2]})
+        summary = {f'{prefix}_{column}':[value] for prefix in ('daily','week_to_date')
+                   for column,value in zip(('open','high','low','close'), (100,110,90,105))}
+        summary.update({'week_start':['2026-09-07'], 'week_to_date_days':[2]})
         frames = {'report_ohlc_summary.csv':pd.DataFrame(summary)}
-        frames['report_ohlc_summary.csv']['Daily High'] = 1
+        frames['report_ohlc_summary.csv']['daily_high'] = 1
         errors=[]
         validator._validate_review_contracts(frames, Path('/nonexistent'), pd.Timestamp('2026-09-08'), errors)
         self.assertTrue(any('report_ohlc_summary.csv' in error for error in errors))
@@ -315,14 +315,14 @@ class ReleaseSourceAgreementTests(unittest.TestCase):
         columns = {item[0] for group in FUNDAMENTALS_TEMPLATE.values() for item in group.values()}
         dates = pd.date_range('2024-01-01', periods=400)
         master = pd.DataFrame(10.0, index=dates, columns=sorted(columns))
-        master.index.name = 'time'
+        master.index.name = 'date'
         fundamentals = report_tables.create_fundamentals_table(master, FUNDAMENTALS_TEMPLATE, dates[-1])
         fundamentals.loc[0,'Current Value'] = '999999999'
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory)
             master.drop(index=dates[10]).to_csv(output/'master_metrics_data.csv.gz')
             errors=[]
-            validator._validate_index_cutoff(output, 'master_metrics_data.csv.gz', 'time', dates[-1], errors)
+            validator._validate_index_cutoff(output, 'master_metrics_data.csv.gz', 'date', dates[-1], errors)
             validator._validate_review_contracts({'fundamentals_table.csv': fundamentals}, output, dates[-1], errors)
         self.assertTrue(any('complete' in error for error in errors))
         self.assertTrue(any('fundamentals_table.csv' in error for error in errors))

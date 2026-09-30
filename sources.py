@@ -140,7 +140,7 @@ def get_brk_ohlc(start: str = "2009-01-03") -> pd.DataFrame:
 def get_price(tickers: dict, start_date: str) -> pd.DataFrame:
     """Daily closes for every ticker in `tickers`, in one batched Yahoo download.
 
-    Returns a frame with a `time` column and one `{ticker}_close` column per ticker,
+    Returns a frame with a `date` column and one `{ticker}_close` column per ticker,
     each with its observation-date marker.
     """
     # Use the UTC date so local and CI runs request the same window. `end` is exclusive,
@@ -151,7 +151,7 @@ def get_price(tickers: dict, start_date: str) -> pd.DataFrame:
     fetch_tickers = [ticker for ticker_list in tickers.values() for ticker in ticker_list]
 
     if not fetch_tickers:
-        return pd.DataFrame(columns=["time"])
+        return pd.DataFrame(columns=["date"])
 
     date_range = pd.date_range(start=start_date, end=end_date, freq="D")
 
@@ -166,7 +166,7 @@ def get_price(tickers: dict, start_date: str) -> pd.DataFrame:
         )
     except YAHOO_DATA_ERRORS as e:
         warnings.warn(f"Yahoo batch price download failed: {e}", RuntimeWarning, stacklevel=2)
-        return pd.DataFrame(columns=["time"])
+        return pd.DataFrame(columns=["date"])
 
     data_frames = []
     for ticker in fetch_tickers:
@@ -187,13 +187,13 @@ def get_price(tickers: dict, start_date: str) -> pd.DataFrame:
             warnings.warn(f"{ticker} is missing from the Yahoo batch result", RuntimeWarning, stacklevel=2)
 
     if not data_frames:
-        return pd.DataFrame(columns=["time"])
+        return pd.DataFrame(columns=["date"])
 
     # copy() consolidates the per-ticker blocks; otherwise reset_index raises pandas'
     # fragmentation PerformanceWarning.
     data = pd.concat(data_frames, axis=1).copy().reset_index()
-    data.rename(columns={"index": "time"}, inplace=True)
-    data["time"] = pd.to_datetime(data["time"]).dt.tz_localize(None)
+    data.rename(columns={"index": "date"}, inplace=True)
+    data["date"] = pd.to_datetime(data["date"]).dt.tz_localize(None)
     return data
 
 
@@ -419,7 +419,7 @@ def _live_market_cap_fallback(stock, ticker: str, fx_close, requested_end: pd.Ti
     return current * float(recent_fx.iloc[-1]) if not recent_fx.empty else None
 
 
-def get_marketcap(
+def get_market_caps(
     tickers: dict, start_date: str, end_date: Optional[str] = None
 ) -> pd.DataFrame:
     """Daily `{ticker}_market_cap` in USD: Yahoo close x split-adjusted shares outstanding.
@@ -438,7 +438,7 @@ def get_marketcap(
     if requested_end < requested_start:
         raise ValueError("Market-cap end_date cannot be before start_date")
 
-    calendar = pd.date_range(requested_start, requested_end, freq="D", name="time")
+    calendar = pd.date_range(requested_start, requested_end, freq="D", name="date")
     data = pd.DataFrame(index=calendar)
     for ticker in stocks:
         data[f"{ticker}_market_cap"] = np.nan
@@ -486,52 +486,36 @@ def get_marketcap(
 def get_miner_data(google_sheet_url: str = "") -> pd.DataFrame:
     """Coin Metrics monthly network efficiency (J/GH) from Google Sheets, filled daily.
 
-    The sheet needs a `time` column and `cm_efficiency_j_gh` (or `efficiency_j_th`,
-    converted). Each daily row keeps its source observation date and URL so the freshness
-    check can measure the estimate's real age. Returns an empty frame with the same
-    columns if the sheet cannot be read.
+    The sheet has `time` and `cm_efficiency_j_gh` columns. Each daily row keeps its source
+    observation date and URL so the freshness check can measure the estimate's real age.
+    Returns an empty frame with the same columns if the sheet cannot be read.
     """
     if not google_sheet_url:
         google_sheet_url = MINER_DATA_SHEET_URL
 
     try:
-        # Sharing URL -> CSV export URL.
-        csv_export_url = google_sheet_url.replace("/edit?usp=sharing", "/export?format=csv")
-        csv_export_url = csv_export_url.split("#")[0]
-        if "/edit?" in csv_export_url:
-            csv_export_url = csv_export_url.split("/edit?")[0] + "/export?format=csv"
+        csv_export_url = google_sheet_url.split("/edit")[0] + "/export?format=csv"
 
         response = requests.get(csv_export_url, timeout=API_TIMEOUT)
         response.raise_for_status()
         df = pd.read_csv(io.StringIO(response.text))
         df.columns = [str(col).strip() for col in df.columns]
 
-        if "time" not in df.columns:
-            raise ValueError("Miner efficiency sheet must contain a `time` column")
+        missing = {"time", MINER_EFFICIENCY_VALUE_COLUMN} - set(df.columns)
+        if missing:
+            raise ValueError(f"Miner efficiency sheet is missing {sorted(missing)}")
 
-        df["time"] = pd.to_datetime(df["time"], errors="coerce")
-        df = df.dropna(subset=["time"]).sort_values("time")
-
-        if "cm_efficiency_j_gh" not in df.columns:
-            if "efficiency_j_th" not in df.columns:
-                raise ValueError(
-                    "Miner efficiency sheet must contain either `cm_efficiency_j_gh` or `efficiency_j_th`"
-                )
-            df["cm_efficiency_j_gh"] = pd.to_numeric(
-                df["efficiency_j_th"], errors="coerce"
-            ) / 1000
-        else:
-            df["cm_efficiency_j_gh"] = pd.to_numeric(
-                df["cm_efficiency_j_gh"], errors="coerce"
-            )
-
-        df = df.dropna(subset=["cm_efficiency_j_gh"])
-        df[MINER_EFFICIENCY_SOURCE_DATE_COLUMN] = df["time"].dt.normalize()
+        df["date"] = pd.to_datetime(df["time"], errors="coerce")
+        df[MINER_EFFICIENCY_VALUE_COLUMN] = pd.to_numeric(
+            df[MINER_EFFICIENCY_VALUE_COLUMN], errors="coerce"
+        )
+        df = df.dropna(subset=["date", MINER_EFFICIENCY_VALUE_COLUMN]).sort_values("date")
+        df[MINER_EFFICIENCY_SOURCE_DATE_COLUMN] = df["date"].dt.normalize()
         df[MINER_EFFICIENCY_SOURCE_URL_COLUMN] = csv_export_url
-        df = df[["time"] + MINER_EFFICIENCY_COLUMNS]
-        df = df.drop_duplicates(subset=["time"], keep="last")
+        df = df[["date"] + MINER_EFFICIENCY_COLUMNS]
+        df = df.drop_duplicates(subset=["date"], keep="last")
 
-        df = df.set_index("time").resample("D").ffill().reset_index()
+        df = df.set_index("date").resample("D").ffill().reset_index()
 
         return df
     except (requests.RequestException, ValueError, KeyError, pd.errors.ParserError) as e:
@@ -540,7 +524,7 @@ def get_miner_data(google_sheet_url: str = "") -> pd.DataFrame:
             RuntimeWarning,
             stacklevel=2,
         )
-        return pd.DataFrame(columns=["time"] + MINER_EFFICIENCY_COLUMNS)
+        return pd.DataFrame(columns=["date"] + MINER_EFFICIENCY_COLUMNS)
 
 
 def _brk_error_code(response: requests.Response) -> Optional[str]:
@@ -731,7 +715,7 @@ def get_brk_onchain(
     index: str = "dateindex",
     verbose: bool = False,
 ) -> pd.DataFrame:
-    """Every BRK_METRICS series from `start_date`, with a `time` column and BRK's names.
+    """Every BRK_METRICS series from `start_date`, with a `date` column and BRK's names.
 
     Series are fetched in chunks and joined on `timestamp`. The partial current UTC day
     is included; main.py applies the report-date cutoff.
@@ -802,7 +786,7 @@ def get_brk_onchain(
     frame = frame.loc[frame.index >= pd.to_datetime(start_date)]
     frame = _blank_pre_price_placeholders(frame)
     print(f"[BRK] {len(frame)} days x {len(frame.columns)} series through {frame.index.max().date()}")
-    return frame.rename_axis("time").reset_index()
+    return frame.rename_axis("date").reset_index()
 
 
 def _blank_pre_price_placeholders(frame: pd.DataFrame) -> pd.DataFrame:
@@ -836,21 +820,21 @@ def get_data(
     """
     coindata = get_brk_onchain(start_date)
     prices = get_price(tickers, start_date)
-    marketcaps = get_marketcap(tickers, start_date)
+    market_caps = get_market_caps(tickers, start_date)
     miner_data = get_miner_data()
 
     datasets = [
         ("coindata", coindata),
         ("prices", prices),
-        ("marketcaps", marketcaps),
+        ("market_caps", market_caps),
         ("miner_data", miner_data),
     ]
 
     processed_datasets = {}
     for name, dataset in datasets:
-        if not dataset.empty and "time" in dataset.columns:
-            dataset["time"] = pd.to_datetime(dataset["time"]).dt.tz_localize(None)
-            dataset.set_index("time", inplace=True)
+        if not dataset.empty and "date" in dataset.columns:
+            dataset["date"] = pd.to_datetime(dataset["date"]).dt.tz_localize(None)
+            dataset.set_index("date", inplace=True)
             processed_datasets[name] = dataset
 
     # BRK defines the calendar; no other source can stand in for it.
@@ -871,7 +855,6 @@ def get_data(
         if overlap:
             raise RuntimeError(f"Sources returned duplicate columns: {', '.join(overlap)}")
         data = pd.merge(data, dataset, left_index=True, right_index=True, how="left")
-    data.index.name = "date"
 
     # Keep a column for every configured ticker even when Yahoo returned nothing.
     optional = [f"{ticker}_close" for group in tickers.values() for ticker in group]

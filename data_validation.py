@@ -30,15 +30,15 @@ def validate_candles(frame, label):
         raise ValueError(f"{label}: duplicate candle dates")
 
 
-def assert_ohlc_usable(ohlc_data: pd.DataFrame, label: str = "OHLC") -> None:
+def assert_ohlc_usable(ohlc: pd.DataFrame, label: str = "OHLC") -> None:
     """Raise when an OHLC frame is empty, missing a column or holds an invalid candle."""
-    if ohlc_data is None or ohlc_data.empty:
+    if ohlc is None or ohlc.empty:
         raise RuntimeError(f"{label} data is empty; refusing to overwrite OHLC outputs")
 
-    missing = [column for column in OHLC_COLUMNS if column not in ohlc_data.columns]
+    missing = [column for column in OHLC_COLUMNS if column not in ohlc.columns]
     if missing:
         raise RuntimeError(
             f"{label} data is missing required columns {missing}; refusing to overwrite OHLC outputs"
         )
 
-    validate_candles(ohlc_data, label)
+    validate_candles(ohlc, label)

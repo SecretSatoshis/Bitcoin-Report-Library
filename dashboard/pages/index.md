@@ -63,7 +63,7 @@ _Headline metrics — market, on-chain, and sentiment._
   // Heatmap cells: red losses, near-black flat, green gains.
   const HEATMAP_SCALE = ['#FF3B30', '#0A0A0A', '#00FF88'];
   $: priceColor     = btc_price?.length         ? (btc_price[0].pct_change         >= 0 ? POS : NEG) : FALLBACK;
-  $: marketcapColor = btc_marketcap?.length     ? (btc_marketcap[0].pct_change     >= 0 ? POS : NEG) : FALLBACK;
+  $: marketCapColor = btc_market_cap?.length     ? (btc_market_cap[0].pct_change     >= 0 ? POS : NEG) : FALLBACK;
   $: satsColor      = sats_per_dollar?.length   ? (sats_per_dollar[0].pct_change   <= 0 ? POS : NEG) : FALLBACK;
   $: supplyColor    = btc_supply?.length        ? (btc_supply[0].pct_change        >= 0 ? POS : NEG) : FALLBACK;
   $: revenueColor   = btc_miner_revenue?.length ? (btc_miner_revenue[0].pct_change >= 0 ? POS : NEG) : FALLBACK;
@@ -117,14 +117,14 @@ _Headline metrics — market, on-chain, and sentiment._
     description="BTC spot price (USD)."
   />
   <BigValue
-    data={btc_marketcap}
-    value=marketcap
+    data={btc_market_cap}
+    value=market_cap
     title="Bitcoin Market Cap"
     fmt='$#,##0.00"T"'
     sparkline=date
     sparklineType=area
     sparklineYScale=true
-    sparklineColor={marketcapColor}
+    sparklineColor={marketCapColor}
     comparison=pct_change
     comparisonTitle="vs 30d ago"
     comparisonFmt=pct1
@@ -531,16 +531,16 @@ left join src prior on prior.date = cur.date - interval 30 day
 order by cur.date desc
 ```
 
-```sql btc_marketcap
+```sql btc_market_cap
 with src as (
-  select cast(date as date) as date, Value / 1e12 as marketcap
+  select cast(date as date) as date, Value / 1e12 as market_cap
   from bitcoin_report_library.summary_history
   where Metric = 'Bitcoin Market Cap'
 )
 select
   cur.date,
-  cur.marketcap,
-  (cur.marketcap - prior.marketcap) / nullif(prior.marketcap, 0) as pct_change
+  cur.market_cap,
+  (cur.market_cap - prior.market_cap) / nullif(prior.market_cap, 0) as pct_change
 from src cur
 left join src prior on prior.date = cur.date - interval 30 day
 order by cur.date desc

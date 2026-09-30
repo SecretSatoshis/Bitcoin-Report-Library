@@ -210,7 +210,7 @@ class BrkAndYahooFetchTests(unittest.TestCase):
         with patch.object(sources.yf, "download", return_value=raw):
             result = sources.get_price(
                 {"stocks": ["SPY"]}, start_date="2024-01-01"
-            ).set_index("time")
+            ).set_index("date")
 
         self.assertEqual(result.loc["2024-01-06", "SPY_close"], 100.0)
         self.assertTrue(pd.isna(result.loc["2024-01-07", "SPY_close"]))
@@ -262,9 +262,9 @@ class BrkAndYahooFetchTests(unittest.TestCase):
     def test_miner_fetch_uses_timeout_and_retains_source_provenance(self):
         response = FakeResponse(
             text=(
-                "time,efficiency_j_th\n"
-                "2024-01-01,30\n"
-                "2024-02-01,28\n"
+                "time,cm_efficiency_j_gh\n"
+                "2024-01-01,0.03\n"
+                "2024-02-01,0.028\n"
             )
         )
         sheet_url = "https://example.test/sheet/edit?usp=sharing"
@@ -273,7 +273,7 @@ class BrkAndYahooFetchTests(unittest.TestCase):
         with patch.object(
             sources.requests, "get", return_value=response
         ) as get_mock:
-            result = sources.get_miner_data(sheet_url).set_index("time")
+            result = sources.get_miner_data(sheet_url).set_index("date")
 
         get_mock.assert_called_once_with(export_url, timeout=sources.API_TIMEOUT)
         self.assertEqual(
@@ -375,8 +375,8 @@ class BrkOnchainTests(unittest.TestCase):
         ):
             frame = sources.get_brk_onchain("2024-01-01")
 
-        self.assertEqual(list(frame.columns), ["time", "a", "b"])
-        self.assertEqual(list(frame["time"]), list(pd.to_datetime(["2024-01-01", "2024-01-02"])))
+        self.assertEqual(list(frame.columns), ["date", "a", "b"])
+        self.assertEqual(list(frame["date"]), list(pd.to_datetime(["2024-01-01", "2024-01-02"])))
         self.assertEqual(list(frame["a"]), [1.0, 2.0])
         self.assertEqual(frame["b"].iloc[0], 4.0)
         self.assertTrue(pd.isna(frame["b"].iloc[1]))
@@ -413,11 +413,11 @@ class PrePricePlaceholderTests(unittest.TestCase):
 class GetDataTests(unittest.TestCase):
     def test_two_sources_with_the_same_column_fail(self):
         dates = pd.date_range("2024-01-01", periods=3)
-        onchain = pd.DataFrame({"time": dates, "price_close": 1.0})
-        prices = pd.DataFrame({"time": dates, "price_close": 2.0})
+        onchain = pd.DataFrame({"date": dates, "price_close": 1.0})
+        prices = pd.DataFrame({"date": dates, "price_close": 2.0})
         with patch.object(sources, "get_brk_onchain", return_value=onchain), patch.object(
             sources, "get_price", return_value=prices
-        ), patch.object(sources, "get_marketcap", return_value=pd.DataFrame()), patch.object(
+        ), patch.object(sources, "get_market_caps", return_value=pd.DataFrame()), patch.object(
             sources, "get_miner_data", return_value=pd.DataFrame()
         ), self.assertRaisesRegex(RuntimeError, "duplicate columns: price_close"):
             sources.get_data({}, "2024-01-01")
@@ -429,7 +429,7 @@ class MarketCapErrorTests(unittest.TestCase):
             sources, "_historical_market_cap", side_effect=ValueError("no shares")
         ), warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            result = sources.get_marketcap({"stocks": ["AAA"]}, "2024-01-01", end_date="2024-01-05")
+            result = sources.get_market_caps({"stocks": ["AAA"]}, "2024-01-01", end_date="2024-01-05")
 
         self.assertTrue(result["AAA_market_cap"].isna().all())
         self.assertTrue(any("no shares" in str(w.message) for w in caught))
@@ -438,7 +438,7 @@ class MarketCapErrorTests(unittest.TestCase):
         with patch.object(sources.yf, "Ticker", return_value=NoMarketCapTicker()), patch.object(
             sources, "_historical_market_cap", side_effect=AttributeError("bug")
         ), self.assertRaises(AttributeError):
-            sources.get_marketcap({"stocks": ["AAA"]}, "2024-01-01", end_date="2024-01-05")
+            sources.get_market_caps({"stocks": ["AAA"]}, "2024-01-01", end_date="2024-01-05")
 
 
 class YahooMarketCapTests(unittest.TestCase):
@@ -451,17 +451,17 @@ class YahooMarketCapTests(unittest.TestCase):
         ticker = FakeYahooTicker(history=history, shares=shares)
 
         with patch.object(sources.yf, "Ticker", return_value=ticker):
-            result = sources.get_marketcap(
+            result = sources.get_market_caps(
                 {"stocks": ["TEST"]},
                 "2014-12-30",
                 end_date="2015-01-02",
-            ).set_index("time")
+            ).set_index("date")
 
         self.assertEqual(ticker.history_calls[0]["start"], "2015-01-01")
         self.assertTrue(result.loc[:"2015-01-01", "TEST_market_cap"].isna().all())
         self.assertEqual(result.loc["2015-01-02", "TEST_market_cap"], 1_000.0)
 
-    def test_historical_marketcap_uses_close_and_handles_split_duplicates(self):
+    def test_historical_market_cap_uses_close_and_handles_split_duplicates(self):
         dates = pd.to_datetime(
             ["2020-08-27", "2020-08-28", "2020-08-31", "2020-09-01"]
         )
@@ -482,11 +482,11 @@ class YahooMarketCapTests(unittest.TestCase):
         ticker = FakeYahooTicker(history=history, shares=shares)
 
         with patch.object(sources.yf, "Ticker", return_value=ticker):
-            result = sources.get_marketcap(
+            result = sources.get_market_caps(
                 {"stocks": ["TEST"]},
                 "2020-08-27",
                 end_date="2020-09-01",
-            ).set_index("time")
+            ).set_index("date")
 
         self.assertTrue(pd.isna(result.loc["2020-08-27", "TEST_market_cap"]))
         self.assertEqual(result.loc["2020-08-28", "TEST_market_cap"], 1_000.0)
@@ -536,7 +536,7 @@ class YahooMarketCapTests(unittest.TestCase):
         self.assertNotIn(pd.Timestamp("2023-06-09"), result.index)
         self.assertEqual(result.tolist(), [100.0, 101.0])
 
-    def test_alias_share_histories_keep_current_marketcap_names(self):
+    def test_alias_share_histories_keep_current_market_cap_names(self):
         meta_dates = pd.to_datetime(["2022-05-27", "2022-06-09", "2022-06-10"])
         meta_history = pd.DataFrame(
             {"Close": [10.0, 10.0, 10.0], "Stock Splits": [0.0, 0.0, 0.0]},
@@ -557,11 +557,11 @@ class YahooMarketCapTests(unittest.TestCase):
         with patch.object(
             sources.yf, "Ticker", side_effect=lambda symbol: ticker_objects[symbol]
         ):
-            result = sources.get_marketcap(
+            result = sources.get_market_caps(
                 {"stocks": ["META"]},
                 "2022-05-27",
                 end_date="2022-06-10",
-            ).set_index("time")
+            ).set_index("date")
 
         self.assertEqual(result.loc["2022-05-27", "META_market_cap"], 1_000.0)
         # Current-ticker META observation wins the overlapping date over FB's 90 shares.
@@ -574,11 +574,11 @@ class YahooMarketCapTests(unittest.TestCase):
 
         with patch.object(sources.yf, "Ticker", return_value=failed), \
             self.assertWarnsRegex(RuntimeWarning, "no closing-price history"):
-            result = sources.get_marketcap(
+            result = sources.get_market_caps(
                 {"stocks": ["FAIL"]},
                 "2020-01-01",
                 end_date="2020-01-03",
-            ).set_index("time")
+            ).set_index("date")
 
         self.assertTrue(pd.isna(result.loc["2020-01-01", "FAIL_market_cap"]))
         self.assertTrue(pd.isna(result.loc["2020-01-02", "FAIL_market_cap"]))
@@ -599,23 +599,23 @@ class YahooMarketCapTests(unittest.TestCase):
         with patch.object(
             sources.yf, "Ticker", side_effect=lambda symbol: ticker_objects[symbol]
         ), self.assertWarnsRegex(RuntimeWarning, "FAIL"):
-            result = sources.get_marketcap(
+            result = sources.get_market_caps(
                 {"stocks": ["GOOD", "FAIL"], "etfs": ["SPY"]},
                 "2020-01-01",
                 end_date="2020-01-03",
             )
 
         self.assertEqual(
-            list(result.columns), ["time", "GOOD_market_cap", "FAIL_market_cap"]
+            list(result.columns), ["date", "GOOD_market_cap", "FAIL_market_cap"]
         )
         self.assertEqual(
             result["GOOD_market_cap"].dropna().tolist(), [1_000.0, 1_100.0]
         )
         self.assertTrue(result["FAIL_market_cap"].isna().all())
-        self.assertTrue(result["time"].is_monotonic_increasing)
-        self.assertFalse(result["time"].duplicated().any())
+        self.assertTrue(result["date"].is_monotonic_increasing)
+        self.assertFalse(result["date"].duplicated().any())
 
-    def test_local_currency_marketcap_is_converted_to_usd(self):
+    def test_local_currency_market_cap_is_converted_to_usd(self):
         dates = pd.to_datetime(["2026-08-19", "2026-08-20"])
         local_stock = FakeYahooTicker(
             history=pd.DataFrame(
@@ -632,11 +632,11 @@ class YahooMarketCapTests(unittest.TestCase):
         with patch.object(
             sources.yf, "Ticker", side_effect=lambda symbol: ticker_objects[symbol]
         ):
-            result = sources.get_marketcap(
+            result = sources.get_market_caps(
                 {"stocks": ["2222.SR"]},
                 "2026-08-19",
                 end_date="2026-08-20",
-            ).set_index("time")
+            ).set_index("date")
 
         self.assertAlmostEqual(
             result.loc["2026-08-19", "2222.SR_market_cap"], 665.0

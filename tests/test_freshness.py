@@ -129,11 +129,11 @@ class CalendarAndFillTests(unittest.TestCase):
         validate_calendar(dates, 'complete')
 
     def test_all_optional_price_sources_missing_preserves_declared_columns(self):
-        base = pd.DataFrame({'time': pd.date_range('2024-01-01', periods=10),
+        base = pd.DataFrame({'date': pd.date_range('2024-01-01', periods=10),
                              'price_close': 100.0})
         with ExitStack() as stack:
             stack.enter_context(patch.object(sources, 'get_brk_onchain', return_value=base))
-            for function in ('get_price', 'get_marketcap', 'get_miner_data'):
+            for function in ('get_price', 'get_market_caps', 'get_miner_data'):
                 stack.enter_context(patch.object(sources, function, return_value=pd.DataFrame()))
             data = sources.get_data({'stocks':['MISSING']}, '2024-01-01')
         self.assertTrue(data[['MISSING_close', 'MISSING_market_cap']].isna().all().all())

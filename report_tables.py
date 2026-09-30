@@ -617,13 +617,13 @@ def monthly_heatmap(data, report_date=None):
 # --- OHLC and period return tables ---
 
 
-def create_report_ohlc_summary(daily_ohlc_data, report_date):
+def create_report_ohlc_summary(daily_ohlc, report_date):
     """One row: the report-date daily candle and the week-to-date candle through it.
 
     Raises if the report date or any earlier day of its week is missing.
     """
-    assert_ohlc_usable(daily_ohlc_data, "Daily OHLC")
-    daily = daily_ohlc_data[OHLC_COLUMNS].copy()
+    assert_ohlc_usable(daily_ohlc, "Daily OHLC")
+    daily = daily_ohlc[OHLC_COLUMNS].copy()
     daily.index = pd.to_datetime(daily.index).normalize()
     daily = daily.sort_index()
 
@@ -734,51 +734,51 @@ def create_asset_valuation_table(report_data, report_date=None):
         FIAT_MONEY_SUPPLY["Country"], FIAT_MONEY_SUPPLY["US Dollar Trillion"] * 1e12
     ))
     assets = [
-        {"name": "Bitcoin", "data": "price_close", "marketcap": "market_cap"},
+        {"name": "Bitcoin", "data": "price_close", "market_cap": "market_cap"},
         # Fiat money (M0)
         {
             "name": "Switzerland M0",
             "data": "switzerland_m0_btc_price",
-            "marketcap_usd": fiat_m0_usd["Switzerland"],
+            "market_cap_usd": fiat_m0_usd["Switzerland"],
         },
         {
             "name": "UK M0",
             "data": "united_kingdom_m0_btc_price",
-            "marketcap_usd": fiat_m0_usd["United Kingdom"],
+            "market_cap_usd": fiat_m0_usd["United Kingdom"],
         },
         {
             "name": "US M0",
             "data": "united_states_m0_btc_price",
-            "marketcap_usd": fiat_m0_usd["United States"],
+            "market_cap_usd": fiat_m0_usd["United States"],
         },
         # Precious metals
         {
             "name": "Total Silver Market",
             "data": "silver_market_cap_btc_price",
-            "marketcap": "silver_market_cap_usd",
+            "market_cap": "silver_market_cap_usd",
         },
         {
             "name": "Total Gold Market",
             "data": "gold_market_cap_btc_price",
-            "marketcap": "gold_market_cap_usd",
+            "market_cap": "gold_market_cap_usd",
         },
         # Mega-cap stocks
-        {"name": "Apple", "data": "AAPL_mc_btc_price", "marketcap": "AAPL_market_cap"},
-        {"name": "Amazon", "data": "AMZN_mc_btc_price", "marketcap": "AMZN_market_cap"},
-        {"name": "Meta", "data": "META_mc_btc_price", "marketcap": "META_market_cap"},
-        {"name": "NVIDIA", "data": "NVDA_mc_btc_price", "marketcap": "NVDA_market_cap"},
-        {"name": "Broadcom", "data": "AVGO_mc_btc_price", "marketcap": "AVGO_market_cap"},
-        {"name": "Tesla", "data": "TSLA_mc_btc_price", "marketcap": "TSLA_market_cap"},
-        {"name": "Eli Lilly", "data": "LLY_mc_btc_price", "marketcap": "LLY_market_cap"},
-        {"name": "Micron", "data": "MU_mc_btc_price", "marketcap": "MU_market_cap"},
-        {"name": "TSMC", "data": "TSM_mc_btc_price", "marketcap": "TSM_market_cap"},
-        {"name": "SpaceX", "data": "SPCX_mc_btc_price", "marketcap": "SPCX_market_cap"},
-        {"name": "Saudi Aramco", "data": "2222.SR_mc_btc_price", "marketcap": "2222.SR_market_cap"},
-        {"name": "Samsung Electronics", "data": "005930.KS_mc_btc_price", "marketcap": "005930.KS_market_cap"},
-        {"name": "Berkshire Hathaway Class B", "data": "BRK-B_mc_btc_price", "marketcap": "BRK-B_market_cap"},
+        {"name": "Apple", "data": "AAPL_mc_btc_price", "market_cap": "AAPL_market_cap"},
+        {"name": "Amazon", "data": "AMZN_mc_btc_price", "market_cap": "AMZN_market_cap"},
+        {"name": "Meta", "data": "META_mc_btc_price", "market_cap": "META_market_cap"},
+        {"name": "NVIDIA", "data": "NVDA_mc_btc_price", "market_cap": "NVDA_market_cap"},
+        {"name": "Broadcom", "data": "AVGO_mc_btc_price", "market_cap": "AVGO_market_cap"},
+        {"name": "Tesla", "data": "TSLA_mc_btc_price", "market_cap": "TSLA_market_cap"},
+        {"name": "Eli Lilly", "data": "LLY_mc_btc_price", "market_cap": "LLY_market_cap"},
+        {"name": "Micron", "data": "MU_mc_btc_price", "market_cap": "MU_market_cap"},
+        {"name": "TSMC", "data": "TSM_mc_btc_price", "market_cap": "TSM_market_cap"},
+        {"name": "SpaceX", "data": "SPCX_mc_btc_price", "market_cap": "SPCX_market_cap"},
+        {"name": "Saudi Aramco", "data": "2222.SR_mc_btc_price", "market_cap": "2222.SR_market_cap"},
+        {"name": "Samsung Electronics", "data": "005930.KS_mc_btc_price", "market_cap": "005930.KS_market_cap"},
+        {"name": "Berkshire Hathaway Class B", "data": "BRK-B_mc_btc_price", "market_cap": "BRK-B_market_cap"},
         # Financials
-        {"name": "JPMorgan", "data": "JPM_mc_btc_price", "marketcap": "JPM_market_cap"},
-        {"name": "Visa", "data": "V_mc_btc_price", "marketcap": "V_market_cap"},
+        {"name": "JPMorgan", "data": "JPM_mc_btc_price", "market_cap": "JPM_market_cap"},
+        {"name": "Visa", "data": "V_mc_btc_price", "market_cap": "V_market_cap"},
     ]
 
     latest_data = (
@@ -790,25 +790,25 @@ def create_asset_valuation_table(report_data, report_date=None):
 
     valuation_data = []
     for asset in assets:
-        marketcap_btc_price = latest_data.get(asset["data"], float("nan"))
-        marketcap_value = asset.get("marketcap_usd")
-        if marketcap_value is None:
-            marketcap_value = latest_data.get(asset["marketcap"], float("nan"))
+        btc_price_at_market_cap = latest_data.get(asset["data"], float("nan"))
+        market_cap_value = asset.get("market_cap_usd")
+        if market_cap_value is None:
+            market_cap_value = latest_data.get(asset["market_cap"], float("nan"))
 
         if (
             pd.notna(bitcoin_price)
-            and pd.notna(marketcap_btc_price)
+            and pd.notna(btc_price_at_market_cap)
             and bitcoin_price > 0
         ):
-            percent_move = ((marketcap_btc_price - bitcoin_price) / bitcoin_price) * 100
+            percent_move = ((btc_price_at_market_cap - bitcoin_price) / bitcoin_price) * 100
         else:
             percent_move = np.nan
 
         valuation_data.append(
             {
                 "Asset": asset["name"],
-                "Market Cap (USD)": marketcap_value,
-                "BTC Price at Market Cap": marketcap_btc_price,
+                "Market Cap (USD)": market_cap_value,
+                "BTC Price at Market Cap": btc_price_at_market_cap,
                 "Move Needed (%)": percent_move,
             }
         )

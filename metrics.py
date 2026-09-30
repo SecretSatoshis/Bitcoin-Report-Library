@@ -106,11 +106,8 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
     price_close = data["price_close"]
     miner_revenue_usd = data["coinbase_sum_24h_usd"]
 
-    # Only leading nulls remain after assert_no_internal_onchain_gaps; they count as zero.
-    rev_all_time = miner_revenue_usd.fillna(0).cumsum()
-
-    # Early rows carry a 0.0 price; dividing by it would publish inf.
-    positive_price = price_close.where(price_close > 0)
+    # Blank before the first price; assert_no_internal_onchain_gaps rules out later gaps.
+    rev_all_time = miner_revenue_usd.cumsum()
 
     mvrv_ratio = market_cap / realized_cap
     ma_200_day = price_close.rolling(window=200).mean()
@@ -138,7 +135,7 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
     daily_returns = price_close.pct_change(fill_method=None)
 
     new_columns = {
-        "sat_per_dollar": SATS_PER_BTC / positive_price,
+        "sat_per_dollar": SATS_PER_BTC / price_close,
         "mvrv": mvrv_ratio,
         "nupl": (market_cap - realized_cap) / market_cap,
         **calculate_nvt_price_models(data),
@@ -261,14 +258,14 @@ def calculate_btc_price_to_surpass_fiat(
 ) -> pd.DataFrame:
     """Add `{country}_m0_btc_price`: the BTC price at which Bitcoin's market cap equals that M0."""
     supply = _positive_supply(data)
-    fiat_marketcap = {}
+    fiat_prices = {}
 
     for _, row in fiat_money_data.iterrows():
         country = row["Country"].replace(" ", "_").lower()
         fiat_supply_usd = row["US Dollar Trillion"] * 1e12
-        fiat_marketcap[f"{country}_m0_btc_price"] = fiat_supply_usd / supply
+        fiat_prices[f"{country}_m0_btc_price"] = fiat_supply_usd / supply
 
-    data = pd.concat([data, pd.DataFrame(fiat_marketcap)], axis=1)
+    data = pd.concat([data, pd.DataFrame(fiat_prices)], axis=1)
     return data
 
 
@@ -277,12 +274,12 @@ def calculate_btc_price_for_stock_mkt_caps(
 ) -> pd.DataFrame:
     """Add `{ticker}_mc_btc_price`: the BTC price at which Bitcoin's market cap equals the stock's."""
     supply = _positive_supply(data)
-    stock_marketcap_prices = {
+    stock_prices = {
         f"{ticker}_mc_btc_price": data[f"{ticker}_market_cap"] / supply
         for ticker in stock_tickers
     }
 
-    data = pd.concat([data, pd.DataFrame(stock_marketcap_prices)], axis=1)
+    data = pd.concat([data, pd.DataFrame(stock_prices)], axis=1)
     return data
 
 
@@ -485,10 +482,7 @@ def calculate_rolling_cagr_for_all_columns(data, years):
 
 
 def _safe_pct_change(numerator, denominator):
-    """Percentage change in percentage points; NaN where the denominator is 0 or missing.
-
-    Early rows carry 0.0 placeholders, which would otherwise publish inf.
-    """
+    """Percentage change in percentage points; NaN where the denominator is 0 or missing."""
     denominator = denominator.where(denominator != 0)
     return ((numerator / denominator) - 1) * 100
 

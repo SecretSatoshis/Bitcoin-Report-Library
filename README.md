@@ -170,10 +170,9 @@ constants, so they are published once in `release_manifest.json` under
 `metrics.calculate_nvt_price_models` publishes `nvt_price_30d`, `nvt_price_90d`
 and `nvt_price_365d`. Each multiplies the 730-day median NVT by the corresponding
 rolling median of BRK USD transfer volume, then divides by current supply.
-The Chart Library displays these three input-smoothed NVT Price models. The
-unsmoothed daily `nvt_price` and its existing averages remain available for
-compatibility. The 365-day model is an additional long-term reference alongside
-the standard 30/90-day pair. All calculations remain in Report Library.
+The Chart Library displays these three input-smoothed NVT Price models; `nvt_price`
+is the same model on daily volume. The 365-day model is a long-term reference
+alongside the standard 30/90-day pair.
 `nvt_price_multiple_30d`, `nvt_price_multiple_90d` and
 `nvt_price_multiple_365d` divide the Bitcoin closing price by each corresponding
 model. A multiple of 1.0 means price equals the model; missing or nonpositive
@@ -181,10 +180,10 @@ model values remain unavailable. The Chart Library defaults to the 90-day multip
 
 Power Law valuation boundaries are also published as prepared USD curves:
 `power_law_price_band_058`, `power_law_price_band_173` and
-`power_law_price_band_300`. They multiply the existing fitted model by the same
-0.58×, 1.73× and 3× thresholds used for dashboard valuation labels; the existing
-`power_law_price` supplies the 1× boundary. The curves share the model's fit date
-and are included in daily, weekly and monthly metrics. Chart shading is a visual
+`power_law_price_band_300`. They multiply the fitted model by the same 0.58×, 1.73×
+and 3× thresholds used for the valuation label; `power_law_price` is the 1× boundary.
+The curves share the model's fit date and are included in daily, weekly and monthly
+metrics. Chart shading is a visual
 interpretation of these fixed reviewed ranges, not a forecast confidence interval.
 
 ### Report Tables
@@ -205,7 +204,7 @@ interpretation of these fixed reviewed ranges, not a forecast confidence interva
 | `onchain_price_models.csv` | Daily valuation models (Metcalfe, power law, Realized, STH/LTH Realized, canonical $0.05/kWh power expense, and 3× Realized) joined to BTC price from the first traded price through `report_date`, plus the 50-day, 3-month, 200-day, 1-year and 200-week moving averages (50, 90, 200, 364 and 1,400 daily closes; empty until the window is complete). The Dashboard price chart draws the 3-month, 1-year and 200-week averages |
 | `mtd_price_paths.csv` | Each year's month-to-date price path rebased to this month's starting close, one column per year; row 0 is the shared prior-month close and the current year stops at `report_date` |
 | `ytd_price_paths.csv` | Each year's year-to-date price path rebased to this year's starting close, one column per year; row 0 is the shared prior-year close, dates align across leap years, and the current year stops at `report_date` |
-| `price_outlook.csv` | Hand-maintained Bear/Base/Bull cases, their forecast year, and retained support/resistance reference data; the website and bundled dashboard render the three case lines |
+| `price_outlook.csv` | Hand-maintained Bear/Base/Bull cases, their forecast year, and support/resistance levels; the website and bundled dashboard render the three case lines |
 
 ### Chart-Ready Datasets
 
