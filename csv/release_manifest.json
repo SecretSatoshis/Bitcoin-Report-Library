@@ -1,7 +1,7 @@
 {
   "files": {
     "bitcoin_candles.csv.gz": {
-      "sha256": "a8474224e8c82261d50db4160c7293f2b7f27a266b35d2e2f3042ba966bac39a",
+      "sha256": "00b0ef3d6873c5ac3912404da1494c0cb99cbbe5c48e6899541b2162b38b1659",
       "size_bytes": 134216
     },
     "cycle_low_data.csv": {
@@ -21,16 +21,16 @@
       "size_bytes": 154650
     },
     "master_metrics_data.csv.gz": {
-      "sha256": "56d83df5d0549d47f5c13db9848f36ccc57b41bedd5a920aa20a256660489ea5",
-      "size_bytes": 10798517
+      "sha256": "3dc2d0f89127176586627ed211ac063ee4fe4066137f829bf0603e651424217c",
+      "size_bytes": 11252864
     },
     "monthly_heatmap_data.csv": {
       "sha256": "bceff99064caa3d7246c975bba8b83e5fc9e9bad76de76f4aa28064afd117d29",
       "size_bytes": 4521
     },
     "monthly_metrics_data.csv.gz": {
-      "sha256": "c3a68fba4992c4975ecf1b5a6523285fa3a38fd6b9cdd3ee9ac00228dbeddd5d",
-      "size_bytes": 408728
+      "sha256": "331f69bc1b3dc4faaf52a810dde4b5bcc71f71623d6f68831d7ebc8adc792884",
+      "size_bytes": 423516
     },
     "mtd_return_comparison.csv": {
       "sha256": "937234f9c558c9f3d52fa4a936b4ada64aeb36826166cf3a4cd695ff6009d9ca",
@@ -49,8 +49,8 @@
       "size_bytes": 1093494
     },
     "performance_table.csv": {
-      "sha256": "39081bda003c0e2344ce35d8735438103d0ac8eb06681908fc0a86f82cdd71db",
-      "size_bytes": 3393
+      "sha256": "3e00fd17b086648a1925b188118f98c7bbd78d43d3eae34e05de975000227caf",
+      "size_bytes": 3390
     },
     "price_outlook.csv": {
       "sha256": "bef26252a26c887a62abc0d287aa6aee78e92bd42df451dc8dc89360bad925fe",
@@ -77,8 +77,8 @@
       "size_bytes": 484
     },
     "weekly_metrics_data.csv.gz": {
-      "sha256": "7b3eef1276809902114bcfad1683b8ec7d2fab5793b218334a521a2a0245d283",
-      "size_bytes": 1737995
+      "sha256": "c33a2d8083545b9a08a84c9f6e4c778de64692e288a384d70dadb86158539468",
+      "size_bytes": 1801966
     },
     "ytd_return_comparison.csv": {
       "sha256": "ec92015523c2fd3ae4c7853520fdca1f0fc3b5320307a944aa6fffa5d461f76c",
@@ -89,7 +89,7 @@
       "size_bytes": 98236
     }
   },
-  "generated_at": "2026-09-30T13:43:31+00:00",
+  "generated_at": "2026-09-30T17:38:41+00:00",
   "release_id": "2026-09-29",
   "report_date": "2026-09-29",
   "schema_version": 1
