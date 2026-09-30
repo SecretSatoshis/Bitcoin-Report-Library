@@ -378,5 +378,49 @@ class MovingAverageTests(unittest.TestCase):
         self.assertEqual(result["365_day_ma_x"].iloc[-1], np.arange(35.0, 400.0).mean())
 
 
+class NvtPriceModelTests(unittest.TestCase):
+    """Input-smoothed NVT Price models and their multiples."""
+
+    def frame(self, rows=1_200):
+        dates = pd.date_range("2020-01-01", periods=rows)
+        volume = pd.Series(100.0, index=dates)
+        volume.iloc[-1] = 1_000.0  # a one-day volume spike
+        return pd.DataFrame(
+            {"transfer_volume_sum_24h_usd": volume, "supply": 10.0,
+             "market_cap": 1_000.0, "price_close": 100.0},
+            index=dates,
+        )
+
+    def test_models_smooth_volume_before_valuing_it(self):
+        models = metrics.calculate_nvt_price_models(self.frame())
+        # The 730-day median NVT is 1,000 / 100 = 10. The unsmoothed model follows the
+        # spike; the smoothed models use median volume and ignore it.
+        self.assertAlmostEqual(models["nvt_price"].iloc[-1], 10 * 1_000.0 / 10)
+        for window in (30, 90, 365):
+            self.assertAlmostEqual(models[f"nvt_price_{window}d"].iloc[-1], 10 * 100.0 / 10)
+            self.assertAlmostEqual(models[f"nvt_price_multiple_{window}d"].iloc[-1], 1.0)
+            # The 730-day NVT median must be complete before any model is published.
+            self.assertTrue(pd.isna(models[f"nvt_price_{window}d"].iloc[728]))
+            self.assertFalse(pd.isna(models[f"nvt_price_{window}d"].iloc[729]))
+
+    def test_nonpositive_prices_leave_the_multiple_blank(self):
+        data = self.frame()
+        data.loc[data.index[-1], "price_close"] = 0.0
+        models = metrics.calculate_nvt_price_models(data)
+        self.assertTrue(pd.isna(models["nvt_price_multiple_90d"].iloc[-1]))
+
+
+class PowerLawBandTests(unittest.TestCase):
+    def test_bands_scale_the_fitted_model_by_the_reviewed_thresholds(self):
+        model = pd.Series([100.0, 200.0])
+        bands = metrics.calculate_power_law_price_bands(model)
+        self.assertEqual(sorted(bands), [
+            "power_law_price_band_058", "power_law_price_band_173", "power_law_price_band_300",
+        ])
+        self.assertTrue(np.allclose(bands["power_law_price_band_058"], [58.0, 116.0]))
+        self.assertTrue(np.allclose(bands["power_law_price_band_173"], [173.0, 346.0]))
+        self.assertTrue(np.allclose(bands["power_law_price_band_300"], [300.0, 600.0]))
+
+
 if __name__ == "__main__":
     unittest.main()

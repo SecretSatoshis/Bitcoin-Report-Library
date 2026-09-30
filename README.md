@@ -153,6 +153,26 @@ All data outputs are written to `csv/` and served from the GitHub Pages base pat
 
 The master metrics dataset is exported as gzipped CSV (`.csv.gz`) to keep the file under GitHub's size limits. `pd.read_csv()` reads `.csv.gz` files natively — no manual decompression needed.
 
+`metrics.calculate_nvt_price_models` publishes `nvt_price_30d`, `nvt_price_90d`
+and `nvt_price_365d`. Each multiplies the 730-day median NVT by the corresponding
+rolling median of BRK USD transfer volume, then divides by current supply.
+The Chart Library displays these three input-smoothed NVT Price models. The
+unsmoothed daily `nvt_price` and its existing averages remain available for
+compatibility. The 365-day model is an additional long-term reference alongside
+the standard 30/90-day pair. All calculations remain in Report Library.
+`nvt_price_multiple_30d`, `nvt_price_multiple_90d` and
+`nvt_price_multiple_365d` divide the Bitcoin closing price by each corresponding
+model. A multiple of 1.0 means price equals the model; missing or nonpositive
+model values remain unavailable. The Chart Library defaults to the 90-day multiple.
+
+Power Law valuation boundaries are also published as prepared USD curves:
+`power_law_price_band_058`, `power_law_price_band_173` and
+`power_law_price_band_300`. They multiply the existing fitted model by the same
+0.58×, 1.73× and 3× thresholds used for dashboard valuation labels; the existing
+`power_law_price` supplies the 1× boundary. The curves share the model's fit date
+and are included in daily, weekly and monthly metrics. Chart shading is a visual
+interpretation of these fixed reviewed ranges, not a forecast confidence interval.
+
 ### Report Tables
 
 | File | Description |

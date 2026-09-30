@@ -17,6 +17,7 @@ from data_definitions import (
     HASH_RIBBON_FAST_WINDOW,
     HASH_RIBBON_SLOW_WINDOW,
     METCALFE_ADDRESS_COLUMNS,
+    POWER_LAW_VALUATION_BANDS,
     SATS_PER_BTC,
 )
 from sources import MARKET_DATA_MAX_FFILL_DAYS, _normalized_index, _source_observation_column
@@ -91,6 +92,32 @@ def _bitcoin_block_subsidy_from_time(time_index) -> pd.Series:
     return pd.Series(reward, index=time_index)
 
 
+def calculate_nvt_price_models(data: pd.DataFrame) -> dict:
+    """NVT Price models using median transfer volume over 30, 90 and 365 days.
+
+    All models use BRK transfer volume and the same trailing 730-day median NVT.
+    Volume is smoothed before valuation. The unsmoothed daily nvt_price is retained
+    for existing data consumers. No change/entity adjustment is added.
+    Complete windows are required, and unavailable observations remain unavailable.
+    """
+    volume = data["transfer_volume_sum_24h_usd"]
+    supply = data["supply"]
+    reference = (data["market_cap"] / volume).rolling(730).median()
+    models = {
+        "nvt_price": reference * volume / supply,
+        **{
+            f"nvt_price_{window}d": reference * volume.rolling(window).median() / supply
+            for window in (30, 90, 365)
+        },
+    }
+    models.update({
+        f"nvt_price_multiple_{window}d": data["price_close"].where(data["price_close"] > 0)
+        / models[f"nvt_price_{window}d"].where(models[f"nvt_price_{window}d"] > 0)
+        for window in (30, 90, 365)
+    })
+    return models
+
+
 def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
     """
     Calculate comprehensive Bitcoin on-chain valuation and network health metrics.
@@ -109,7 +136,6 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
     supply = data["supply"]
     realized_cap = data["realized_cap"]
     price_close = data["price_close"]
-    transfer_volume = data["transfer_volume_sum_24h_usd"]
     miner_revenue_usd = data["coinbase_sum_24h_usd"]
 
     # --- Intermediates that later metrics build on -------------------------------
@@ -117,7 +143,6 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
     # contribute zero: they precede the series' first observation. An interior hole would
     # have aborted the run already.
     rev_all_time = miner_revenue_usd.fillna(0).cumsum()
-    nvt_adj = market_cap / transfer_volume
 
     # Early source rows carry a 0.0 price placeholder from before Bitcoin had a market
     # price. Dividing by those publishes inf, which downstream consumers cannot chart:
@@ -126,7 +151,6 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
     positive_price = price_close.where(price_close > 0)
 
     mvrv_ratio = market_cap / realized_cap  # published as CapMVRVCur
-    nvt_price = (nvt_adj.rolling(window=365 * 2).median() * transfer_volume) / supply
     ma_200_day = price_close.rolling(window=200).mean()
 
     # BRK provides utxos_over_1y_old_supply in BTC; divide by circulating supply for %
@@ -160,7 +184,7 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
         "sat_per_dollar": SATS_PER_BTC / positive_price,
         "CapMVRVCur": mvrv_ratio,
         "nupl": (market_cap - realized_cap) / market_cap,
-        "nvt_price": nvt_price,
+        **calculate_nvt_price_models(data),
         "7_day_ma_price_close": price_close.rolling(window=7).mean(),
         "50_day_ma_price_close": price_close.rolling(window=50).mean(),
         "200_day_ma_price_close": ma_200_day,
@@ -437,6 +461,10 @@ def calculate_network_model_metrics(data, model_end_date=None):
         }
     )
 
+    # Use the same reviewed boundaries as the dashboard valuation label. These
+    # USD curves are prepared here so chart renderers only display observations.
+    new_columns.update(calculate_power_law_price_bands(power_law_price))
+
     for address_column, suffix in METCALFE_ADDRESS_COLUMNS.items():
         addresses = pd.to_numeric(result[address_column], errors="coerce")
         metcalfe_fit = (
@@ -483,6 +511,15 @@ def calculate_network_model_metrics(data, model_end_date=None):
     if existing:
         result = result.drop(columns=existing)
     return pd.concat([result, pd.DataFrame(new_columns, index=result.index)], axis=1)
+
+
+def calculate_power_law_price_bands(power_law_price):
+    """USD boundaries of the fixed, reviewed Power Law valuation ranges."""
+    return {
+        f"power_law_price_band_{round(upper * 100):03d}": power_law_price * upper
+        for upper, _ in POWER_LAW_VALUATION_BANDS
+        if np.isfinite(upper) and upper != 1.0
+    }
 
 
 def electric_price_models(data):
