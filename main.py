@@ -42,7 +42,7 @@ from data_definitions import (
     gold_silver_supply,
     gold_supply_breakdown,
     analysis_columns,
-    stats_start_date,
+    yoy_columns,
     correlation_data,
     metrics_template,
     price_outlook_levels,
@@ -100,35 +100,15 @@ data = data_format.electric_price_models(data)
 
 # Create Datasets
 
-## Create Report Data - only calculate changes for columns that need them
-analysis_data = data[analysis_columns]
-report_data = data_format.run_data_analysis(analysis_data, stats_start_date)
+## Create Report Data - 7-day, 90-day, MTD and YTD changes for the price columns
+## the reports read, plus Bitcoin's YoY change
+changes = data_format.calculate_all_changes(data[analysis_columns], yoy_columns)
+report_data = pd.concat([data, changes], axis=1)
 
-## Merge the change columns back with the full data
-report_data = pd.concat([data, report_data.drop(columns=analysis_columns)], axis=1)
-
-## Create Growth Rate Data — only compute CAGR for the 13 columns actually used downstream.
-## Filter to columns present in data (some valuation models may not exist on early dates).
-cagr_input_cols = [c for c in cagr_columns if c in data.columns]
-cagr_results = data_format.calculate_rolling_cagr_for_all_metrics(data[cagr_input_cols])
-
-## Merge only the CAGR columns that Chart Library charts actually reference.
-## Full CAGR data is exported separately as cagr_data.csv.
-chart_cagr_columns = [
-    "price_close_4_Year_CAGR",
-    "SPY_close_4_Year_CAGR",
-    "QQQ_close_4_Year_CAGR",
-    "XLK_close_4_Year_CAGR",
-    "XLF_close_4_Year_CAGR",
-    "GLD_close_4_Year_CAGR",
-    "AGG_close_4_Year_CAGR",
-    "DX-Y.NYB_close_4_Year_CAGR",
-    "WGMI_close_4_Year_CAGR",
-]
-available_cagr = [c for c in chart_cagr_columns if c in cagr_results.columns]
-report_data = report_data.merge(
-    cagr_results[available_cagr], left_index=True, right_index=True, how="left"
-)
+## 4-year CAGR for the price columns Chart Library's CAGR charts read.
+## Also exported on its own as cagr_data.csv.
+cagr_results = data_format.calculate_rolling_cagr_for_all_columns(data[cagr_columns], 4)
+report_data = report_data.merge(cagr_results, left_index=True, right_index=True, how="left")
 
 ## Create Bitcoin Correlation Data (correlation_df was captured before the fill)
 correlation_results = data_format.create_btc_correlation_data(

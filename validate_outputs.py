@@ -50,7 +50,7 @@ OUTPUT_RULES = {
 
 
 REQUIRED_COLUMNS = {
-    "cagr_data.csv": {"time", "price_close_2_Year_CAGR", "price_close_4_Year_CAGR"},
+    "cagr_data.csv": {"time", "price_close_4_Year_CAGR"},
     "cycle_low_data.csv": {"days_since_cycle_low", "index_value", "Cycle"},
     "drawdown_data.csv": {"days_since_ath", "drawdown_pct", "Cycle"},
     "fundamentals_table.csv": {"Section", "Metric", "Current Value"},

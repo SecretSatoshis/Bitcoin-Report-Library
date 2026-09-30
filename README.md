@@ -18,7 +18,7 @@ CSV run with a hashed `visual-manifest.json`; see `dashboard/README.md`.
 - **Market Data Integration**: Multi-asset price data spanning equities, ETFs, commodities, forex, and cryptocurrencies
 - **Valuation Models**: Metcalfe, time-based power law, Stock-to-Flow, Thermocap, NVT, MVRV, Reserve Risk, energy-based pricing models, and relative valuation metrics
 - **Mining Signals**: Hash-rate trend metrics including strategy-aligned 30/60-day Hash Ribbons
-- **Performance Tracking**: Rolling returns (7d, 90d, MTD, YTD, YOY), correlation analysis, volatility, and CAGR calculations
+- **Performance Tracking**: Rolling returns (7d, 90d, MTD, YTD, and YOY for Bitcoin), correlation analysis, volatility, and 4-year CAGR calculations
 - **Cycle Analysis**: ATH drawdown tracking, halving epoch comparisons, and market cycle low indexing
 - **Report Tables**: Pre-built tables for fundamentals summaries, ROI comparisons, monthly heatmaps, and performance comparisons
 - **Chart-Ready Exports**: Pre-computed datasets for downstream visualization (drawdowns, cycle lows, halving eras, CAGR)
@@ -107,7 +107,7 @@ The pipeline executes in sequence:
 2. Retrieves market data from Yahoo Finance
 3. Pulls full daily OHLC history from BRK; weekly and monthly candles are aggregated from it through the report date
 4. Calculates derived metrics, mining signals, and valuation models (Metcalfe, power law, Hash Ribbons, Reserve Risk, MVRV, NUPL, NVT, volatility, etc.)
-5. Runs performance analysis (7d, 90d, MTD, YTD, YOY changes)
+5. Runs performance analysis (7d, 90d, MTD and YTD changes for the tracked prices, plus Bitcoin YOY)
 6. Generates report tables
 7. Computes cycle analysis (drawdowns, halving eras, cycle lows)
 8. Exports all outputs to `csv/`
@@ -172,7 +172,7 @@ These CSV files are pre-computed for downstream visualization by [Bitcoin-Chart-
 | `cycle_low_data.csv` | Market cycle performance indexed from the lowest positive price observed inside each configured cycle window |
 | `release_manifest.json` | Shared release ID, report date, generation time, and SHA-256/size records for every published CSV |
 | `halving_data.csv` | Performance indexed from each Bitcoin halving with a positive day-0 source price; the pre-price Genesis era is omitted |
-| `cagr_data.csv` | Rolling 2-year and 4-year CAGR values for the configured 13 downstream metrics, measured from the same calendar date 2 or 4 years earlier (leap days included) and expressed in percentage points |
+| `cagr_data.csv` | Rolling 4-year CAGR values for Bitcoin and the eight comparison prices, measured from the same calendar date 4 years earlier (leap days included) and expressed in percentage points |
 
 ## Dashboard
 

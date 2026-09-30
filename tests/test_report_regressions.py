@@ -229,6 +229,21 @@ class ReportRegressionTests(unittest.TestCase):
         self.assertEqual(result.loc["2021-02-28", "metric_YOY_change"], 200.0)
         self.assertEqual(result.loc["2021-03-01", "metric_YOY_change"], 100.0)
 
+    def test_only_requested_columns_get_yoy_changes(self):
+        dates = pd.date_range("2023-01-01", "2024-03-01", freq="D")
+        data = pd.DataFrame(
+            {"price_close": np.arange(1.0, len(dates) + 1), "SPY_close": 50.0},
+            index=dates,
+        )
+
+        result = data_format.calculate_all_changes(data, ["price_close"])
+
+        self.assertEqual(sorted(result.columns), sorted([
+            "price_close_7_change", "price_close_90_change", "price_close_MTD_change",
+            "price_close_YTD_change", "price_close_YOY_change", "SPY_close_7_change",
+            "SPY_close_90_change", "SPY_close_MTD_change", "SPY_close_YTD_change",
+        ]))
+
     def test_cycle_series_starts_at_actual_low_and_never_falls_below_one(self):
         dates = pd.date_range("2010-07-25", "2011-11-17", freq="D")
         prices = pd.Series(10.0, index=dates)

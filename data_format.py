@@ -1616,7 +1616,6 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
         "nvt_price_multiple_ma": nvt_price_multiple.rolling(window=14).mean(),
         "7_day_ma_price_close": price_close.rolling(window=7).mean(),
         "50_day_ma_price_close": price_close.rolling(window=50).mean(),
-        "100_day_ma_price_close": price_close.rolling(window=100).mean(),
         "200_day_ma_price_close": ma_200_day,
         "200_week_ma_price_close": price_close.rolling(window=200 * 7).mean(),
         "200_day_multiple": price_close / ma_200_day,
@@ -1684,36 +1683,14 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
 
 def calculate_moving_averages(data: pd.DataFrame, metrics: list) -> pd.DataFrame:
     """
-    Calculate 7-day, 30-day, and 365-day moving averages for specified metrics.
-
-    This function creates smoothed time series for on-chain metrics to reduce daily volatility
-    and identify trends. Moving averages are used throughout the pipeline for analysis and
-    visualization. The function adds 3 new columns per input metric.
-
-    Parameters:
-    data (pd.DataFrame): DataFrame with DatetimeIndex containing the metrics to smooth.
-                         Must include all column names specified in the metrics list.
-    metrics (list): List of column names to calculate moving averages for. Typically includes:
-                    hash_rate, daily_active_addresses_sending, tx_count_sum_24h, transfer_volume_sum_24h_usd, fees_average_24h_usd,
-                    subsidy_sum_24h, coinbase_sum_24h_usd, nvt_price, nvt_price_adj.
-                    Defined in data_definitions.moving_avg_metrics.
+    Add 30-day and 365-day moving averages for each metric in `metrics`
+    (data_definitions.moving_avg_metrics), as `30_day_ma_{metric}` and `365_day_ma_{metric}`.
     """
     moving_averages = {
-        f"7_day_ma_{metric}": data[metric].rolling(window=7).mean()
+        f"{window}_day_ma_{metric}": data[metric].rolling(window=window).mean()
+        for window in (30, 365)
         for metric in metrics
     }
-    moving_averages.update(
-        {
-            f"30_day_ma_{metric}": data[metric].rolling(window=30).mean()
-            for metric in metrics
-        }
-    )
-    moving_averages.update(
-        {
-            f"365_day_ma_{metric}": data[metric].rolling(window=365).mean()
-            for metric in metrics
-        }
-    )
 
     data = pd.concat([data, pd.DataFrame(moving_averages)], axis=1)
     return data
@@ -2270,37 +2247,6 @@ def calculate_rolling_cagr_for_all_columns(data, years):
     return cagr
 
 
-def calculate_rolling_cagr_for_all_metrics(data):
-    """
-    Calculate rolling Compound Annual Growth Rate (CAGR) for all metrics across 4-year and 2-year windows.
-
-    This function computes annualized growth rates for every numeric column in the dataset, providing
-    historical context for current values. CAGR smooths volatility and shows long-term trends, making
-    it useful for valuation model projections (e.g., projecting Bitcoin price based on 4-year CAGR of
-    realized price or thermocap price). The output is used in create_eoy_model_table for forecasting.
-
-    CAGR Formula: ((End Value / Start Value)^(1/years) - 1) * 100
-
-    Parameters:
-    data (pd.DataFrame): DataFrame with DatetimeIndex containing numeric metrics to calculate growth rates.
-                         Typically includes price_close, realized_price, thermocap_price, hash_rate, etc.
-
-    Returns:
-    pd.DataFrame: DataFrame with DatetimeIndex containing CAGR columns:
-        - {metric}_4_Year_CAGR: Annualized growth rate over past 4 years (1460 days) for each metric
-        - {metric}_2_Year_CAGR: Annualized growth rate over past 2 years (730 days) for each metric
-        Values are percentages (5.0 = 5% annual growth). NaN for insufficient history.
-    """
-    # Calculate 4-year CAGR for all columns
-    cagr_4yr = calculate_rolling_cagr_for_all_columns(data, 4)
-
-    # Calculate 2-year CAGR for all columns
-    cagr_2yr = calculate_rolling_cagr_for_all_columns(data, 2)
-
-    # Concatenate the results to return a DataFrame containing both 4-year and 2-year CAGR metrics
-    return pd.concat([cagr_4yr, cagr_2yr], axis=1)
-
-
 def _safe_pct_change(numerator, denominator):
     """
     Percentage change in percentage points, treating a zero denominator as missing.
@@ -2407,34 +2353,31 @@ def calculate_yoy_change(data):
     return yoy_change
 
 
-def calculate_all_changes(data: pd.DataFrame, periods: Optional[list] = None) -> pd.DataFrame:
+def calculate_all_changes(data: pd.DataFrame, yoy_columns: list, periods: Optional[list] = None) -> pd.DataFrame:
     """
-    Calculate time-based changes for each column in the DataFrame.
+    Calculate 7-day, 90-day, MTD and YTD changes for every column, and YoY changes
+    for `yoy_columns` only.
 
     Parameters:
     data (pd.DataFrame): The input DataFrame containing numerical data.
-    periods (list of int, optional): List of time periods (in days) to calculate changes for.
-                                     Defaults to [7, 90] which are the most commonly used.
+    yoy_columns (list): Columns that also get a year-over-year change.
+    periods (list of int, optional): Fixed day windows. Defaults to [7, 90].
 
     Returns:
-    pd.DataFrame: DataFrame containing all calculated changes.
+    pd.DataFrame: The change columns only, in percentage points.
     """
-    # Default to only the periods actually used in reports
     if periods is None:
         periods = [7, 90]
 
-    # Calculate changes for the specified periods
-    changes = calculate_time_changes(data, periods)
-
-    # Calculate YTD, MTD, and YOY changes (needed for reports and charts)
-    ytd_change = calculate_ytd_change(data)
-    mtd_change = calculate_mtd_change(data)
-    yoy_change = calculate_yoy_change(data)
-
-    # Concatenate all changes into a single DataFrame
-    changes = pd.concat([changes, ytd_change, mtd_change, yoy_change], axis=1)
-
-    return changes
+    return pd.concat(
+        [
+            calculate_time_changes(data, periods),
+            calculate_ytd_change(data),
+            calculate_mtd_change(data),
+            calculate_yoy_change(data[yoy_columns]),
+        ],
+        axis=1,
+    )
 
 
 def calculate_time_changes(data, periods):
@@ -2458,87 +2401,6 @@ def calculate_time_changes(data, periods):
     )
 
     return changes
-
-
-def calculate_statistics(data, start_date):
-    """
-    Calculate statistical metrics, including percentiles and z-scores, for the given data after a specified start date.
-
-    Parameters:
-    data (pd.DataFrame): The input DataFrame containing financial or numerical data.
-    start_date (str): The start date from which to filter data.
-
-    Returns:
-    tuple: Two DataFrames containing percentiles and z-scores, respectively.
-    """
-    # Convert start_date to datetime to ensure consistent filtering
-    start_date = pd.to_datetime(start_date)
-
-    # Filter data to only include rows after start_date
-    data = data[data.index >= start_date]
-
-    # Calculate percentiles and z-scores for numeric columns
-    numeric_data = data.select_dtypes(include=[np.number])
-
-    # Calculate percentiles for each numeric column
-    percentiles = numeric_data.rank(pct=True)
-    percentiles.columns = [str(col) + "_percentile" for col in percentiles.columns]
-
-    # Calculate z-scores for each numeric column (standard score)
-    z_scores = (numeric_data - numeric_data.mean()) / numeric_data.std()
-    z_scores.columns = [str(col) + "_zscore" for col in z_scores.columns]
-
-    return percentiles, z_scores
-
-
-def run_data_analysis(data: pd.DataFrame, start_date: str, periods: Optional[list] = None, include_statistics: bool = False) -> pd.DataFrame:
-    """
-    Calculate time-based percentage changes (7d, 90d, MTD, YTD) for all metrics in the dataset.
-
-    This is the primary analysis function that enriches raw data with calculated percentage changes
-    across multiple time periods. These change columns are essential for performance tables and
-    time-series analysis. Optionally includes percentile and z-score statistics.
-
-    The function calculates:
-    - Fixed period changes: 7-day, 90-day percentage changes
-    - Month-to-date (MTD) changes: Performance since start of current month
-    - Year-to-date (YTD) changes: Performance since January 1st of current year
-    - Optional statistics: Percentile rankings and z-scores since start_date
-
-    Parameters:
-    data (pd.DataFrame): DataFrame with DatetimeIndex containing metrics to analyze. Typically
-                         a subset of the full dataset containing only analysis_columns from
-                         data_definitions.py (optimized to ~28 columns instead of 400+).
-    start_date (str): Start date for statistical calculations in 'YYYY-MM-DD' format.
-                      Only used if include_statistics=True. Typically '2012-11-28' (first halving).
-    periods (Optional[list]): List of day periods for fixed-window changes. Default: [7, 90].
-                              Custom periods can be specified (e.g., [7, 30, 90, 365]).
-    include_statistics (bool): If True, calculates percentile and z-score for each metric relative
-                               to historical data since start_date. Default: False (not used in
-                               current reports but available for advanced analysis).
-
-    Returns:
-    pd.DataFrame: Original data with added change columns:
-        - {column}_7_change: 7-day percentage change for each metric
-        - {column}_90_change: 90-day percentage change for each metric
-        - {column}_MTD_change: Month-to-date percentage change
-        - {column}_YTD_change: Year-to-date percentage change
-        - {column}_percentile: Percentile rank (0-1) if include_statistics=True
-        - {column}_zscore: Standard score if include_statistics=True
-
-    """
-    # Calculate time-based changes for the data
-    changes = calculate_all_changes(data, periods)
-
-    # Merge the changes with the original data
-    data = pd.concat([data, changes], axis=1)
-
-    # Optionally include percentiles and z-scores (not used in current reports)
-    if include_statistics:
-        percentiles, z_scores = calculate_statistics(data, start_date)
-        data = pd.concat([data, percentiles, z_scores], axis=1)
-
-    return data
 
 
 # Create Market Statistics

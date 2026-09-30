@@ -122,9 +122,6 @@ yahoo_market_cap_fx_tickers = {
     "005930.KS": "KRWUSD=X",
 }
 
-# First Bitcoin halving date - used as start date for statistics calculations
-stats_start_date = "2012-11-28"
-
 # The report represents the last completed UTC day. GitHub-hosted runners currently use
 # UTC, but making the clock explicit keeps local and CI runs identical across timezones.
 report_date = (
@@ -276,11 +273,9 @@ price_outlook_levels = pd.DataFrame(
 # REPORT CONFIGURATION
 # =============================================================================
 
-# Columns for which CAGR is actually needed downstream.
-# Chart Library uses the _close price CAGRs; report_tables uses the valuation model CAGRs.
-# Limiting to these 13 columns instead of all 400+ cuts CAGR compute time by ~97%.
+# Columns that get a rolling 4-year CAGR. Chart Library's CAGR charts read these
+# from the master file; nothing reads any other CAGR.
 cagr_columns = [
-    # Close prices — used in chart CAGR comparison and cagr_data.csv export
     "price_close",
     "SPY_close",
     "QQQ_close",
@@ -290,52 +285,23 @@ cagr_columns = [
     "AGG_close",
     "DX-Y.NYB_close",
     "WGMI_close",
-    # Valuation models — used in EOY price model table (report_tables.create_eoy_model_table)
-    "realized_price",
-    "thermocap_price",
-    "200_day_ma_price_close",
-    "Lagged_Energy_Value",
 ]
 
-# Metrics for which to calculate 7/30/365-day moving averages
+# Metrics that get 30-day and 365-day moving averages (Chart Library lines)
 moving_avg_metrics = [
     "hash_rate",
     "daily_active_addresses_sending",
     "tx_count_sum_24h",
     "transfer_volume_sum_24h_usd",
-    "fees_average_24h_usd",
-    "fees_average_24h",
     "subsidy_sum_24h",
     "coinbase_sum_24h_usd",
     "nvt_price",
-    "nvt_price_adj",
 ]
 
-# Columns that need change calculations (7d, 90d, MTD, YTD)
-# These are the only columns passed to run_data_analysis()
+# Price columns that get 7-day, 90-day, MTD and YTD changes. These feed the
+# performance tables, Chart Library's return comparisons and the quarterly report.
 analysis_columns = [
-    # Bitcoin price and on-chain metrics
     "price_close",
-    "hash_rate",
-    "tx_count_sum_24h",
-    "transfer_volume_sum_24h_usd",
-    "daily_active_addresses_sending",
-    "addrs_over_10k_sats_addr_count",
-    "addrs_over_1btc_addr_count",
-    "coinbase_sum_24h_usd",
-    "fees_sum_24h_usd",
-    "supply_pct_1_year_plus",
-    "velocity_usd",
-    # BDD/VOCD/Reserve Risk metrics
-    "coindays_destroyed_sum_24h",
-    "adjusted_bdd",
-    "vocd",
-    "mvocd",
-    "hodl_bank_calc",
-    "reserve_risk_calc",
-    # Volatility metrics
-    "VtyDayRet30d",
-    "VtyDayRet180d",
     # Equity ETFs
     "SPY_close",
     "QQQ_close",
@@ -357,6 +323,9 @@ analysis_columns = [
     "COIN_close",
     "WGMI_close",
 ]
+
+# Only Bitcoin's year-over-year change is read (Chart Library's YoY chart).
+yoy_columns = ["price_close"]
 
 # Column names for correlation analysis
 correlation_data = [
