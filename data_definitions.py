@@ -19,7 +19,7 @@ import pandas as pd
 # MARKET DATA CONFIGURATION
 # =============================================================================
 
-# Asset tickers organized by category for yfinance/CoinGecko API calls
+# Asset tickers organized by category for yfinance API calls
 tickers = {
     "stocks": [
         "AAPL",
@@ -94,7 +94,6 @@ tickers = {
         "JPYUSD=X",
         "RUBUSD=X",
     ],
-    "crypto": ["ethereum", "ripple", "dogecoin", "binancecoin", "tether"],
 }
 
 # Stock tickers extracted for market cap calculations
@@ -615,3 +614,34 @@ MINER_DATA_SHEET_URL = "https://docs.google.com/spreadsheets/d/1GXaY6XE2mx5jnCu5
 
 # Default timeout for HTTP requests (seconds)
 API_TIMEOUT = 30
+
+
+# =============================================================================
+# INVESTOR SENTIMENT
+# =============================================================================
+
+# Fear & Greed is the NUPL zone (net unrealized profit/loss, calculated from BRK market cap
+# and realized cap) using the widely published emotion-cycle bands. The label comes from the
+# 7-day average so it does not flicker at a boundary on a single day's move. Each entry is
+# (upper bound, label); the last applies above.
+NUPL_SENTIMENT_ZONES = [
+    (0.0, "Capitulation"),
+    (0.25, "Hope / Fear"),
+    (0.5, "Optimism / Anxiety"),
+    (0.75, "Belief / Denial"),
+    (float("inf"), "Euphoria / Greed"),
+]
+NUPL_SENTIMENT_WINDOW_DAYS = 7
+
+# Valuation is price against the power-law fair value (`power_law_price_multiple`), banded
+# at standard deviations around the fair-value line: -1, 0, +1 and +2 sigma, where sigma is
+# the log10 spread of the multiple since 2015 (0.2388 as reviewed on 2026-09-29). The
+# thresholds are fixed so labels never drift on their own; review them once a year.
+POWER_LAW_VALUATION_REVIEWED = "2026-09-29"
+POWER_LAW_VALUATION_BANDS = [
+    (0.58, "Undervalued"),
+    (1.00, "Below Fair Value"),
+    (1.73, "Above Fair Value"),
+    (3.00, "Overvalued"),
+    (float("inf"), "Extremely Overvalued"),
+]

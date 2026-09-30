@@ -4,10 +4,6 @@
       "sha256": "61abb657878d733b6823596e8b5455fd388d44e1f977aeeeb9898c27e3fd29a0",
       "size_bytes": 134216
     },
-    "bitcoin_dominance_history.csv": {
-      "sha256": "142f1f88b94c328e467641a02a353461dba9d1fd089b8e08f74ebb829a86361a",
-      "size_bytes": 2024
-    },
     "cagr_data.csv": {
       "sha256": "798b8c6a57cc595e6be27ddfa849cbec5af897fffc6dbf385a301bb2638b22d7",
       "size_bytes": 2315942

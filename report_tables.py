@@ -23,7 +23,12 @@ from datetime import timedelta
 import numpy as np
 from pandas.tseries.offsets import MonthEnd
 import calendar
-from data_definitions import SATS_PER_BTC
+from data_definitions import (
+    NUPL_SENTIMENT_WINDOW_DAYS,
+    NUPL_SENTIMENT_ZONES,
+    POWER_LAW_VALUATION_BANDS,
+    SATS_PER_BTC,
+)
 
 
 def _positive_price_series(price_series):
@@ -415,30 +420,29 @@ def _row_asof(df, report_date):
     return df.loc[available_dates.max()]
 
 
-def _classify_fear_greed(value):
-    if pd.isna(value):
-        return ""
-    if value <= 24:
-        return "Extreme Fear"
-    if value <= 44:
-        return "Fear"
-    if value <= 54:
-        return "Neutral"
-    if value <= 74:
-        return "Greed"
-    return "Extreme Greed"
+def _band_label(value, bands):
+    """Return the label of the first (upper bound, label) band the value falls below."""
+    return next(label for upper, label in bands if value < upper)
 
 
-def _classify_bitcoin_valuation(mvrv_ratio):
-    if pd.isna(mvrv_ratio):
-        return ""
-    if mvrv_ratio < 1:
-        return "Undervalued"
-    if mvrv_ratio < 2:
-        return "Fair Value"
-    if mvrv_ratio < 3:
-        return "Overvalued"
-    return "Extremely Overvalued"
+def _nupl_sentiment(report_data, report_date):
+    """Fear & Greed label: the NUPL zone of the trailing 7-day average NUPL."""
+    report_date = pd.to_datetime(report_date).normalize()
+    window = pd.to_numeric(
+        report_data["nupl"].sort_index().loc[:report_date], errors="coerce"
+    ).tail(NUPL_SENTIMENT_WINDOW_DAYS)
+    if len(window) < NUPL_SENTIMENT_WINDOW_DAYS or window.isna().any():
+        raise RuntimeError(
+            f"NUPL needs {NUPL_SENTIMENT_WINDOW_DAYS} daily values through the report date"
+        )
+    return _band_label(window.mean(), NUPL_SENTIMENT_ZONES)
+
+
+def _power_law_valuation(power_law_multiple):
+    """Valuation label: price against the power-law fair value, in standard-deviation bands."""
+    if pd.isna(power_law_multiple) or power_law_multiple <= 0:
+        raise RuntimeError("Power-law price multiple is required for the valuation label")
+    return _band_label(power_law_multiple, POWER_LAW_VALUATION_BANDS)
 
 
 def create_summary_table(report_data, report_date):
@@ -465,17 +469,12 @@ def create_summary_table(report_data, report_date):
     # snapshot definition identical instead of silently substituting a 30-day mean.
     miner_revenue = latest["coinbase_sum_24h_usd"]
     tx_volume = latest["transfer_volume_sum_24h_usd"]
-    btc_dominance = latest.get("bitcoin_dominance", np.nan)
-    if pd.isna(btc_dominance):
-        raise RuntimeError(
-            "Bitcoin dominance is required for the report-date summary snapshot"
-        )
-
-    fear_greed_value = latest.get("fear_greed_value", np.nan)
-    fear_greed = latest.get("fear_greed_classification", "")
-    if pd.isna(fear_greed) or not fear_greed:
-        fear_greed = _classify_fear_greed(fear_greed_value)
-    bitcoin_valuation = _classify_bitcoin_valuation(latest.get("mvrv_ratio", np.nan))
+    # Investor sentiment comes entirely from BRK on-chain data.
+    supply_in_profit_pct = latest["supply_in_profit"] / latest["supply"] * 100
+    if pd.isna(supply_in_profit_pct) or not 0 <= supply_in_profit_pct <= 100:
+        raise RuntimeError("Supply in profit is required for the report-date summary snapshot")
+    market_sentiment = _nupl_sentiment(report_data, report_date)
+    bitcoin_valuation = _power_law_valuation(latest.get("power_law_price_multiple", np.nan))
 
     # Define categories for organization
     categorized_data = {
@@ -490,9 +489,8 @@ def create_summary_table(report_data, report_date):
             "Bitcoin Transaction Volume": tx_volume,
         },
         "Investor Sentiment": {
-            "Bitcoin Dominance": btc_dominance,
-            "Bitcoin Fear & Greed Index": fear_greed_value,
-            "Bitcoin Market Sentiment": fear_greed,
+            "Bitcoin Supply in Profit": supply_in_profit_pct,
+            "Bitcoin Market Sentiment": market_sentiment,
             "Bitcoin Valuation": bitcoin_valuation,
         },
     }

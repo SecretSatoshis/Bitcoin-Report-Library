@@ -8,9 +8,7 @@ metrics used throughout the reporting pipeline.
 Data Sources:
     - BRK (Bitview): On-chain metrics, difficulty, supply data
     - Yahoo Finance: Equities, ETFs, indices, commodities, forex
-    - CoinGecko: Altcoin prices, market caps, dominance
     - BRK: Bitcoin OHLC price data
-    - Alternative.me: Fear & Greed Index
     - Google Sheets: Miner efficiency data
 """
 
@@ -20,7 +18,6 @@ import numpy as np
 import yfinance as yf
 from datetime import datetime
 from io import StringIO
-from pathlib import Path
 import time
 import csv, io
 import warnings
@@ -46,7 +43,6 @@ from data_definitions import (
     HASH_RIBBON_FAST_WINDOW,
     HASH_RIBBON_SLOW_WINDOW,
 )
-import os
 
 
 # Ordinary market feeds should bridge weekends and short exchange holidays, not outages.
@@ -93,223 +89,7 @@ def _source_observation_column(value_column: str) -> str:
     return f"{_SOURCE_OBSERVATION_DATE_PREFIX}{value_column}"
 
 
-# CoinGecko's free tier rate-limits aggressively. Every CoinGecko call shares one bounded
-# retry policy so a single 429 cannot abort the release (dominance is release-blocking).
-COINGECKO_MAX_ATTEMPTS = 3
-COINGECKO_INITIAL_BACKOFF_SECONDS = 5
-
-
-def _get_json_with_retry(
-    url: str,
-    params: Optional[dict] = None,
-    max_attempts: int = COINGECKO_MAX_ATTEMPTS,
-    initial_backoff_seconds: float = COINGECKO_INITIAL_BACKOFF_SECONDS,
-):
-    """GET a JSON payload, retrying rate limits, 5xx responses and connection errors.
-
-    Other HTTP errors are raised immediately. The final failure is re-raised so callers
-    keep their existing error handling.
-    """
-    delay = initial_backoff_seconds
-    for attempt in range(1, max_attempts + 1):
-        try:
-            response = requests.get(url, params=params, timeout=API_TIMEOUT)
-            response.raise_for_status()
-            return response.json()
-        except requests.HTTPError as exc:
-            status = exc.response.status_code if exc.response is not None else None
-            transient = status == 429 or (status is not None and 500 <= status <= 599)
-            if not transient or attempt >= max_attempts:
-                raise
-        except (requests.ConnectionError, requests.Timeout):
-            if attempt >= max_attempts:
-                raise
-        time.sleep(delay)
-        delay *= 2
-
-
-def _coingecko_close_dates(timestamps_ms) -> pd.Series:
-    """Label CoinGecko daily points with the UTC day they close.
-
-    Daily ``market_chart`` points are stamped at 00:00 UTC, so the value at day D
-    midnight is the close of D-1 — the same convention as BRK's ``price_close``, which
-    labels a day by its own close. The trailing intraday point (the live price) stays on
-    its own, in-progress day and is removed by the report-date cutoff.
-    """
-    times = pd.to_datetime(pd.Series(timestamps_ms), unit="ms")
-    return (times - pd.Timedelta(milliseconds=1)).dt.normalize()
-
-
 # Get Data
-
-
-def get_fear_and_greed_index() -> pd.DataFrame:
-    """
-    Fetches the Fear and Greed Index data from the Alternative.me API.
-
-    Returns:
-    pd.DataFrame: DataFrame containing the Fear and Greed Index data.
-    """
-    # URL to fetch the Fear and Greed Index data (limit=0 fetches all historical data)
-    url = "https://api.alternative.me/fng/?limit=0"
-
-    try:
-        # Attempt to send a GET request to the URL
-        response = requests.get(
-            url, timeout=API_TIMEOUT
-        )  # Set a timeout to avoid indefinite waits
-        response.raise_for_status()  # Raise an error for unsuccessful status codes
-
-        # Convert the JSON response to a dictionary
-        data = response.json()
-        # Convert the data into a pandas DataFrame
-        df = pd.DataFrame(data["data"])
-        df["time"] = pd.to_datetime(df["timestamp"].astype(int), unit="s")
-        df["fear_greed_value"] = pd.to_numeric(df["value"], errors="coerce")
-        df["fear_greed_classification"] = df["value_classification"]
-        df = df[["fear_greed_value", "fear_greed_classification", "time"]]
-        return df
-
-    except (requests.exceptions.RequestException, KeyError) as e:
-        # If an error occurs, return an empty DataFrame and print the error
-        print(f"Failed to fetch Fear and Greed Index data. Reason: {e}")
-        return pd.DataFrame(
-            columns=["fear_greed_value", "fear_greed_classification", "time"]
-        )
-
-
-def get_bitcoin_dominance() -> pd.DataFrame:
-    """
-    Fetches the current Bitcoin dominance from the CoinGecko API.
-
-    Returns:
-    pd.DataFrame: DataFrame containing Bitcoin dominance and timestamp.
-    """
-    url = "https://api.coingecko.com/api/v3/global"
-    try:
-        data = _get_json_with_retry(url)
-        bitcoin_dominance = data["data"]["market_cap_percentage"]["btc"]
-        timestamp = pd.to_datetime(data["data"]["updated_at"], unit="s", utc=True)
-
-        df = pd.DataFrame(
-            {"bitcoin_dominance": [bitcoin_dominance], "time": [timestamp]}
-        )
-
-        return df
-
-    except requests.RequestException as e:
-        print(f"Failed to fetch Bitcoin dominance: {e}")
-        return pd.DataFrame(columns=["bitcoin_dominance", "time"])
-    except (KeyError, ValueError) as e:
-        print(f"Failed to parse Bitcoin dominance data: {e}")
-        return pd.DataFrame(columns=["bitcoin_dominance", "time"])
-
-
-BITCOIN_DOMINANCE_HISTORY_COLUMNS = [
-    "date",
-    "bitcoin_dominance",
-    "source_updated_at",
-]
-
-
-def _write_bitcoin_dominance_history(path: Path, history: pd.DataFrame) -> None:
-    """Atomically persist valid observations, including an empty initialized history."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = path.with_suffix(path.suffix + ".tmp")
-    output = history[BITCOIN_DOMINANCE_HISTORY_COLUMNS].copy()
-    if not output.empty:
-        output["date"] = pd.to_datetime(output["date"]).dt.strftime("%Y-%m-%d")
-    output.to_csv(temporary_path, index=False)
-    os.replace(temporary_path, path)
-
-
-def update_bitcoin_dominance_history(
-    snapshot: pd.DataFrame,
-    report_date,
-    output_path: str | Path = "csv/bitcoin_dominance_history.csv",
-) -> pd.DataFrame:
-    """Persist the latest available dominance observation for the report day.
-
-    CoinGecko's free ``/global`` endpoint is a current snapshot rather than a historical
-    daily series. The first successful snapshot is assigned to the completed report day,
-    regardless of when a delayed workflow runs. Existing report-date rows are immutable,
-    so a retry does not replace the observation already recorded for that day.
-    """
-    path = Path(output_path)
-    report_day = pd.to_datetime(report_date).normalize()
-
-    if path.is_file():
-        history = pd.read_csv(path)
-        missing = set(BITCOIN_DOMINANCE_HISTORY_COLUMNS) - set(history.columns)
-        if missing:
-            raise RuntimeError(
-                f"{path} is missing required columns {sorted(missing)}"
-            )
-        history = history[BITCOIN_DOMINANCE_HISTORY_COLUMNS].copy()
-        history["date"] = pd.to_datetime(history["date"], errors="coerce").dt.normalize()
-        if history["date"].isna().any():
-            raise RuntimeError(f"{path} contains an invalid dominance date")
-        history["bitcoin_dominance"] = pd.to_numeric(
-            history["bitcoin_dominance"], errors="coerce"
-        )
-
-        existing = history.loc[history["date"].eq(report_day)]
-        if not existing.empty:
-            if len(existing) != 1 or existing["bitcoin_dominance"].isna().any():
-                raise RuntimeError(
-                    f"{path} has duplicate or unusable data for {report_day.date()}"
-                )
-            return history.sort_values("date").reset_index(drop=True)
-    else:
-        history = pd.DataFrame(columns=BITCOIN_DOMINANCE_HISTORY_COLUMNS)
-
-    if snapshot is None or snapshot.empty:
-        raise RuntimeError(
-            f"CoinGecko returned no Bitcoin dominance snapshot for {report_day.date()}"
-        )
-    if not {"bitcoin_dominance", "time"}.issubset(snapshot.columns):
-        raise RuntimeError("CoinGecko dominance snapshot is missing value or time")
-
-    values = pd.to_numeric(snapshot["bitcoin_dominance"], errors="coerce")
-    fetched_times = pd.to_datetime(snapshot["time"], errors="coerce", utc=True)
-    valid = values.notna() & fetched_times.notna()
-    if not valid.any():
-        raise RuntimeError("CoinGecko dominance snapshot contains no usable observation")
-
-    value = float(values.loc[valid].iloc[-1])
-    source_updated_at = fetched_times.loc[valid].iloc[-1]
-    if not 0 < value < 100:
-        raise RuntimeError(f"CoinGecko returned invalid Bitcoin dominance {value}")
-
-    new_row = pd.DataFrame(
-        {
-            "date": [report_day],
-            "bitcoin_dominance": [value],
-            "source_updated_at": [source_updated_at.isoformat()],
-        }
-    )
-    history = pd.concat([history, new_row], ignore_index=True)
-    history["date"] = pd.to_datetime(history["date"]).dt.normalize()
-    history = (
-        history.drop_duplicates(subset=["date"], keep="first")
-        .sort_values("date")
-        .reset_index(drop=True)
-    )
-
-    _write_bitcoin_dominance_history(path, history)
-    return history
-
-
-def dominance_history_for_merge(history: pd.DataFrame) -> pd.DataFrame:
-    """Return persisted report-date dominance observations in merge-ready form."""
-    if history is None or history.empty:
-        return pd.DataFrame(columns=["bitcoin_dominance", "time"])
-    merged = history[["date", "bitcoin_dominance"]].rename(
-        columns={"date": "time"}
-    )
-    merged["time"] = pd.to_datetime(merged["time"]).dt.normalize()
-    merged[_source_observation_column("bitcoin_dominance")] = merged["time"]
-    return merged
 
 
 def assert_ohlc_usable(ohlc_data: pd.DataFrame, label: str = "OHLC") -> None:
@@ -392,111 +172,12 @@ def get_brk_ohlc(index: str = "day1", start: str = "2009-01-03") -> pd.DataFrame
         ) from e
 
 
-def get_btc_trade_volume_14d() -> pd.DataFrame:
-    """
-    Fetches the past 14 days of Bitcoin trade volume from CoinGecko.
-
-    Returns:
-    pd.DataFrame: DataFrame with daily Bitcoin trade volume.
-    """
-    url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
-    params = {"vs_currency": "usd", "days": "14", "interval": "daily"}
-
-    try:
-        volume_data = _get_json_with_retry(url, params=params)["total_volumes"]
-        df = pd.DataFrame(volume_data, columns=["time", "btc_trading_volume"])
-        # The 00:00 UTC point is the 24h volume of the day that just closed.
-        df["time"] = _coingecko_close_dates(df["time"])
-        df = df.drop_duplicates(subset=["time"], keep="last")
-
-        return df
-
-    except requests.RequestException as e:
-        print(f"Failed to fetch Bitcoin trading volume: {e}")
-        return pd.DataFrame(columns=["time", "btc_trading_volume"])
-    except (KeyError, ValueError) as e:
-        print(f"Failed to parse Bitcoin trading volume data: {e}")
-        return pd.DataFrame(columns=["time", "btc_trading_volume"])
-
-
-def get_crypto_data(ticker_list: list) -> pd.DataFrame:
-    """
-    Fetches historical daily data for a list of cryptocurrencies from the CoinGecko API.
-
-    Parameters:
-    ticker_list (list): List of CoinGecko-compatible cryptocurrency tickers.
-
-    Returns:
-    pd.DataFrame: DataFrame containing merged close prices, volumes, and market caps.
-    """
-    data_frames = []  # Collect all DataFrames for efficient concatenation
-
-    for ticker in ticker_list:
-        try:
-            url = f"https://api.coingecko.com/api/v3/coins/{ticker}/market_chart"
-            params = {"vs_currency": "usd", "days": "365", "interval": "daily"}
-            json_data = _get_json_with_retry(url, params=params)
-
-            # Parse JSON response into DataFrames
-            prices = pd.DataFrame(
-                json_data["prices"], columns=["time", f"{ticker}_close"]
-            )
-            volumes = pd.DataFrame(
-                json_data["total_volumes"], columns=["time", f"{ticker}_volume"]
-            )
-            market_caps = pd.DataFrame(
-                json_data["market_caps"], columns=["time", f"{ticker}_market_cap"]
-            )
-
-            # Label each point by the UTC day it closes so it aligns with BRK's
-            # price_close for the same date.
-            for frame in (prices, volumes, market_caps):
-                frame["time"] = _coingecko_close_dates(frame["time"])
-
-            # Merge DataFrames on the 'time' column
-            merged_data = pd.merge(prices, volumes, on="time")
-            merged_data = pd.merge(merged_data, market_caps, on="time")
-            merged_data = merged_data.drop_duplicates(subset=["time"], keep="last")
-            merged_data.set_index("time", inplace=True)
-
-            # Retain the true API observation date through daily reindexing. Without
-            # this marker, a second fill after merging could mistake a repeated value
-            # for a fresh observation and extend it beyond the configured age limit.
-            for value_column in list(merged_data.columns):
-                source_dates = pd.Series(
-                    merged_data.index, index=merged_data.index
-                ).where(merged_data[value_column].notna())
-                merged_data[_source_observation_column(value_column)] = source_dates
-
-            data_frames.append(merged_data)
-        except Exception as err:
-            print(f"Failed to fetch data for {ticker}: {err}")
-
-        # Delay between requests to avoid hitting API rate limits
-        time.sleep(1)
-
-    # Concatenate all DataFrames at once (O(n) instead of O(n²))
-    if data_frames:
-        data = pd.concat(data_frames, axis=1)
-        # Resample to fill any missing daily data
-        data = (
-            data.resample("D")
-            .ffill(limit=MARKET_DATA_MAX_FFILL_DAYS)
-            .reset_index()
-        )
-    else:
-        data = pd.DataFrame()
-
-    return data
-
-
 def get_price(tickers: dict, start_date: str) -> pd.DataFrame:
     """
     Fetches historical close prices for all tickers using a single yf.download() batch call.
 
     Batching all tickers into one request is significantly faster than fetching each ticker
-    individually. CoinGecko-sourced crypto tickers (ethereum, ripple, etc.) are excluded
-    because they are fetched separately by get_crypto_data().
+    individually.
 
     Parameters:
     tickers (dict): Dictionary with categories as keys and ticker lists as values.
@@ -511,21 +192,7 @@ def get_price(tickers: dict, start_date: str) -> pd.DataFrame:
     end_date = pd.Timestamp.now(tz="UTC").normalize().tz_localize(None).strftime(
         "%Y-%m-%d"
     )
-    excluded_crypto_tickers = {
-        "ethereum",
-        "ripple",
-        "dogecoin",
-        "binancecoin",
-        "tether",
-    }
-
-    # Build flat list of tickers, excluding those sourced from CoinGecko
-    fetch_tickers = [
-        ticker
-        for category, ticker_list in tickers.items()
-        for ticker in ticker_list
-        if not (category == "crypto" and ticker.lower() in excluded_crypto_tickers)
-    ]
+    fetch_tickers = [ticker for ticker_list in tickers.values() for ticker in ticker_list]
 
     if not fetch_tickers:
         return pd.DataFrame(columns=["time"])
@@ -1364,6 +1031,8 @@ REQUIRED_ONCHAIN_METRICS = [
     "addrs_over_100k_sats_addr_count",
     "addrs_over_1m_sats_addr_count",
     "addrs_over_10m_sats_addr_count",
+    # Investor sentiment: supply in profit. NUPL is derived from market_cap and realized_cap.
+    "supply_in_profit",
 ]
 
 
@@ -1395,7 +1064,7 @@ def warn_on_stale_market_data(
     """
     Warn about ordinary market series whose last proven observation is too old.
 
-    This check must run before `forward_fill_market_data`. Price and crypto fetchers retain
+    This check must run before `forward_fill_market_data`. Price fetchers retain
     temporary source-date markers, so an already repeated weekend value cannot masquerade
     as a new source observation. Monthly miner efficiency has its own explicit policy.
 
@@ -1771,84 +1440,36 @@ def assert_no_internal_onchain_gaps(
 def get_data(
     tickers: dict,
     start_date: str,
-    report_date=None,
-    bitcoin_dominance_history_path: str | Path | None = None,
 ) -> pd.DataFrame:
     """
     Primary data orchestration function that fetches and merges all data sources into unified dataset.
 
-    This is the main entry point for data ingestion. It coordinates API calls to 8 different data
-    sources, normalizes timestamps to UTC midnight, and performs left-join merges to create a
-    complete time-series dataset. The resulting DataFrame contains 400+ columns spanning on-chain
-    metrics, market prices, market caps, sentiment indicators, and crypto altcoin data.
+    This is the main entry point for data ingestion. It fetches every source, normalizes
+    timestamps to UTC midnight, and left-joins them onto the BRK daily calendar.
 
     Data Sources Integrated:
-    1. BRK (Bitview) API: Bitcoin on-chain metrics (difficulty, hash rate, supply, fees, etc.)
-    2. Yahoo Finance: Stock/ETF/commodity/forex prices via yfinance library
+    1. BRK (Bitview) API: Bitcoin price and on-chain metrics
+    2. Yahoo Finance: Stock/ETF/index/commodity/forex prices via yfinance
     3. Yahoo Finance: Market capitalizations for public companies
-    4. Alternative.me: Fear & Greed Index sentiment indicator
-    5. Google Sheets: Monthly Coin Metrics Bitcoin network efficiency data, forward-filled daily (J/GH)
-    6. CoinGecko: Bitcoin dominance percentage
-    7. CoinGecko: 14-day Bitcoin trade volume
-    8. CoinGecko: Altcoin prices (ETH, XRP, DOGE, BNB, USDT)
+    4. Google Sheets: Monthly Coin Metrics Bitcoin network efficiency data, forward-filled daily (J/GH)
 
     Parameters:
     tickers (dict): Asset ticker dictionary from data_definitions.py with keys:
-                    'stocks', 'etfs', 'indices', 'commodities', 'forex', 'crypto'.
-                    Example: {"stocks": ["AAPL", "MSFT"], "crypto": ["ethereum"]}
+                    'stocks', 'etfs', 'indices', 'commodities', 'forex'.
     start_date (str): Historical data start date in 'YYYY-MM-DD' format. Typically '2010-01-01'
                       to capture maximum history from Yahoo Finance. BRK data starts ~2009.
-    report_date (str or pd.Timestamp, optional): Completed UTC day represented by the report.
-    bitcoin_dominance_history_path (str or Path, optional): Persistent CoinGecko
-                    daily snapshot history. When both optional arguments are supplied,
-                    dominance is aligned to report_date instead of the fetch timestamp.
     """
     # Fetch data
     coindata = get_brk_onchain(start_date)
     prices = get_price(tickers, start_date)
     marketcaps = get_marketcap(tickers, start_date)
-    fear_greed_index = get_fear_and_greed_index()
     miner_data = get_miner_data()  # Monthly Coin Metrics network efficiency, forward-filled daily
-    bitcoin_dominance = get_bitcoin_dominance()
-    btc_trade_volume_14d = get_btc_trade_volume_14d()
-    crypto_data = get_crypto_data(tickers["crypto"])
-
-    if report_date is not None and bitcoin_dominance_history_path is not None:
-        dominance_history = update_bitcoin_dominance_history(
-            bitcoin_dominance,
-            report_date,
-            bitcoin_dominance_history_path,
-        )
-        bitcoin_dominance = dominance_history_for_merge(dominance_history)
-    elif not bitcoin_dominance.empty and "time" in bitcoin_dominance.columns:
-        # Backwards-compatible snapshot behavior for library callers that do not opt
-        # into persistent report-date history. The production pipeline always supplies
-        # report_date and bitcoin_dominance_history_path.
-        bitcoin_dominance["time"] = pd.to_datetime(bitcoin_dominance["time"]).dt.normalize()
-        if not coindata.empty and "time" in coindata.columns:
-            latest_data_date = pd.to_datetime(coindata["time"]).max().normalize()
-            dominance_value = bitcoin_dominance["bitcoin_dominance"].iloc[-1]
-            dominance_source_date = bitcoin_dominance["time"].iloc[-1]
-            bitcoin_dominance = pd.DataFrame(
-                {
-                    "bitcoin_dominance": [dominance_value, dominance_value],
-                    "time": [latest_data_date - pd.Timedelta(days=1), latest_data_date],
-                    _source_observation_column("bitcoin_dominance"): [
-                        dominance_source_date,
-                        dominance_source_date,
-                    ],
-                }
-            ).drop_duplicates(subset=["time"], keep="last")
 
     datasets = [
         ("coindata", coindata),
         ("prices", prices),
         ("marketcaps", marketcaps),
-        ("fear_greed_index", fear_greed_index),
         ("miner_data", miner_data),
-        ("bitcoin_dominance", bitcoin_dominance),
-        ("btc_trade_volume_14d", btc_trade_volume_14d),
-        ("crypto_data", crypto_data),
     ]
 
     processed_datasets = {}
@@ -1879,8 +1500,6 @@ def get_data(
     # Optional assets retain a stable schema when their providers return no data.
     optional = [f"{ticker}_close" for group in tickers.values() for ticker in group]
     optional += [f"{ticker}_MarketCap" for ticker in tickers.get("stocks", [])]
-    optional += [f"{ticker}_{suffix}" for ticker in tickers.get("crypto", [])
-                 for suffix in ("volume", "market_cap")]
     data = data.reindex(columns=list(dict.fromkeys([*data.columns, *optional])))
 
     # Handle duplicates

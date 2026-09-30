@@ -61,7 +61,7 @@ Bitcoin-Report-Library/
 ### Data Flow
 
 ```
-Sources (BRK, Yahoo Finance, CoinGecko, Alternative.me, Google Sheets)
+Sources (BRK, Yahoo Finance, Google Sheets)
     │
     ▼
 data_format.py  ──►  Fetches & calculates all metrics
@@ -104,14 +104,13 @@ uv run --no-sync python main.py
 
 The pipeline executes in sequence:
 1. Fetches the configured on-chain and market series from the BRK API
-2. Retrieves market data from Yahoo Finance and CoinGecko
-3. Stores one CoinGecko Bitcoin-dominance observation for the completed UTC day
-4. Pulls full daily OHLC history from BRK; weekly and monthly candles are aggregated from it through the report date
-5. Calculates derived metrics, mining signals, and valuation models (Metcalfe, power law, Hash Ribbons, Reserve Risk, MVRV, NVT, volatility, etc.)
-6. Runs performance analysis (7d, 90d, MTD, YTD, YOY changes)
-7. Generates report tables
-8. Computes cycle analysis (drawdowns, halving eras, cycle lows)
-9. Exports all outputs to `csv/`
+2. Retrieves market data from Yahoo Finance
+3. Pulls full daily OHLC history from BRK; weekly and monthly candles are aggregated from it through the report date
+4. Calculates derived metrics, mining signals, and valuation models (Metcalfe, power law, Hash Ribbons, Reserve Risk, MVRV, NUPL, NVT, volatility, etc.)
+5. Runs performance analysis (7d, 90d, MTD, YTD, YOY changes)
+6. Generates report tables
+7. Computes cycle analysis (drawdowns, halving eras, cycle lows)
+8. Exports all outputs to `csv/`
 
 **Note:** The CSV output is consumed by
 [Bitcoin-Chart-Library](https://github.com/SecretSatoshis/Bitcoin-Chart-Library) for
@@ -124,13 +123,7 @@ visualization. Run this pipeline first when Chart Library is configured with a l
 |--------|-----------|----------|
 | **BRK (Bitview) API** | On-chain metrics, difficulty, supply data | `bitview.space/api` |
 | **Yahoo Finance** | Equities, ETFs, indices, commodities, forex | `yfinance` library |
-| **CoinGecko** | Altcoin prices, market caps, and the latest available BTC-dominance snapshot | Public API (rate limits and 5xx responses are retried with backoff) |
-| **Alternative.me** | Fear & Greed Index | Public API |
 | **Google Sheets** | Miner efficiency data | CSV export |
-
-CoinGecko stamps each daily point at 00:00 UTC, which is the close of the previous day.
-The pipeline labels those points by the day they close, so altcoin prices and volumes
-line up with BRK's `price_close` for the same date.
 
 ## Configuration
 
@@ -154,8 +147,7 @@ The master metrics dataset is exported as gzipped CSV (`.csv.gz`) to keep the fi
 |------|-------------|
 | `master_metrics_data.csv.gz` | Complete dataset with all calculated metrics and change calculations (gzipped) |
 | `fundamentals_table.csv` | Network performance, security, economics, valuation metrics |
-| `summary_table.csv` | Labeled summary metrics with `Metric`, `Value`, and `Category` columns |
-| `bitcoin_dominance_history.csv` | Persistent daily CoinGecko BTC-dominance observations using the latest snapshot available to each run; each report-date row is immutable |
+| `summary_table.csv` | Labeled summary metrics with `Metric`, `Value`, and `Category` columns. Investor Sentiment is all on-chain: supply in profit (%), a Fear & Greed label from the NUPL zone of the 7-day average (Capitulation, Hope / Fear, Optimism / Anxiety, Belief / Denial, Euphoria / Greed), and a valuation label from price against the power-law fair value in standard-deviation bands (Undervalued below 0.58×, Below Fair Value to 1.00×, Above Fair Value to 1.73×, Overvalued to 3.00×, Extremely Overvalued above) |
 | `performance_table.csv` | Multi-asset performance comparison. The 90-day BTC correlation pairs each asset's returns between its own trading days with BTC's return over the same span, so weekends and holidays add no artificial zero returns |
 | `mtd_return_comparison.csv` | Month-to-date return from the latest positive close before the month began, plus the historical median projection |
 | `ytd_return_comparison.csv` | Year-to-date return from the latest positive close before January 1, plus the historical median projection |
@@ -194,8 +186,7 @@ The `dashboard/` subfolder is an [Evidence.dev](https://evidence.dev) BI-as-code
 The GitHub Actions workflow is scheduled for **00:30 UTC**, shortly after the UTC day
 closes and safely after the New York market close. GitHub starts scheduled workflows
 late, so in practice runs have begun around 05:15–05:45 UTC. It refreshes the source data,
-records the completed day's Bitcoin-dominance observation, runs the regression and
-output-validation suites, rebuilds the public release page and sitemap, and commits the
+runs the regression and output-validation suites, rebuilds the public release page and sitemap, and commits the
 validated CSV and public release outputs. That publication supplies the dashboard and
 the downstream Chart Library, which checks hourly for a new release rather than
 assuming a fixed time.
@@ -207,9 +198,8 @@ hand-maintained reference dataset exceeds its reviewed-age budget, or a dated ex
 power-law and Metcalfe coefficients are kept in the master file for every date, so fitted
 valuation series remain reproducible.
 
-Bitcoin dominance is a required report-date input. The pipeline stores the latest usable
-CoinGecko snapshot available when the run executes, including delayed runs, and fails only
-when CoinGecko returns no usable observation rather than publishing an incomplete report.
+The power-law valuation bands are fixed in `data_definitions.py` (one standard deviation
+of the log multiple since 2015, reviewed yearly), so the label never drifts on its own.
 
 ## Dependencies
 

@@ -60,24 +60,15 @@ class ReviewFixTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'missing on'):
             tables.create_fundamentals_table(frame, template, dates[-1])
 
-    def test_optional_crypto_rate_limits_have_bounded_wait(self):
-        with patch.object(ingest.requests, 'get', return_value=FakeResponse(status_code=429)) as get, patch.object(ingest.time, 'sleep') as sleep:
-            self.assertTrue(ingest.get_crypto_data(['ethereum']).empty)
-        self.assertEqual(get.call_count, 3)
-        self.assertEqual([call.args[0] for call in sleep.call_args_list], [5,10,1])
-
     def test_all_optional_price_sources_missing_preserves_declared_columns(self):
         base = pd.DataFrame({'time': pd.date_range('2024-01-01', periods=10),
                              'price_close': 100.0})
         with ExitStack() as stack:
             stack.enter_context(patch.object(ingest, 'get_brk_onchain', return_value=base))
-            for function in ('get_price', 'get_marketcap', 'get_fear_and_greed_index',
-                             'get_miner_data', 'get_bitcoin_dominance',
-                             'get_btc_trade_volume_14d', 'get_crypto_data'):
+            for function in ('get_price', 'get_marketcap', 'get_miner_data'):
                 stack.enter_context(patch.object(ingest, function, return_value=pd.DataFrame()))
-            data = ingest.get_data({'stocks':['MISSING'], 'crypto':['ethereum']}, '2024-01-01')
-        self.assertTrue(data[['MISSING_close', 'MISSING_MarketCap', 'ethereum_close',
-                              'ethereum_market_cap', 'ethereum_volume']].isna().all().all())
+            data = ingest.get_data({'stocks':['MISSING']}, '2024-01-01')
+        self.assertTrue(data[['MISSING_close', 'MISSING_MarketCap']].isna().all().all())
         filled = ingest.forward_fill_market_data(data)
         self.assertTrue(filled['MISSING_close'].isna().all())
 

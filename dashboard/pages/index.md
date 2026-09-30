@@ -393,23 +393,23 @@ _Headline metrics — market, on-chain, and sentiment._
 
 <Grid cols=3 gapSize=lg>
   <BigValue
-    data={btc_dominance}
-    value=dominance
-    title="Bitcoin Dominance"
-    fmt='#,##0.00"%"'
-    description="BTC share of total crypto market cap."
+    data={btc_supply_in_profit}
+    value=supply_in_profit
+    title="Supply in Profit"
+    fmt='#,##0.0"%"'
+    description="Share of all bitcoin whose price today is above the price it last moved at."
   />
   <BigValue
     data={btc_sentiment}
     value=sentiment
     title="Fear & Greed"
-    description="Fear & Greed Index classification (Extreme Fear to Extreme Greed)."
+    description="NUPL zone, from Capitulation to Euphoria / Greed, based on the 7-day average of holders' unrealized profit or loss."
   />
   <BigValue
     data={btc_valuation}
     value=valuation
     title="Bitcoin Valuation"
-    description="Undervalued / Fair / Overvalued."
+    description="Price against the power-law fair value: Undervalued, Below Fair Value, Above Fair Value, Overvalued or Extremely Overvalued."
   />
 </Grid>
 
@@ -798,10 +798,10 @@ left join src prior on prior.date = cur.date - interval 30 day
 order by cur.date desc
 ```
 
-```sql btc_dominance
-select CAST(Value AS DOUBLE) as dominance
+```sql btc_supply_in_profit
+select CAST(Value AS DOUBLE) as supply_in_profit
 from bitcoin_report_library.summary_table
-where Metric = 'Bitcoin Dominance'
+where Metric = 'Bitcoin Supply in Profit'
 ```
 
 ```sql btc_sentiment

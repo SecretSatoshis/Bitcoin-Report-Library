@@ -50,12 +50,7 @@ from data_definitions import (
 )
 
 # Fetch the data
-data = data_format.get_data(
-    tickers,
-    market_data_start_date,
-    report_date=report_date,
-    bitcoin_dominance_history_path="csv/bitcoin_dominance_history.csv",
-)
+data = data_format.get_data(tickers, market_data_start_date)
 
 ## Forward fill market data only.
 ## Equities/ETFs/FX print on trading days and miner efficiency prints monthly, so both
@@ -249,9 +244,6 @@ onchain_subset.to_csv("csv/onchain_price_models.csv")
 
 
 ## Summary History CSV - inclusive 30-day comparison window (31 daily endpoints)
-## Bitcoin Dominance is maintained separately in bitcoin_dominance_history.csv. Its
-## required report-date value still flows into summary_table, but it stays out of this
-## fixed 30-day headline window until the dedicated history has accumulated enough observations.
 HEADLINE_METRICS = {
     "Bitcoin Price USD": "price_close",
     "Bitcoin Marketcap": "market_cap",
@@ -259,7 +251,6 @@ HEADLINE_METRICS = {
     "Bitcoin Supply": "supply",
     "Bitcoin Miner Revenue": "coinbase_sum_24h_usd",
     "Bitcoin Transaction Volume": "transfer_volume_sum_24h_usd",
-    "Bitcoin Fear & Greed Index": "fear_greed_value",
 }
 summary_history = report_tables.create_summary_history(
     report_data, report_date, HEADLINE_METRICS, comparison_days=30

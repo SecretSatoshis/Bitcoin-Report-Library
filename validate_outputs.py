@@ -26,7 +26,6 @@ class RowBounds:
 # report tables. They catch truncation, header-only files, accidental duplication,
 # and runaway exports without coupling validation to today's exact history length.
 OUTPUT_RULES = {
-    "bitcoin_dominance_history.csv": RowBounds(1, 100_000),
     "cagr_data.csv": RowBounds(365, 100_000),
     "cycle_low_data.csv": RowBounds(1, 100_000),
     "drawdown_data.csv": RowBounds(1, 100_000),
@@ -51,9 +50,6 @@ OUTPUT_RULES = {
 
 
 REQUIRED_COLUMNS = {
-    "bitcoin_dominance_history.csv": {
-        "date", "bitcoin_dominance", "source_updated_at",
-    },
     "cagr_data.csv": {"time", "price_close_2_Year_CAGR", "price_close_4_Year_CAGR"},
     "cycle_low_data.csv": {"days_since_cycle_low", "index_value", "Cycle"},
     "drawdown_data.csv": {"days_since_ath", "drawdown_pct", "Cycle"},
@@ -99,14 +95,12 @@ SUMMARY_HISTORY_METRICS = {
     "Bitcoin Supply",
     "Bitcoin Miner Revenue",
     "Bitcoin Transaction Volume",
-    "Bitcoin Fear & Greed Index",
 }
 
 
 RETAINED_OUTPUTS = {
     "ohlc_data.csv",
     "fundamentals_table.csv",
-    "bitcoin_dominance_history.csv",
     "cycle_low_data.csv",
     "halving_data.csv",
     "monthly_heatmap_data.csv",
@@ -565,53 +559,6 @@ def _validate_report_agreement(
         require_every_row=True,
     )
 
-    dominance = frames.get("bitcoin_dominance_history.csv")
-    if dominance is not None and not dominance.empty:
-        _validate_dated_output(
-            frames,
-            "bitcoin_dominance_history.csv",
-            "date",
-            expected_report_date,
-            errors,
-        )
-        dates = _normalized_dates(
-            dominance,
-            "date",
-            "bitcoin_dominance_history.csv",
-            errors,
-        )
-        if dates is not None and dates.duplicated().any():
-            errors.append("bitcoin_dominance_history.csv: contains duplicate dates")
-        values = pd.to_numeric(dominance["bitcoin_dominance"], errors="coerce")
-        if values.isna().any() or not values.between(0, 100, inclusive="neither").all():
-            errors.append(
-                "bitcoin_dominance_history.csv: dominance must be numeric and between 0 and 100"
-            )
-        source_updated_at = pd.to_datetime(
-            dominance["source_updated_at"], errors="coerce", utc=True
-        )
-        if source_updated_at.isna().any():
-            errors.append(
-                "bitcoin_dominance_history.csv: contains invalid source_updated_at values"
-            )
-
-        summary = frames.get("summary_table.csv")
-        if summary is not None and {"Metric", "Value"}.issubset(summary.columns):
-            report_value = values.loc[dates.eq(expected_report_date)] if dates is not None else []
-            summary_value = pd.to_numeric(
-                summary.loc[
-                    summary["Metric"].eq("Bitcoin Dominance"), "Value"
-                ],
-                errors="coerce",
-            ).dropna()
-            if (
-                len(report_value) != 1
-                or len(summary_value) != 1
-                or not np.isclose(report_value.iloc[0], summary_value.iloc[0])
-            ):
-                errors.append(
-                    "summary_table.csv: Bitcoin Dominance disagrees with report-date history"
-                )
 
     history = frames.get("summary_history.csv")
     if history is not None and not history.empty:
@@ -663,6 +610,36 @@ def _validate_report_agreement(
     _validate_price_moving_averages(frames, errors)
 
 
+def _validate_investor_sentiment(summary, master_path, report_date, errors):
+    """Recompute the three on-chain Investor Sentiment values from the master file."""
+    from report_tables import _nupl_sentiment, _power_law_valuation
+    try:
+        master = pd.read_csv(
+            master_path,
+            usecols=["time", "nupl", "supply_in_profit", "supply", "power_law_price_multiple"],
+            parse_dates=["time"],
+        ).set_index("time").loc[:report_date]
+        latest = master.iloc[-1]
+        expected = {
+            "Bitcoin Supply in Profit": latest["supply_in_profit"] / latest["supply"] * 100,
+            "Bitcoin Market Sentiment": _nupl_sentiment(master, report_date),
+            "Bitcoin Valuation": _power_law_valuation(latest["power_law_price_multiple"]),
+        }
+        values = summary.set_index("Metric")["Value"]
+        for metric, value in expected.items():
+            if metric not in values.index:
+                raise ValueError(f"missing {metric!r}")
+            observed = values[metric]
+            matches = (
+                np.isclose(float(observed), value, rtol=1e-9)
+                if isinstance(value, float) else str(observed) == value
+            )
+            if not matches:
+                raise ValueError(f"{metric!r} is {observed!r}, expected {value!r}")
+    except (ValueError, KeyError, RuntimeError, IndexError) as exc:
+        errors.append(f"summary_table.csv: investor sentiment does not match its source ({exc})")
+
+
 def _validate_review_contracts(frames, output_dir, report_date, errors):
     from data_validation import validate_candles, validate_calendar
     weekly = frames.get("ohlc_data.csv")
@@ -696,8 +673,11 @@ def _validate_review_contracts(frames, output_dir, report_date, errors):
                 raise ValueError("report_ohlc_summary.csv: inconsistent week-to-date candle")
         except (ValueError, KeyError, IndexError) as exc:
             errors.append(f"report_ohlc_summary.csv: {exc}")
-    fundamentals = frames.get("fundamentals_table.csv")
     master_path = output_dir / "master_metrics_data.csv.gz"
+    summary = frames.get("summary_table.csv")
+    if summary is not None and master_path.is_file():
+        _validate_investor_sentiment(summary, master_path, report_date, errors)
+    fundamentals = frames.get("fundamentals_table.csv")
     if fundamentals is not None and master_path.is_file():
         from data_definitions import metrics_template
         from report_tables import create_fundamentals_table

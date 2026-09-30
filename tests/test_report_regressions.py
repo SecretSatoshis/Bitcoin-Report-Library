@@ -25,23 +25,6 @@ class ReportRegressionTests(unittest.TestCase):
             index=[pd.Timestamp("2024-01-01")],
         )
 
-    def test_summary_table_requires_a_dominance_capture(self):
-        report_data = pd.DataFrame(
-            {
-                "price_close": [50_000.0],
-                "market_cap": [1.0e12],
-                "supply": [20_000_000.0],
-                "coinbase_sum_24h_usd": [25_000_000.0],
-                "transfer_volume_sum_24h_usd": [10_000_000_000.0],
-                "fear_greed_value": [55.0],
-                "mvrv_ratio": [1.5],
-            },
-            index=[pd.Timestamp("2024-01-09")],
-        )
-
-        with self.assertRaisesRegex(RuntimeError, "Bitcoin dominance is required"):
-            report_tables.create_summary_table(report_data, "2024-01-09")
-
     def test_electricity_cost_uses_observed_subsidy_plus_fees_and_tariffs(self):
         result = data_format.electric_price_models(self._energy_input()).iloc[0]
 
@@ -165,29 +148,63 @@ class ReportRegressionTests(unittest.TestCase):
         self.assertEqual(result["date"].iloc[0], "2024-03-01")
         self.assertEqual(result["date"].iloc[-1], "2024-03-31")
 
-    def test_summary_snapshot_uses_raw_daily_onchain_values(self):
-        data = pd.DataFrame(
+    @staticmethod
+    def _summary_input(nupl, multiple=0.9, supply_in_profit=14_000_000.0):
+        dates = pd.date_range(end="2024-01-07", periods=len(nupl), freq="D")
+        return pd.DataFrame(
             {
-                "price_close": [50_000.0],
-                "market_cap": [1_000_000.0],
-                "supply": [20_000_000.0],
-                "coinbase_sum_24h_usd": [10.0],
-                "30_day_ma_coinbase_sum_24h_usd": [99.0],
-                "transfer_volume_sum_24h_usd": [20.0],
-                "30_day_ma_transfer_volume_sum_24h_usd": [88.0],
-                "bitcoin_dominance": [55.0],
-                "fear_greed_value": [50.0],
-                "mvrv_ratio": [1.5],
+                "price_close": 50_000.0,
+                "market_cap": 1_000_000.0,
+                "supply": 20_000_000.0,
+                "coinbase_sum_24h_usd": 10.0,
+                "30_day_ma_coinbase_sum_24h_usd": 99.0,
+                "transfer_volume_sum_24h_usd": 20.0,
+                "30_day_ma_transfer_volume_sum_24h_usd": 88.0,
+                "supply_in_profit": supply_in_profit,
+                "nupl": nupl,
+                "power_law_price_multiple": multiple,
             },
-            index=[pd.Timestamp("2024-01-01")],
+            index=dates,
         )
 
-        result = report_tables.create_summary_table(data, "2024-01-01").set_index(
-            "Metric"
-        )
+    def test_summary_snapshot_uses_raw_daily_onchain_values(self):
+        data = self._summary_input([0.3] * 7)
+        result = report_tables.create_summary_table(data, "2024-01-07").set_index("Metric")
 
         self.assertEqual(result.loc["Bitcoin Miner Revenue", "Value"], 10.0)
         self.assertEqual(result.loc["Bitcoin Transaction Volume", "Value"], 20.0)
+        self.assertNotIn("Bitcoin Dominance", result.index)
+
+    def test_investor_sentiment_comes_from_onchain_data(self):
+        # Six days in Belief and one in Hope still average into Belief / Denial,
+        # so a single day's move does not flip the label.
+        data = self._summary_input([0.6] * 6 + [0.2], multiple=0.594)
+        result = report_tables.create_summary_table(data, "2024-01-07").set_index("Metric")
+        sentiment = result[result["Category"] == "Investor Sentiment"]["Value"]
+
+        self.assertEqual(list(sentiment.index), [
+            "Bitcoin Supply in Profit", "Bitcoin Market Sentiment", "Bitcoin Valuation",
+        ])
+        self.assertEqual(sentiment["Bitcoin Supply in Profit"], 70.0)
+        self.assertEqual(sentiment["Bitcoin Market Sentiment"], "Belief / Denial")
+        self.assertEqual(sentiment["Bitcoin Valuation"], "Below Fair Value")
+
+    def test_sentiment_and_valuation_band_edges(self):
+        cases = [(-0.1, "Capitulation"), (0.0, "Hope / Fear"), (0.36, "Optimism / Anxiety"),
+                 (0.5, "Belief / Denial"), (0.8, "Euphoria / Greed")]
+        for nupl, label in cases:
+            with self.subTest(nupl=nupl):
+                data = self._summary_input([nupl] * 7)
+                self.assertEqual(report_tables._nupl_sentiment(data, "2024-01-07"), label)
+        for multiple, label in [(0.45, "Undervalued"), (0.58, "Below Fair Value"),
+                                (1.0, "Above Fair Value"), (1.73, "Overvalued"),
+                                (3.0, "Extremely Overvalued")]:
+            with self.subTest(multiple=multiple):
+                self.assertEqual(report_tables._power_law_valuation(multiple), label)
+
+    def test_sentiment_requires_a_full_nupl_week(self):
+        with self.assertRaisesRegex(RuntimeError, "NUPL needs 7"):
+            report_tables.create_summary_table(self._summary_input([0.3] * 6), "2024-01-07")
 
     def test_yoy_change_matches_the_same_calendar_date(self):
         dates = pd.to_datetime(
