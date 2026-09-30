@@ -86,8 +86,23 @@ uv run --no-sync python validate_outputs.py
 | `candle_data.py` | Daily, weekly and monthly candles |
 | `data_definitions.py` | Configuration: tickers, series, reference data |
 | `validate_outputs.py` | Release checks run before publishing |
-| `dashboard/` | The Market Dashboard, a static site built from the release ([its README](dashboard/README.md)) |
+| `dashboard/` | The Market Dashboard, a static site built from the release |
 | `tests/` | One test file per module |
+
+## Dashboard
+
+`dashboard/` turns each release into the [Market Dashboard](https://dashboard.secretsatoshis.com),
+a static site. The Chart Library renderer draws its three interactive charts. You need Node 24.
+
+```bash
+cd dashboard
+npx --yes npm@12.0.2 ci
+npm run sync:local
+npm run dev
+```
+
+`npm run build` writes the site to `dashboard/build/`. `npm test` and `npm run test:browser`
+check it.
 
 ## Reading the data
 
