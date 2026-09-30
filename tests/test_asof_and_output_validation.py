@@ -34,10 +34,7 @@ class AsOfReportTests(unittest.TestCase):
             report_data=report_data,
             report_date="2024-01-10",
             correlation_results={},
-            asset_configs=[
-                {"name": "BTC", "label": "Bitcoin - [BTC]", "ticker": "price_close"}
-            ],
-            category="Test",
+            asset_groups={"Bitcoin": [("Bitcoin - [BTC]", "price_close")]},
         ).iloc[0]
 
         self.assertEqual(result["Price"], 100.0)
@@ -48,9 +45,65 @@ class AsOfReportTests(unittest.TestCase):
         self.assertEqual(result["52 Week High"], 100.0)
         self.assertEqual(result["52 Week Low"], 50.0)
 
+    def test_performance_table_lists_bitcoin_once_in_its_own_category(self):
+        tickers = ["price_close"] + [
+            ticker for assets in report_tables.PERFORMANCE_GROUPS.values()
+            for _, ticker in assets if ticker != "price_close"
+        ]
+        columns = {}
+        for ticker in tickers:
+            price = ticker if ticker == "price_close" else f"{ticker}_close"
+            columns[price] = [10.0]
+            for suffix in ("7", "MTD", "YTD", "90"):
+                columns[f"{price}_{suffix}_change"] = [1.0]
+        report_data = pd.DataFrame(columns, index=pd.to_datetime(["2024-01-05"]))
+        correlations = {"price_close_90_days": pd.DataFrame(
+            0.5, index=["price_close"], columns=[f"{t}_close" for t in tickers[1:]])}
+
+        result = report_tables.create_full_performance_table(
+            report_data, "2024-01-05", correlations)
+
+        bitcoin = result[result["Asset"] == "Bitcoin - [BTC]"]
+        self.assertEqual(len(bitcoin), 1)
+        self.assertEqual(bitcoin["Category"].iloc[0], "Bitcoin")
+        self.assertEqual(result["Asset"].iloc[0], "Bitcoin - [BTC]")
+        self.assertEqual(len(result), 17)
+        self.assertEqual(
+            result.groupby("Category", sort=False).size().to_dict(),
+            {"Bitcoin": 1, "Equity Market Indexes": 4, "Sectors": 4,
+             "Macro Asset Classes": 4, "Bitcoin Industry Performance": 4},
+        )
+
 
 
 class OutputValidationTests(unittest.TestCase):
+    def _performance_frame(self):
+        rows = [
+            {"Category": category, "Asset": label, "Price": 10.0, "7 Day Return (%)": 1.0,
+             "MTD Return (%)": 1.0, "YTD Return (%)": 1.0, "90 Day Return (%)": 1.0}
+            for category, assets in report_tables.PERFORMANCE_GROUPS.items()
+            for label, _ in assets
+        ]
+        return pd.DataFrame(rows)
+
+    def test_validator_rejects_performance_rows_without_prices(self):
+        import validate_outputs as validator
+
+        errors = []
+        validator._validate_performance_rows({"performance_table.csv": self._performance_frame()}, errors)
+        self.assertEqual(errors, [])
+
+        outage = self._performance_frame()
+        outage.loc[outage["Category"] == "Sectors", "Price"] = float("nan")
+        validator._validate_performance_rows({"performance_table.csv": outage}, errors)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("missing price or returns for Technology Sector ETF - [XLK]", errors[0])
+
+        errors = []
+        validator._validate_performance_rows(
+            {"performance_table.csv": self._performance_frame().iloc[:-1]}, errors)
+        self.assertIn("rows do not match", errors[0])
+
     def _write_summary_history(self, directory: Path, end_date: str) -> Path:
         dates = pd.date_range(end=pd.Timestamp(end_date), periods=31, freq="D")
         rows = [
@@ -113,24 +166,16 @@ class OutputValidationTests(unittest.TestCase):
 
     def test_validator_cross_checks_btc_mtd_and_ytd_returns(self):
         rules = {
-            "performance_table.csv": RowBounds(1, 10),
+            "performance_table.csv": RowBounds(1, 20),
             "mtd_return_comparison.csv": RowBounds(1, 10),
             "ytd_return_comparison.csv": RowBounds(1, 10),
             "monthly_heatmap_data.csv": RowBounds(1, 10),
         }
         with tempfile.TemporaryDirectory() as temp_dir:
             directory = Path(temp_dir)
-            pd.DataFrame(
-                [
-                    {
-                        "Category": "Bitcoin",
-                        "Asset": "Bitcoin - [BTC]",
-                        "Price": 100.0,
-                        "MTD Return (%)": -5.0,
-                        "YTD Return (%)": 10.0,
-                    }
-                ]
-            ).to_csv(directory / "performance_table.csv", index=False)
+            performance = self._performance_frame()
+            performance.loc[0, ["Price", "MTD Return (%)", "YTD Return (%)"]] = [100.0, -5.0, 10.0]
+            performance.to_csv(directory / "performance_table.csv", index=False)
 
             for period, value in (("mtd", -5.0), ("ytd", 10.0)):
                 pd.DataFrame(

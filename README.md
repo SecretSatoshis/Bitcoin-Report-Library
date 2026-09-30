@@ -129,7 +129,7 @@ visualization. Run this pipeline first when Chart Library is configured with a l
 
 All configuration is centralized in `data_definitions.py`:
 
-- **Tickers**: Asset symbols organized by category (stocks, ETFs, indices, commodities, forex)
+- **Tickers**: Asset symbols organized by category (stocks, which also get market caps; Bitcoin equities, price only; ETFs, indices, commodities, forex)
 - **Reference Data**: Fiat money supply, precious metals supply, and gold allocation breakdown, each with an explicit reviewed vintage and maximum age
 - **API Settings**: Configured BRK series, endpoint URLs, timeout values
 - **Model Parameters**: Metcalfe address input, Bitcoin genesis anchor, Hash Ribbon windows, electricity-tariff scenarios, trading days, and unit conversions
@@ -148,7 +148,7 @@ The master metrics dataset is exported as gzipped CSV (`.csv.gz`) to keep the fi
 | `master_metrics_data.csv.gz` | Complete dataset with all calculated metrics, change calculations and 4-year CAGRs (gzipped) |
 | `fundamentals_table.csv` | Network performance, security, economics, valuation metrics |
 | `summary_table.csv` | Labeled summary metrics with `Metric`, `Value`, and `Category` columns. Investor Sentiment is all on-chain: supply in profit (%), a Fear & Greed label from the NUPL zone of the 7-day average (Capitulation, Hope / Fear, Optimism / Anxiety, Belief / Denial, Euphoria / Greed), and a valuation label from price against the power-law fair value in standard-deviation bands (Undervalued below 0.58×, Below Fair Value to 1.00×, Above Fair Value to 1.73×, Overvalued to 3.00×, Extremely Overvalued above) |
-| `performance_table.csv` | Multi-asset performance comparison. The 90-day BTC correlation pairs each asset's returns between its own trading days with BTC's return over the same span, so weekends and holidays add no artificial zero returns |
+| `performance_table.csv` | Multi-asset performance comparison: one Bitcoin row (category `Bitcoin`), then equity indexes, sectors, macro assets and Bitcoin-industry stocks. The release fails if any asset lacks a price or return. The 90-day BTC correlation pairs each asset's returns between its own trading days with BTC's return over the same span, so weekends and holidays add no artificial zero returns |
 | `mtd_return_comparison.csv` | Month-to-date return from the latest positive close before the month began, plus the historical median projection |
 | `ytd_return_comparison.csv` | Year-to-date return from the latest positive close before January 1, plus the historical median projection |
 | `relative_value_comparison.csv` | Relative valuation metrics |

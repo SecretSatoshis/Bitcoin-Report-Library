@@ -638,6 +638,41 @@ def _validate_investor_sentiment(summary, master_path, report_date, errors):
         errors.append(f"summary_table.csv: investor sentiment does not match its source ({exc})")
 
 
+PERFORMANCE_VALUE_COLUMNS = [
+    "Price", "7 Day Return (%)", "MTD Return (%)", "YTD Return (%)", "90 Day Return (%)",
+]
+
+
+def _validate_performance_rows(frames, errors):
+    """Every configured asset is published once, in its category, with a price and returns.
+
+    A market-data outage leaves carried-forward prices blank rather than stale, so without
+    this check a table of empty rows would still publish.
+    """
+    table = frames.get("performance_table.csv")
+    if table is None or not {"Category", "Asset"}.issubset(table.columns):
+        return
+    from report_tables import PERFORMANCE_GROUPS
+    expected = [
+        (category, label)
+        for category, assets in PERFORMANCE_GROUPS.items()
+        for label, _ in assets
+    ]
+    if list(zip(table["Category"], table["Asset"])) != expected:
+        errors.append("performance_table.csv: rows do not match the configured assets and categories")
+        return
+    absent = [column for column in PERFORMANCE_VALUE_COLUMNS if column not in table.columns]
+    if absent:
+        errors.append(f"performance_table.csv: missing columns {absent}")
+        return
+    values = table[PERFORMANCE_VALUE_COLUMNS].apply(pd.to_numeric, errors="coerce")
+    blank = table.loc[values.isna().any(axis=1), "Asset"].tolist()
+    if blank:
+        errors.append(
+            "performance_table.csv: missing price or returns for " + ", ".join(blank)
+        )
+
+
 def _validate_review_contracts(frames, output_dir, report_date, errors):
     from data_validation import validate_candles, validate_calendar
     weekly = frames.get("ohlc_data.csv")
@@ -750,6 +785,7 @@ def validate_outputs(
 
     _validate_report_agreement(retained_frames, expected_report_date, errors)
     _validate_review_contracts(retained_frames, output_dir, expected_report_date, errors)
+    _validate_performance_rows(retained_frames, errors)
     from candle_data import CANDLE_FILES, validate_candle_exports
     if any((output_dir / name).exists() for name in CANDLE_FILES):
         try:

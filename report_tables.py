@@ -508,29 +508,57 @@ def create_summary_table(report_data, report_date):
     return weekly_summary_df
 
 
+# Performance table rows by category, in published order. Bitcoin appears once, in its own
+# category; each dashboard and newsletter group shows it alongside its own assets.
+PERFORMANCE_GROUPS = {
+    "Bitcoin": [("Bitcoin - [BTC]", "price_close")],
+    "Equity Market Indexes": [
+        ("S&P 500 Index ETF - [SPY]", "SPY"),
+        ("Nasdaq-100 ETF - [QQQ]", "QQQ"),
+        ("US Total Stock Market ETF - [VTI]", "VTI"),
+        ("International Stock ETF - [VXUS]", "VXUS"),
+    ],
+    "Sectors": [
+        ("Technology Sector ETF - [XLK]", "XLK"),
+        ("Financials Sector ETF - [XLF]", "XLF"),
+        ("Energy Sector ETF - [XLE]", "XLE"),
+        ("Real Estate Sector ETF - [XLRE]", "XLRE"),
+    ],
+    "Macro Asset Classes": [
+        ("US Dollar Index - [DXY]", "DX-Y.NYB"),
+        ("Gold ETF - [GLD]", "GLD"),
+        ("Aggregate Bond ETF - [AGG]", "AGG"),
+        ("S&P GSCI Commodity Index - [SPGSCI]", "^SPGSCI"),
+    ],
+    "Bitcoin Industry Performance": [
+        ("MicroStrategy - [MSTR]", "MSTR"),
+        ("Block - [XYZ]", "XYZ"),
+        ("Coinbase - [COIN]", "COIN"),
+        ("Bitcoin Miners ETF - [WGMI]", "WGMI"),
+    ],
+}
+
+
 def _build_performance_table(
     report_data: pd.DataFrame,
     report_date,
     correlation_results: dict,
-    asset_configs: list,
-    category: str,
+    asset_groups: dict,
 ) -> pd.DataFrame:
     """
-    Generic performance table builder for any asset category.
+    Build one performance row per asset: price, 7-day/MTD/YTD/90-day returns, 52-week
+    range and 90-day correlation with Bitcoin.
 
     Parameters:
-    - report_data (pd.DataFrame): DataFrame containing historical data for all assets.
+    - report_data (pd.DataFrame): Historical data with each asset's close and change columns.
     - report_date (str or pd.Timestamp): As-of cutoff; metrics use the newest
       available row on or before this date.
-    - correlation_results (dict): Dictionary with correlation DataFrames for different periods.
-    - asset_configs (list): List of dicts with 'name', 'label', 'ticker' keys.
-                            Example: [{"name": "BTC", "label": "Bitcoin - [BTC]", "ticker": "price_close"}]
+    - correlation_results (dict): Correlation frames keyed "price_close_{days}_days".
+    - asset_groups (dict): {category: [(label, ticker), ...]}; ticker "price_close" is Bitcoin.
 
     Returns:
-    - pd.DataFrame: Performance metrics for the specified assets.
+    - pd.DataFrame: One row per asset, in group order.
     """
-    performance_metrics = []
-
     # Resolve the as-of row once. Market closures or an upstream gap can leave no
     # exact report-date label; every current value and the 52-week window must then
     # use the same newest observation on or before the requested cutoff.
@@ -547,205 +575,33 @@ def _build_performance_table(
     # 52-week window for high/low calculations, anchored to that same as-of row.
     year_ago = actual_report_date - pd.Timedelta(days=365)
 
-    for config in asset_configs:
-        ticker = config["ticker"]
-        # Handle special case for Bitcoin price_close column
-        price_col = ticker if ticker == "price_close" else f"{ticker}_close"
-        corr_col = ticker if ticker == "price_close" else f"{ticker}_close"
-
-        # Compute 52-week high/low from the last 365 days of close prices
-        window = report_data.loc[year_ago:actual_report_date, price_col].dropna()
-        high_52w = window.max() if len(window) else None
-        low_52w = window.min() if len(window) else None
-
-        metrics = {
-            "Category": category,
-            "Asset": config["label"],
-            "Price": latest[price_col],
-            "7 Day Return (%)": latest[f"{price_col}_7_change"],
-            "MTD Return (%)": latest[f"{price_col}_MTD_change"],
-            "YTD Return (%)": latest[f"{price_col}_YTD_change"],
-            "90 Day Return (%)": latest[f"{price_col}_90_change"],
-            "52 Week High": high_52w,
-            "52 Week Low": low_52w,
-            "90 Day BTC Correlation": correlation_results["price_close_90_days"].loc[
-                "price_close", corr_col
-            ] if ticker != "price_close" else 1,  # BTC correlation with itself is 1
-        }
-        performance_metrics.append(metrics)
-
-    return pd.DataFrame(performance_metrics)
+    rows = []
+    for category, assets in asset_groups.items():
+        for label, ticker in assets:
+            price_col = ticker if ticker == "price_close" else f"{ticker}_close"
+            window = report_data.loc[year_ago:actual_report_date, price_col].dropna()
+            rows.append({
+                "Category": category,
+                "Asset": label,
+                "Price": latest[price_col],
+                "7 Day Return (%)": latest[f"{price_col}_7_change"],
+                "MTD Return (%)": latest[f"{price_col}_MTD_change"],
+                "YTD Return (%)": latest[f"{price_col}_YTD_change"],
+                "90 Day Return (%)": latest[f"{price_col}_90_change"],
+                "52 Week High": window.max() if len(window) else None,
+                "52 Week Low": window.min() if len(window) else None,
+                # Bitcoin's correlation with itself is 1.
+                "90 Day BTC Correlation": 1 if ticker == "price_close" else
+                    correlation_results["price_close_90_days"].loc["price_close", price_col],
+            })
+    return pd.DataFrame(rows)
 
 
-def create_equity_performance_table(report_data, report_date, correlation_results):
-    """
-    Creates a performance table summarizing key metrics for selected equity ETFs.
-
-    Parameters:
-    - report_data (pd.DataFrame): DataFrame containing historical data for the assets.
-    - report_date (str or pd.Timestamp): Date for which the performance metrics are retrieved.
-    - correlation_results (dict): Dictionary with correlation DataFrames for different periods.
-
-    Returns:
-    - pd.DataFrame: A DataFrame containing the performance metrics for the selected assets.
-    """
-    asset_configs = [
-        {"name": "BTC", "label": "Bitcoin - [BTC]", "ticker": "price_close"},
-        {"name": "SPY", "label": "S&P 500 Index ETF - [SPY]", "ticker": "SPY"},
-        {"name": "QQQ", "label": "Nasdaq-100 ETF - [QQQ]", "ticker": "QQQ"},
-        {"name": "VTI", "label": "US Total Stock Market ETF - [VTI]", "ticker": "VTI"},
-        {"name": "VXUS", "label": "International Stock ETF - [VXUS]", "ticker": "VXUS"},
-    ]
+def create_full_performance_table(report_data, report_date, correlation_results):
+    """Performance rows for Bitcoin and every asset in PERFORMANCE_GROUPS."""
     return _build_performance_table(
-        report_data,
-        report_date,
-        correlation_results,
-        asset_configs,
-        "Equity Market Indexes",
+        report_data, report_date, correlation_results, PERFORMANCE_GROUPS
     )
-
-
-def create_sector_performance_table(report_data, report_date, correlation_results):
-    """
-    Creates a sector performance table for selected sector ETFs.
-
-    Parameters:
-    - report_data (pd.DataFrame): DataFrame containing historical data for the assets.
-    - report_date (str or pd.Timestamp): Date for which the performance metrics are retrieved.
-    - correlation_results (dict): Dictionary with correlation DataFrames for different periods.
-
-    Returns:
-    - pd.DataFrame: A DataFrame containing the performance metrics for the selected sector ETFs.
-    """
-    asset_configs = [
-        {"name": "BTC", "label": "Bitcoin - [BTC]", "ticker": "price_close"},
-        {"name": "XLK", "label": "Technology Sector ETF - [XLK]", "ticker": "XLK"},
-        {"name": "XLF", "label": "Financials Sector ETF - [XLF]", "ticker": "XLF"},
-        {"name": "XLE", "label": "Energy Sector ETF - [XLE]", "ticker": "XLE"},
-        {"name": "XLRE", "label": "Real Estate Sector ETF - [XLRE]", "ticker": "XLRE"},
-    ]
-    return _build_performance_table(
-        report_data,
-        report_date,
-        correlation_results,
-        asset_configs,
-        "Sectors",
-    )
-
-
-def create_macro_performance_table(
-    report_data, report_date, correlation_results
-):
-    """
-    Creates a macro performance table for macroeconomic indicators.
-
-    Parameters:
-    - report_data (pd.DataFrame): DataFrame containing historical data for the macro indicators.
-    - report_date (str or pd.Timestamp): Date for which the performance metrics are retrieved.
-    - correlation_results (pd.DataFrame): DataFrame with correlation values between macro indicators and Bitcoin.
-
-    Returns:
-    - pd.DataFrame: A DataFrame containing the performance metrics for the selected macro indicators.
-    """
-    asset_configs = [
-        {"name": "BTC", "label": "Bitcoin - [BTC]", "ticker": "price_close"},
-        {"name": "DXY", "label": "US Dollar Index - [DXY]", "ticker": "DX-Y.NYB"},
-        {"name": "GLD", "label": "Gold ETF - [GLD]", "ticker": "GLD"},
-        {"name": "AGG", "label": "Aggregate Bond ETF - [AGG]", "ticker": "AGG"},
-        {
-            "name": "SPGSCI",
-            "label": "S&P GSCI Commodity Index - [SPGSCI]",
-            "ticker": "^SPGSCI",
-        },
-    ]
-    return _build_performance_table(
-        report_data,
-        report_date,
-        correlation_results,
-        asset_configs,
-        "Macro Asset Classes",
-    )
-
-
-def create_bitcoin_performance_table(report_data, report_date, correlation_results):
-    """
-    Creates a Bitcoin performance table for Bitcoin-related equities.
-
-    Parameters:
-    - report_data (pd.DataFrame): DataFrame containing historical data for Bitcoin and equities.
-    - report_date (str or pd.Timestamp): Date for which the performance metrics are retrieved.
-    - correlation_results (pd.DataFrame): DataFrame with correlation values between Bitcoin and related equities.
-
-    Returns:
-    - pd.DataFrame: A DataFrame containing the performance metrics for Bitcoin and related equities.
-    """
-    asset_configs = [
-        {"name": "BTC", "label": "Bitcoin - [BTC]", "ticker": "price_close"},
-        {"name": "MSTR", "label": "MicroStrategy - [MSTR]", "ticker": "MSTR"},
-        {"name": "XYZ", "label": "Block - [XYZ]", "ticker": "XYZ"},
-        {"name": "COIN", "label": "Coinbase - [COIN]", "ticker": "COIN"},
-        {"name": "WGMI", "label": "Bitcoin Miners ETF - [WGMI]", "ticker": "WGMI"},
-    ]
-    return _build_performance_table(
-        report_data,
-        report_date,
-        correlation_results,
-        asset_configs,
-        "Bitcoin Industry Performance",
-    )
-
-
-def create_full_performance_table(
-    report_data,
-    report_date,
-    correlation_results,
-):
-    """
-    Combines data from all performance tables into a single comprehensive table.
-
-    Parameters:
-    - report_data (pd.DataFrame): DataFrame containing report data for all assets.
-    - report_date (str or pd.Timestamp): Date for which the report is generated.
-    - correlation_results (dict): Dictionary of correlation DataFrames for each period (e.g., 90 days) with BTC as baseline.
-
-    Returns:
-    - pd.DataFrame: A comprehensive DataFrame summarizing performance metrics for all assets.
-    """
-    # Combine performance data from all existing tables
-    all_performance_metrics = {}
-
-    # Merge Equity Performance Table Data
-    equity_data = create_equity_performance_table(
-        report_data, report_date, correlation_results
-    )
-    for index, row in equity_data.iterrows():
-        all_performance_metrics[row["Asset"]] = row.to_dict()
-
-    # Merge Sector Performance Table Data
-    sector_data = create_sector_performance_table(
-        report_data, report_date, correlation_results
-    )
-    for index, row in sector_data.iterrows():
-        all_performance_metrics[row["Asset"]] = row.to_dict()
-
-    # Merge Macro Performance Table Data
-    macro_data = create_macro_performance_table(
-        report_data, report_date, correlation_results
-    )
-    for index, row in macro_data.iterrows():
-        all_performance_metrics[row["Asset"]] = row.to_dict()
-
-    # Merge Bitcoin Performance Table Data
-    bitcoin_data = create_bitcoin_performance_table(
-        report_data, report_date, correlation_results
-    )
-    for index, row in bitcoin_data.iterrows():
-        all_performance_metrics[row["Asset"]] = row.to_dict()
-
-    # Create the final combined DataFrame
-    full_performance_df = pd.DataFrame(all_performance_metrics.values())
-
-    return full_performance_df
 
 
 def monthly_heatmap(data, report_date=None, export_csv=True):
