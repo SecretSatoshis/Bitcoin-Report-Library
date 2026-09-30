@@ -89,8 +89,9 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 function heatColor(n: number, yearly: boolean): { background: string; text: string } {
   const bound = yearly ? (n < 0 ? 80 : 150) : 40;
   const weight = Math.min(1, Math.abs(n) / bound);
-  const neutral = [214, 216, 224],
-    target = n < 0 ? [239, 68, 68] : [22, 163, 74];
+  // Subdued tones so near-zero cells read grey rather than bright white.
+  const neutral = [170, 172, 182],
+    target = n < 0 ? [214, 72, 66] : [26, 142, 78];
   const rgb = neutral.map((c, i) => Math.round(c + weight * (target[i] - c)));
   const luminance = rgb
     .map((channel) => {
@@ -156,6 +157,7 @@ function performanceSection(d: DashboardData): string {
             ...["7 Day Return (%)", "MTD Return (%)", "YTD Return (%)", "90 Day Return (%)"].map((k) => delta(r[k])),
           ]),
           g.title,
+          "performance",
         )}</div>`,
     )
     .join("");
@@ -236,6 +238,7 @@ export function renderDashboard(d: DashboardData): string {
     ["Period", "ROI", "Start Price"],
     d.roi.map((r) => [escape(r["Time Frame"]), delta(r["ROI (%)"], 1), format(r["Start Price"], "usd")]),
     "Bitcoin holding-period returns",
+    "roi",
   )}</section>
 </main>
 <footer class="site-footer"><div class="footer-inner"><div class="footer-top"><div><a class="brand" href="https://secretsatoshis.com/"><span class="accent">//</span> SECRET SATOSHIS</a><p>AI-native Bitcoin market intelligence</p></div>${footerGroup("Platform", NAV_LINKS.slice(0, 3))}${footerGroup("Data", [

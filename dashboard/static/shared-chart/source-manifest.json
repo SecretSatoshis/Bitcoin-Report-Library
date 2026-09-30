@@ -9,7 +9,7 @@
     "fonts/JetBrainsMono-400.ttf": "abc6c66d3c566c3a42e00d3263b46ca85f12d7735c9e5dc7a2b60e8e26b84a38",
     "fonts/JetBrainsMono-600.ttf": "e7cccd8573ef7d2392cf52de43d9ccf747ee41de10f5f54ba44af1a3901689ab",
     "fonts/Syne-700.ttf": "bf35fabe05b34b18fed68b1a26b5b474af4c86d4f1a0f0eb6412d8782947c583",
-    "scripts/sync-dashboard.py": "90eb002562090e231baa742505676be94cacd1cf985da67a3d7e350e8a33c60d"
+    "scripts/sync-dashboard.py": "b4233f91fa159bd42d77246a5fcce104df686622c76e65cbac220c2fd559b61d"
   },
   "assets": {
     "STYLE": "assets/chart.b7491b7fa07c6986.css",
@@ -29,9 +29,9 @@
     "assets/lightweight-charts.e21cc5caa0226ef3.js": "e21cc5caa0226ef30bd8549c50b9ef926615f2a4ee6b4e486353477a55f598cf",
     "assets/LICENSE": "70c9d5382506dd184465425c08a99ad9bd6d9ac1313c252968ba0b585e5ef823",
     "assets/NOTICE": "f76c6afab94884448f0426e30d6e9d555ca7247894cd3484e477d2f87513036e",
-    "frame.html": "4bd2c9d3d666d38d2f9c742bfbfb5692c1dc2471f9cdc0dea6bd1697da48f865",
-    "seasonal-mtd.html": "c98f2967a0905292fd114acefbfc94cee11d0c7f2f40b3fa2123c171028d99d9",
-    "seasonal-ytd.html": "aeb4a8a7a56e770711704d569c648a8adfc4d598aba767f3eb10b7ee0e84c9ee",
+    "frame.html": "c3849f064a300893c559c08048d1e372150df3905b216a1b498d5ed05f76e6cd",
+    "seasonal-mtd.html": "c22a72fb8ff76f0f7886ef87f61b993f01db72eb7627b293175f6fe75c9b79f2",
+    "seasonal-ytd.html": "4b807c5bd906de637d7d6977bedcfb36d3323a44c8a2f24f95e6cd3fe3a367c2",
     "embed-host.js": "e5479f684c8f36d10ac4bc2a8b1246cf7ff5ba822dbd52906141dcbfb09fc0d5"
   }
 }
