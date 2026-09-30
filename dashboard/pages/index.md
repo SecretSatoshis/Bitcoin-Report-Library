@@ -330,7 +330,7 @@ _Monthly returns by year._
 <div class="monthly-heatmap-table">
 
 <DataTable data={monthly_returns_agg} rows=all compact=true rowShading=false>
-  <Column id=time title="Period" width=120 align=center />
+  <Column id=period title="Period" width=120 align=center />
   <Column id=Jan title="Jan" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
   <Column id=Feb title="Feb" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
   <Column id=Mar title="Mar" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
@@ -353,7 +353,7 @@ _Monthly returns by year._
 <div class="monthly-heatmap-table heatmap-historical">
 
 <DataTable data={monthly_returns_years} rows=all compact=true rowShading=false>
-  <Column id=time title="Year" width=120 align=center />
+  <Column id=year title="Year" width=120 align=center />
   <Column id=Jan title="Jan" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
   <Column id=Feb title="Feb" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
   <Column id=Mar title="Mar" fmt='#,##0.0"%"' contentType=colorscale colorScale={HEATMAP_SCALE} colorMin={-40} colorMid={0} colorMax={40} align=center />
@@ -535,7 +535,7 @@ order by cur.date desc
 with src as (
   select cast(date as date) as date, Value / 1e12 as marketcap
   from bitcoin_report_library.summary_history
-  where Metric = 'Bitcoin Marketcap'
+  where Metric = 'Bitcoin Market Cap'
 )
 select
   cur.date,
@@ -609,7 +609,7 @@ order by cur.date desc
 ```sql btc_supply_in_profit
 select CAST(Value AS DOUBLE) as supply_in_profit
 from bitcoin_report_library.summary_table
-where Metric = 'Bitcoin Supply in Profit'
+where Metric = 'Bitcoin Supply in Profit (%)'
 ```
 
 ```sql btc_sentiment
@@ -736,8 +736,8 @@ with parsed as (
   select
     Asset,
     "Market Cap (USD)" / 1e12 as market_cap,
-    "Market Cap BTC Price" as implied_price,
-    "BTC % Move to Marketcap BTC Price" as implied_return
+    "BTC Price at Market Cap" as implied_price,
+    "Move Needed (%)" as implied_return
   from bitcoin_report_library.relative_value_comparison
 ),
 btc_mcap as (
@@ -762,14 +762,14 @@ order by market_cap desc
 
 ```sql monthly_returns_agg
 select
-  case when time = '4-Year Average' then '4 Year Avg' else time end as time,
+  case when Year = '4-Year Average' then '4 Year Avg' else Year end as period,
   Jan, Feb, Mar, Apr, May, Jun,
   Jul, Aug, Sep, Oct, Nov, Dec,
   Yearly
 from bitcoin_report_library.monthly_heatmap_data
-where time in ('Average', 'Median', '4-Year Average')
+where Year in ('Average', 'Median', '4-Year Average')
 order by
-  case time
+  case Year
     when 'Average' then 0
     when 'Median' then 1
     when '4-Year Average' then 2
@@ -779,12 +779,12 @@ order by
 ```sql monthly_returns_years
 -- Label the newest year as partial only while its report cutoff precedes December 31.
 with years as (
-  select *, try_cast(time as integer) as yr
+  select *, try_cast(Year as integer) as yr
   from bitcoin_report_library.monthly_heatmap_data
-  where try_cast(time as integer) is not null
+  where try_cast(Year as integer) is not null
 )
 select
-  case when yr = (select max(yr) from years) and (select strftime(max(cast(date as date)), '%m-%d') from bitcoin_report_library.summary_history) <> '12-31' then time || ' (YTD)' else time end as time,
+  case when yr = (select max(yr) from years) and (select strftime(max(cast(date as date)), '%m-%d') from bitcoin_report_library.summary_history) <> '12-31' then Year || ' (YTD)' else Year end as year,
   Jan, Feb, Mar, Apr, May, Jun,
   Jul, Aug, Sep, Oct, Nov, Dec,
   Yearly
@@ -796,7 +796,7 @@ order by yr desc
 select
   "Time Frame" as time_frame,
   "ROI (%)" as roi_pct,
-  "BTC Price" as start_price
+  "Start Price" as start_price
 from bitcoin_report_library.roi_table
 ```
 
@@ -814,16 +814,15 @@ from bitcoin_report_library.fundamentals_table
 ```
 
 ```sql mtd_history
--- See ytd_history.
-select * exclude ("Median", "Average")
-from bitcoin_report_library.mtd_returns_history
+select *
+from bitcoin_report_library.mtd_price_paths
 order by day
 ```
 
 ```sql ytd_history
--- The CSV's Median/Average include hidden and current years, so they are dropped here and
--- recomputed by the chart (components/seasonalChart.js) over the visible past years.
-select * exclude ("Median", "Average")
-from bitcoin_report_library.ytd_returns_history
+-- Median and Average are computed by the chart (components/seasonalChart.js) over the
+-- visible past years.
+select *
+from bitcoin_report_library.ytd_price_paths
 order by day_of_year
 ```

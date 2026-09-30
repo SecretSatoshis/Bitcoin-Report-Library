@@ -20,7 +20,7 @@ import freshness
 import metrics
 import report_tables
 import sources
-from candle_data import weekly_ohlc, write_candle_tables
+from candle_data import write_candle_tables
 from release_manifest import write_release_manifest
 from data_definitions import (
     CAGR_COLUMNS,
@@ -41,9 +41,8 @@ from data_definitions import (
 )
 from data_validation import assert_ohlc_usable
 
-# Daily candles start at genesis; the published weekly OHLC history starts in 2017.
+# Daily candles start at genesis; BRK's pre-price candles are dropped on fetch.
 DAILY_OHLC_START = "2009-01-03"
-WEEKLY_OHLC_START = "2017-01-01"
 
 
 # --- Fetch and check sources ---
@@ -62,11 +61,9 @@ freshness.assert_reference_data_fresh(REPORT_DATE)
 freshness.assert_price_outlook_current(REPORT_DATE)
 freshness.warn_on_stale_miner_efficiency(data, REPORT_DATE)
 
-# Daily BRK candles are the only OHLC source. Weekly candles are built from them so the
-# open week stops at the report date.
+# Daily BRK candles are the only OHLC source; weekly and monthly candles are built from them.
 daily_ohlc = sources.get_brk_ohlc(start=DAILY_OHLC_START)
 assert_ohlc_usable(daily_ohlc, label="Daily BRK OHLC")
-weekly_candles = weekly_ohlc(daily_ohlc, REPORT_DATE, start=WEEKLY_OHLC_START)
 
 
 # --- Calculate metrics ---
@@ -77,7 +74,7 @@ data = metrics.calculate_btc_price_to_surpass_fiat(data, FIAT_MONEY_SUPPLY)
 data = metrics.calculate_metal_market_caps(data, GOLD_SILVER_SUPPLY)
 data = metrics.calculate_btc_price_to_surpass_metal_categories(data, GOLD_SUPPLY_BREAKDOWN)
 data = metrics.calculate_btc_price_for_stock_mkt_caps(data, STOCK_TICKERS)
-data = metrics.calculate_network_model_metrics(data, REPORT_DATE)
+data, model_parameters = metrics.calculate_network_model_metrics(data, REPORT_DATE)
 data = metrics.electric_price_models(data)
 
 # Period changes for CHANGE_COLUMNS, Bitcoin's YoY change and the 4-year CAGRs.
@@ -96,6 +93,7 @@ correlation_results = metrics.create_btc_correlation_data(
 
 # Sources include the partial current UTC day. Cut it here so no export includes it.
 report_data = report_data.loc[:REPORT_DATE]
+report_data.index.name = "date"
 
 
 # --- Build tables ---
@@ -132,16 +130,11 @@ tables = {
 # Published with their date index.
 indexed_tables = {
     "monthly_heatmap_data.csv": report_tables.monthly_heatmap(report_data, REPORT_DATE),
-    "mtd_returns_history.csv": report_tables.create_indexed_returns_history(
-        prices, REPORT_DATE, "mtd"
-    ),
-    "ytd_returns_history.csv": report_tables.create_indexed_returns_history(
-        prices, REPORT_DATE, "ytd"
-    ),
+    "mtd_price_paths.csv": report_tables.create_price_paths(prices, REPORT_DATE, "mtd"),
+    "ytd_price_paths.csv": report_tables.create_price_paths(prices, REPORT_DATE, "ytd"),
     "onchain_price_models.csv": report_tables.create_onchain_price_models(
         report_data, REPORT_DATE
     ),
-    "ohlc_data.csv": report_tables.weekly_ohlc_table(weekly_candles),
 }
 
 
@@ -160,4 +153,5 @@ write_release_manifest(
     "csv",
     REPORT_DATE,
     [*tables, *indexed_tables, "master_metrics_data.csv.gz", *candle_files],
+    model_parameters,
 )

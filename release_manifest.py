@@ -8,11 +8,12 @@ RELEASE_MANIFEST_NAME = 'release_manifest.json'
 RELEASE_MANIFEST_VERSION = 1
 
 
-def write_release_manifest(output_dir, report_date, filenames=None):
+def write_release_manifest(output_dir, report_date, filenames=None, model_parameters=None):
     """Write the manifest after every file is written, and return it.
 
     `filenames` lists the files this run published, so a leftover file is never listed;
-    without it, every CSV in the directory is. The file is replaced atomically.
+    without it, every CSV in the directory is. `model_parameters` holds the fitted model
+    coefficients. The file is replaced atomically.
     """
     output = Path(output_dir)
     if filenames is None:
@@ -37,6 +38,8 @@ def write_release_manifest(output_dir, report_date, filenames=None):
         'generated_at': datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         'files': files,
     }
+    if model_parameters:
+        manifest['model_parameters'] = model_parameters
     target = output / RELEASE_MANIFEST_NAME
     temporary = target.with_suffix('.json.tmp')
     temporary.write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n', encoding='utf-8')

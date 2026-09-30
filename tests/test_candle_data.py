@@ -5,7 +5,7 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from candle_data import CANDLE_FILES, build_candle_tables, weekly_ohlc
+from candle_data import CANDLE_FILES, build_candle_tables
 
 
 class CandleTests(unittest.TestCase):
@@ -26,7 +26,10 @@ class CandleTests(unittest.TestCase):
         self.assertTrue(feb.complete)
         self.assertEqual(feb.Open,daily.loc['2024-02-01','Open'])
         self.assertEqual(feb.High,daily.loc['2024-02-29','High'])
-        self.assertTrue(pd.isna(tables[CANDLE_FILES[2]].loc['2024-02-01','moving_average']))
+        monthly = tables[CANDLE_FILES[2]]
+        self.assertEqual(monthly.index.name, 'period_start')
+        self.assertEqual(monthly.loc['2024-02-01', 'observation_date'], pd.Timestamp('2024-02-29'))
+        self.assertTrue(pd.isna(monthly.loc['2024-02-01','moving_average']))
         week = candles.loc[candles.interval=='weekly'].iloc[-1]
         self.assertEqual(week.period_start,pd.Timestamp('2024-02-26'))
         self.assertFalse(week.complete)
@@ -48,21 +51,6 @@ class CandleTests(unittest.TestCase):
         self.assertEqual(result.loc[result.interval=='daily'].period_start.min(),pd.Timestamp('2024-01-03'))
         self.assertEqual(result.loc[result.interval=='weekly'].period_start.min(),pd.Timestamp('2024-01-08'))
         self.assertEqual(result.loc[result.interval=='monthly'].period_start.min(),pd.Timestamp('2024-02-01'))
-
-
-class WeeklyOhlcTests(unittest.TestCase):
-    def test_weekly_ohlc_is_cut_off_at_the_report_date(self):
-        dates = pd.date_range('2024-01-01', '2024-01-17')  # Monday start
-        close = np.arange(100.0, 100.0 + len(dates))
-        daily = pd.DataFrame({'Open': close, 'High': close + 5, 'Low': close - 5,
-                              'Close': close}, index=dates)
-        weekly = weekly_ohlc(daily, '2024-01-16', start='2024-01-03')
-        self.assertEqual(weekly.index.name, 'Time')
-        self.assertEqual(list(weekly.index), list(pd.to_datetime(['2024-01-01', '2024-01-08', '2024-01-15'])))
-        # The open week closes on the report date, not on the later partial day.
-        self.assertEqual(weekly['Close'].iloc[-1], daily.loc['2024-01-16', 'Close'])
-        with self.assertRaisesRegex(ValueError, 'report date'):
-            weekly_ohlc(daily, '2024-01-20')
 
 
 if __name__ == "__main__":

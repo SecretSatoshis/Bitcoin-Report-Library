@@ -41,8 +41,7 @@ OUTPUT_RULES = {
     "master_metrics_data.csv.gz": RowBounds(365, 100_000),
     "monthly_heatmap_data.csv": RowBounds(4, 1_000),
     "mtd_return_comparison.csv": RowBounds(2, 10),
-    "mtd_returns_history.csv": RowBounds(29, 32),
-    "ohlc_data.csv": RowBounds(52, 10_000),
+    "mtd_price_paths.csv": RowBounds(29, 32),
     "onchain_price_models.csv": RowBounds(365, 100_000),
     "performance_table.csv": RowBounds(1, 1_000),
     "price_outlook.csv": RowBounds(1, 1_000),
@@ -52,7 +51,7 @@ OUTPUT_RULES = {
     "summary_history.csv": RowBounds(31, 1_000),
     "summary_table.csv": RowBounds(1, 100),
     "ytd_return_comparison.csv": RowBounds(2, 10),
-    "ytd_returns_history.csv": RowBounds(365, 366),
+    "ytd_price_paths.csv": RowBounds(365, 366),
 }
 
 
@@ -62,19 +61,18 @@ REQUIRED_COLUMNS = {
     "fundamentals_table.csv": {"Section", "Metric", "Current Value"},
     "halving_data.csv": {"days_since_halving", "index_value", "Era"},
     "master_metrics_data.csv.gz": {
-        "time", "price_close", "market_cap", "metcalfe_value",
+        "date", "price_close", "market_cap", "metcalfe_value",
         "power_law_price", "60_day_ma_hash_rate", "hash_ribbon_capitulation",
-        "price_close_4_Year_CAGR",
+        "price_close_4y_cagr",
     },
     "monthly_heatmap_data.csv": {
-        "time", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
+        "Year", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
         "Aug", "Sep", "Oct", "Nov", "Dec", "Yearly",
     },
     "mtd_return_comparison.csv": {
         "Year", "End Price ($)", "Return (%)", "Report Date Return (%)",
     },
-    "mtd_returns_history.csv": {"day", "Median", "Average"},
-    "ohlc_data.csv": {"Time", "Open", "High", "Low", "Close"},
+    "mtd_price_paths.csv": {"day"},
     "onchain_price_models.csv": {
         "date", "BTC Price", "Electricity Cost", "Metcalfe Value", "Power Law Price",
         "50-day MA", "3-month MA", "200-day MA", "1-year MA", "200-week MA",
@@ -83,21 +81,21 @@ REQUIRED_COLUMNS = {
         "Category", "Asset", "Price", "MTD Return (%)", "YTD Return (%)",
     },
     "price_outlook.csv": {"label", "price", "type", "color", "outlook_year"},
-    "relative_value_comparison.csv": {"Asset", "Market Cap (USD)", "Market Cap BTC Price"},
-    "report_ohlc_summary.csv": {"Report Date", "Daily Close"},
-    "roi_table.csv": {"Time Frame", "ROI (%)", "Start Date", "BTC Price"},
+    "relative_value_comparison.csv": {"Asset", "Market Cap (USD)", "BTC Price at Market Cap"},
+    "report_ohlc_summary.csv": {"date", "daily_close"},
+    "roi_table.csv": {"Time Frame", "ROI (%)", "Start Date", "Start Price"},
     "summary_history.csv": {"Metric", "date", "Value"},
     "summary_table.csv": {"Metric", "Value", "Category"},
     "ytd_return_comparison.csv": {
         "Year", "End Price ($)", "Return (%)", "Report Date Return (%)",
     },
-    "ytd_returns_history.csv": {"day_of_year", "Median", "Average"},
+    "ytd_price_paths.csv": {"day_of_year"},
 }
 
 
 SUMMARY_HISTORY_METRICS = {
     "Bitcoin Price USD",
-    "Bitcoin Marketcap",
+    "Bitcoin Market Cap",
     "Sats Per Dollar",
     "Bitcoin Supply",
     "Bitcoin Miner Revenue",
@@ -106,20 +104,19 @@ SUMMARY_HISTORY_METRICS = {
 
 
 RETAINED_OUTPUTS = {
-    "ohlc_data.csv",
     "fundamentals_table.csv",
     "cycle_low_data.csv",
     "halving_data.csv",
     "monthly_heatmap_data.csv",
     "mtd_return_comparison.csv",
-    "mtd_returns_history.csv",
+    "mtd_price_paths.csv",
     "onchain_price_models.csv",
     "performance_table.csv",
     "report_ohlc_summary.csv",
     "summary_history.csv",
     "summary_table.csv",
     "ytd_return_comparison.csv",
-    "ytd_returns_history.csv",
+    "ytd_price_paths.csv",
 }
 
 
@@ -220,7 +217,7 @@ def _validate_dated_output(
 
 # Large exports whose date column alone is read to check the cutoff.
 INDEX_CUTOFF_OUTPUTS = {
-    "master_metrics_data.csv.gz": "time",
+    "master_metrics_data.csv.gz": "date",
 }
 
 
@@ -341,7 +338,7 @@ def _validate_price_agreement(
 
     dated_price_sources = {
         "onchain_price_models.csv": ("date", "BTC Price"),
-        "report_ohlc_summary.csv": ("Report Date", "Daily Close"),
+        "report_ohlc_summary.csv": ("date", "daily_close"),
     }
     for filename, (date_column, value_column) in dated_price_sources.items():
         frame = frames.get(filename)
@@ -436,10 +433,10 @@ def _validate_return_agreement(
 
     heatmap = frames.get("monthly_heatmap_data.csv")
     month_column = expected_report_date.strftime("%b")
-    heatmap_columns = {"time", month_column, "Yearly"}
+    heatmap_columns = {"Year", month_column, "Yearly"}
     if heatmap is not None and heatmap_columns.issubset(heatmap.columns):
         current_rows = heatmap.loc[
-            heatmap["time"].astype(str).eq(str(expected_report_date.year))
+            heatmap["Year"].astype(str).eq(str(expected_report_date.year))
         ]
         if len(current_rows) != 1:
             errors.append(
@@ -563,7 +560,7 @@ def _validate_report_agreement(
     _validate_dated_output(
         frames,
         "report_ohlc_summary.csv",
-        "Report Date",
+        "date",
         expected_report_date,
         errors,
         require_every_row=True,
@@ -599,7 +596,7 @@ def _validate_report_agreement(
 
     _validate_history_position(
         frames,
-        "mtd_returns_history.csv",
+        "mtd_price_paths.csv",
         "day",
         "mtd",
         expected_report_date,
@@ -607,7 +604,7 @@ def _validate_report_agreement(
     )
     _validate_history_position(
         frames,
-        "ytd_returns_history.csv",
+        "ytd_price_paths.csv",
         "day_of_year",
         "ytd",
         expected_report_date,
@@ -624,12 +621,12 @@ def _validate_investor_sentiment(summary, master_path, report_date, errors):
     try:
         master = pd.read_csv(
             master_path,
-            usecols=["time", "nupl", "supply_in_profit", "supply", "power_law_price_multiple"],
-            parse_dates=["time"],
-        ).set_index("time").loc[:report_date]
+            usecols=["date", "nupl", "supply_in_profit", "supply", "power_law_price_multiple"],
+            parse_dates=["date"],
+        ).set_index("date").loc[:report_date]
         latest = master.iloc[-1]
         expected = {
-            "Bitcoin Supply in Profit": latest["supply_in_profit"] / latest["supply"] * 100,
+            "Bitcoin Supply in Profit (%)": latest["supply_in_profit"] / latest["supply"] * 100,
             "Bitcoin Market Sentiment": _nupl_sentiment(master, report_date),
             "Bitcoin Valuation": _power_law_valuation(latest["power_law_price_multiple"]),
         }
@@ -683,33 +680,19 @@ def _validate_performance_rows(frames, errors):
 
 def _validate_review_contracts(frames, output_dir, report_date, errors):
     """Recheck OHLC candles, the investor-sentiment rows and the fundamentals table against source data."""
-    weekly = frames.get("ohlc_data.csv")
-    if weekly is not None:
-        try:
-            weekly = weekly.set_index("Time")
-            validate_candles(weekly, "ohlc_data.csv")
-            validate_calendar(weekly.index, "ohlc_data.csv", step=7)
-            report_week = report_date - pd.Timedelta(days=report_date.weekday())
-            if pd.Timestamp(weekly.index.max()) != report_week:
-                raise ValueError(
-                    f"ohlc_data.csv: latest week is {weekly.index.max()}, expected "
-                    f"{report_week.date()}"
-                )
-        except (ValueError, RuntimeError, KeyError) as exc:
-            errors.append(str(exc))
     summary = frames.get("report_ohlc_summary.csv")
     if summary is not None:
         try:
-            for prefix in ("Daily", "Week-to-Date"):
-                candles = summary[[f"{prefix} {c}" for c in ("Open", "High", "Low", "Close")]].copy()
+            for prefix in ("daily", "week_to_date"):
+                candles = summary[[f"{prefix}_{c}" for c in ("open", "high", "low", "close")]].copy()
                 candles.columns = ["Open", "High", "Low", "Close"]
-                validate_candles(candles, "report_ohlc_summary.csv " + prefix)
+                validate_candles(candles, f"report_ohlc_summary.csv {prefix}")
             row = summary.iloc[0]
-            if (pd.Timestamp(row["Week Start"]) != report_date - pd.Timedelta(days=report_date.weekday())
-                    or float(row["Week-to-Date Days"]) != report_date.weekday() + 1
-                    or float(row["Week-to-Date Close"]) != float(row["Daily Close"])
-                    or float(row["Week-to-Date High"]) < float(row["Daily High"])
-                    or float(row["Week-to-Date Low"]) > float(row["Daily Low"])):
+            if (pd.Timestamp(row["week_start"]) != report_date - pd.Timedelta(days=report_date.weekday())
+                    or float(row["week_to_date_days"]) != report_date.weekday() + 1
+                    or float(row["week_to_date_close"]) != float(row["daily_close"])
+                    or float(row["week_to_date_high"]) < float(row["daily_high"])
+                    or float(row["week_to_date_low"]) > float(row["daily_low"])):
                 raise ValueError("report_ohlc_summary.csv: inconsistent week-to-date candle")
         except (ValueError, KeyError, IndexError) as exc:
             errors.append(f"report_ohlc_summary.csv: {exc}")
@@ -720,8 +703,8 @@ def _validate_review_contracts(frames, output_dir, report_date, errors):
     fundamentals = frames.get("fundamentals_table.csv")
     if fundamentals is not None and master_path.is_file():
         try:
-            columns = list(dict.fromkeys(["time"] + [item[0] for group in FUNDAMENTALS_TEMPLATE.values() for item in group.values()]))
-            master = pd.read_csv(master_path, usecols=columns, parse_dates=["time"]).set_index("time")
+            columns = list(dict.fromkeys(["date"] + [item[0] for group in FUNDAMENTALS_TEMPLATE.values() for item in group.values()]))
+            master = pd.read_csv(master_path, usecols=columns, parse_dates=["date"]).set_index("date")
             expected = create_fundamentals_table(master, FUNDAMENTALS_TEMPLATE, report_date)
             change = "7 Day Change (%)"
             if not np.allclose(pd.to_numeric(fundamentals[change], errors="coerce"),
@@ -801,6 +784,10 @@ def validate_outputs(
     return errors
 
 
+# Fitted coefficients published in the manifest instead of as constant columns.
+MODEL_PARAMETERS = ("power_law_exponent", "power_law_scale", "metcalfe_scale")
+
+
 def _validate_release_manifest(output_dir, expected_report_date, errors, required=False):
     """Require the manifest to match the report date and to list and hash exactly the generated files."""
     path = Path(output_dir) / "release_manifest.json"
@@ -819,6 +806,13 @@ def _validate_release_manifest(output_dir, expected_report_date, errors, require
         errors.append("release_manifest.json: release_id does not match report date")
     if manifest.get("report_date") != str(expected_report_date.date()):
         errors.append("release_manifest.json: report_date does not match report date")
+    parameters = manifest.get("model_parameters")
+    if required and (
+        not isinstance(parameters, dict)
+        or set(parameters) != set(MODEL_PARAMETERS)
+        or not all(isinstance(v, (int, float)) and np.isfinite(v) for v in parameters.values())
+    ):
+        errors.append("release_manifest.json: model_parameters are missing or invalid")
     files = manifest.get("files")
     expected_files = {name for name in OUTPUT_RULES}
     # Candle files are required whenever the release contains any of them.

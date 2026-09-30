@@ -45,21 +45,10 @@ def period_candles(daily, interval, frequency):
     return result
 
 
-def weekly_ohlc(daily, report_date, start=None):
-    """Monday-start weekly OHLC through the report date, indexed by week start ("Time").
-
-    The open week closes at the report-date close. Weeks ending before ``start`` are dropped.
-    """
-    daily = _cutoff_daily_candles(daily, report_date, 'Weekly OHLC source candles')
-    weeks = period_candles(daily, 'weekly', 'W-SUN')
-    if start is not None:
-        weeks = weeks.loc[weeks.period_end >= pd.Timestamp(start)]
-    result = weeks.set_index(pd.DatetimeIndex(weeks.period_start, name='Time'))
-    return result[['Open', 'High', 'Low', 'Close']]
-
-
 def build_candle_tables(daily, master, report_date):
     """Daily/weekly/monthly candles and the master rows at each week and month close.
+
+    Snapshot rows are indexed by `period_start`; `observation_date` is the row they copy.
 
     Daily closes must agree with the master's price_close. Returns {filename: frame}.
     """
@@ -77,7 +66,8 @@ def build_candle_tables(daily, master, report_date):
         if filename:
             # reindex, not groupby().last(), which would skip nulls to an earlier row.
             snapshot = master.reindex(pd.DatetimeIndex(result.observation_date)).copy()
-            snapshot.index = pd.DatetimeIndex(result.period_start, name='time')
+            snapshot.index = pd.DatetimeIndex(result.period_start, name='period_start')
+            snapshot.insert(0, 'observation_date', pd.DatetimeIndex(result.observation_date))
             tables[filename] = snapshot
     tables[CANDLE_FILES[0]] = pd.concat(candles, ignore_index=True)
     return tables
@@ -101,5 +91,5 @@ def validate_candle_exports(output_dir, master, report_date):
     expected = build_candle_tables(daily, master, report_date)
     pd.testing.assert_frame_equal(candles, expected[CANDLE_FILES[0]], check_dtype=False, rtol=1e-9, atol=1e-8)
     for filename in CANDLE_FILES[1:]:
-        actual = pd.read_csv(output / filename, index_col=0, parse_dates=True, low_memory=False)
+        actual = pd.read_csv(output / filename, index_col=0, parse_dates=[0, 1], low_memory=False)
         pd.testing.assert_frame_equal(actual, expected[filename], check_dtype=False, check_freq=False, rtol=1e-9, atol=1e-8)

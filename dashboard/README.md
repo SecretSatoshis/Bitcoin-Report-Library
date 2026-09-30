@@ -129,8 +129,8 @@ The sync script intentionally uses only the CSVs required by the dashboard:
 - `relative_value_comparison.csv`
 - `roi_table.csv`
 - `onchain_price_models.csv`
-- `mtd_returns_history.csv`
-- `ytd_returns_history.csv`
+- `mtd_price_paths.csv`
+- `ytd_price_paths.csv`
 - `price_outlook.csv` (case levels plus their `outlook_year`, which labels the outlook)
 - `bitcoin_candles.csv.gz` (verified, then decoded to `bitcoin_candles.csv` for Evidence)
 

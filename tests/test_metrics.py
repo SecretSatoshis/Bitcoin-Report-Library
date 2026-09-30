@@ -51,7 +51,7 @@ class CustomOnchainContractTests(unittest.TestCase):
         # Intermediates stay local; only columns a consumer reads are published.
         for unpublished in ("RevAllTimeUSD", "NVTAdj90", "miner_revenue_1_Year", "mvrv_ratio", "hodl_bank_calc"):
             self.assertNotIn(unpublished, result)
-        self.assertEqual(result["CapMVRVCur"].iloc[-1], 2.5)
+        self.assertEqual(result["mvrv"].iloc[-1], 2.5)
 
         self.assertEqual(result["realized_price"].iloc[0], 7.0)
         self.assertEqual(result["realized_price"].iloc[2], 2.0)
@@ -196,10 +196,10 @@ class PeriodReturnBoundaryTests(unittest.TestCase):
         ytd = metrics.calculate_ytd_change(data)
         mtd = metrics.calculate_mtd_change(data)
 
-        self.assertAlmostEqual(ytd.loc["2023-01-01", "a_YTD_change"], 25.0)
-        self.assertAlmostEqual(ytd.loc["2023-01-01", "b_YTD_change"], 20.0)
-        self.assertAlmostEqual(mtd.loc["2023-02-01", "a_MTD_change"], 20.0)
-        self.assertAlmostEqual(mtd.loc["2023-02-01", "b_MTD_change"], 25.0)
+        self.assertAlmostEqual(ytd.loc["2023-01-01", "a_ytd_change"], 25.0)
+        self.assertAlmostEqual(ytd.loc["2023-01-01", "b_ytd_change"], 20.0)
+        self.assertAlmostEqual(mtd.loc["2023-02-01", "a_mtd_change"], 20.0)
+        self.assertAlmostEqual(mtd.loc["2023-02-01", "b_mtd_change"], 25.0)
 
 
 class ElectricityAndChangeTests(unittest.TestCase):
@@ -225,15 +225,15 @@ class ElectricityAndChangeTests(unittest.TestCase):
 
         for cents in range(3, 8):
             expected = expected_kwh * (cents / 100) / expected_revenue
-            self.assertAlmostEqual(result[f"Electricity_Cost_{cents}c"], expected)
-        self.assertEqual(result["Electricity_Cost"], result["Electricity_Cost_5c"])
+            self.assertAlmostEqual(result[f"electricity_cost_{cents}c"], expected)
+        self.assertNotIn("Electricity_Cost", result)
 
     def test_electricity_cost_returns_nan_for_zero_miner_revenue(self):
         result = metrics.electric_price_models(
             self._energy_input(subsidy=0.0, fees=0.0)
         ).iloc[0]
 
-        self.assertTrue(pd.isna(result["Electricity_Cost"]))
+        self.assertTrue(pd.isna(result["electricity_cost_5c"]))
         numeric = pd.to_numeric(result, errors="coerce").dropna()
         self.assertFalse(np.isinf(numeric).any())
 
@@ -255,10 +255,10 @@ class ElectricityAndChangeTests(unittest.TestCase):
 
         result = metrics.calculate_yoy_change(data)
 
-        self.assertEqual(result.loc["2020-02-28", "metric_YOY_change"], 100.0)
-        self.assertEqual(result.loc["2020-02-29", "metric_YOY_change"], 200.0)
-        self.assertEqual(result.loc["2021-02-28", "metric_YOY_change"], 200.0)
-        self.assertEqual(result.loc["2021-03-01", "metric_YOY_change"], 100.0)
+        self.assertEqual(result.loc["2020-02-28", "metric_yoy_change"], 100.0)
+        self.assertEqual(result.loc["2020-02-29", "metric_yoy_change"], 200.0)
+        self.assertEqual(result.loc["2021-02-28", "metric_yoy_change"], 200.0)
+        self.assertEqual(result.loc["2021-03-01", "metric_yoy_change"], 100.0)
 
     def test_only_requested_columns_get_yoy_changes(self):
         dates = pd.date_range("2023-01-01", "2024-03-01", freq="D")
@@ -270,9 +270,9 @@ class ElectricityAndChangeTests(unittest.TestCase):
         result = metrics.calculate_all_changes(data, ["price_close"])
 
         self.assertEqual(sorted(result.columns), sorted([
-            "price_close_7_change", "price_close_90_change", "price_close_MTD_change",
-            "price_close_YTD_change", "price_close_YOY_change", "SPY_close_7_change",
-            "SPY_close_90_change", "SPY_close_MTD_change", "SPY_close_YTD_change",
+            "price_close_7d_change", "price_close_90d_change", "price_close_mtd_change",
+            "price_close_ytd_change", "price_close_yoy_change", "SPY_close_7d_change",
+            "SPY_close_90d_change", "SPY_close_mtd_change", "SPY_close_ytd_change",
         ]))
 
 
@@ -292,7 +292,7 @@ class CagrTests(unittest.TestCase):
         start = values.loc['2020-03-01', 'price_close']
         end = values.loc['2024-03-01', 'price_close']
         expected = ((end / start) ** 0.25 - 1) * 100
-        self.assertAlmostEqual(cagr.loc['2024-03-01', 'price_close_4_Year_CAGR'], expected)
+        self.assertAlmostEqual(cagr.loc['2024-03-01', 'price_close_4y_cagr'], expected)
 
 
 
@@ -313,23 +313,27 @@ class NetworkModelTests(unittest.TestCase):
         )
 
     def test_fits_recover_the_generating_parameters(self):
-        result = metrics.calculate_network_model_metrics(self.frame(), "2024-12-31")
-        self.assertAlmostEqual(result["power_law_exponent"].iloc[-1], 5.6, places=6)
-        self.assertAlmostEqual(result["power_law_scale"].iloc[-1] / 1e-17, 1.0, places=6)
+        result, parameters = metrics.calculate_network_model_metrics(self.frame(), "2024-12-31")
+        self.assertAlmostEqual(parameters["power_law_exponent"], 5.6, places=6)
+        self.assertAlmostEqual(parameters["power_law_scale"] / 1e-17, 1.0, places=6)
         self.assertTrue(np.allclose(result["power_law_price_multiple"], 1.0))
-        self.assertAlmostEqual(result["metcalfe_scale_any_balance"].iloc[-1] / 3e-4, 1.0, places=9)
+        self.assertAlmostEqual(parameters["metcalfe_scale"] / 3e-4, 1.0, places=9)
         self.assertTrue(np.allclose(result["metcalfe_price_multiple"], 1.0))
+        # Fitted constants go to the manifest, not into repeated columns.
+        for constant in ("power_law_exponent", "power_law_scale", "metcalfe_scale_any_balance",
+                         "metcalfe_value_any_balance"):
+            self.assertNotIn(constant, result)
 
     def test_rows_after_the_report_date_do_not_move_the_fit(self):
         frame = self.frame()
         frame.loc["2024-07-01":, "price_close"] *= 100
-        fitted = metrics.calculate_network_model_metrics(frame, "2024-06-30")
-        self.assertAlmostEqual(fitted["power_law_exponent"].iloc[-1], 5.6, places=6)
+        _, parameters = metrics.calculate_network_model_metrics(frame, "2024-06-30")
+        self.assertAlmostEqual(parameters["power_law_exponent"], 5.6, places=6)
 
     def test_hash_ribbon_flags_the_fast_average_below_the_slow(self):
         frame = self.frame()
         frame["hash_rate"] = np.r_[np.full(100, 10.0), np.full(len(frame) - 100, 5.0)]
-        result = metrics.calculate_network_model_metrics(frame, "2024-12-31")
+        result, _ = metrics.calculate_network_model_metrics(frame, "2024-12-31")
         self.assertTrue(result["hash_ribbon_capitulation"].iloc[110])
         self.assertFalse(result["hash_ribbon_capitulation"].iloc[-1])
 
@@ -341,27 +345,29 @@ class RelativePriceTests(unittest.TestCase):
         dates = pd.date_range("2024-01-01", periods=3)
         return pd.DataFrame(
             {"supply": 20.0, "GC=F_close": [2_000.0, 2_100.0, np.nan], "SI=F_close": 25.0,
-             "AAA_MarketCap": 400.0},
+             "AAA_market_cap": 400.0},
             index=dates,
         )
 
     def test_fiat_price_divides_money_supply_by_bitcoin_supply(self):
         fiat = pd.DataFrame({"Country": ["United States"], "US Dollar Trillion": [5.0]})
         result = metrics.calculate_btc_price_to_surpass_fiat(self.frame(), fiat)
-        self.assertEqual(result["United_States_btc_price"].iloc[0], 5e12 / 20)
+        self.assertEqual(result["united_states_m0_btc_price"].iloc[0], 5e12 / 20)
         self.assertNotIn("United_States_cap", result)
 
-    def test_metal_caps_use_the_latest_price_and_split_by_category(self):
+    def test_metal_caps_use_each_days_price_and_split_by_category(self):
         supply = pd.DataFrame({"Metal": ["Gold", "Silver"], "Supply Troy Ounces": [10.0, 100.0]})
         breakdown = pd.DataFrame({"Gold Supply Breakdown": ["Jewellery", "Other"], "Percentage Of Market": [60.0, 40.0]})
         caps = metrics.calculate_metal_market_caps(self.frame(), supply)
-        # The latest gold close is carried forward over the missing final value.
-        self.assertTrue((caps["gold_marketcap_billion_usd"] == 10.0 * 2_100.0).all())
-        self.assertTrue((caps["silver_marketcap_billion_usd"] == 100.0 * 25.0).all())
+        # Each row uses that day's close; a missing close stays missing.
+        self.assertEqual(caps["gold_market_cap_usd"].iloc[0], 10.0 * 2_000.0)
+        self.assertEqual(caps["gold_market_cap_usd"].iloc[1], 10.0 * 2_100.0)
+        self.assertTrue(pd.isna(caps["gold_market_cap_usd"].iloc[2]))
+        self.assertTrue((caps["silver_market_cap_usd"] == 100.0 * 25.0).all())
         prices = metrics.calculate_btc_price_to_surpass_metal_categories(caps, breakdown)
-        self.assertEqual(prices["gold_marketcap_btc_price"].iloc[0], 21_000.0 / 20)
-        self.assertEqual(prices["gold_jewellery_marketcap_btc_price"].iloc[0], 21_000.0 * 0.6 / 20)
-        self.assertEqual(prices["silver_marketcap_btc_price"].iloc[0], 2_500.0 / 20)
+        self.assertEqual(prices["gold_market_cap_btc_price"].iloc[0], 20_000.0 / 20)
+        self.assertEqual(prices["gold_jewellery_market_cap_btc_price"].iloc[1], 21_000.0 * 0.6 / 20)
+        self.assertEqual(prices["silver_market_cap_btc_price"].iloc[0], 2_500.0 / 20)
 
     def test_stock_price_divides_market_cap_by_bitcoin_supply(self):
         result = metrics.calculate_btc_price_for_stock_mkt_caps(self.frame(), ["AAA"])
@@ -373,7 +379,7 @@ class RelativePriceTests(unittest.TestCase):
         fiat = pd.DataFrame({"Country": ["United States"], "US Dollar Trillion": [5.0]})
         fiat_prices = metrics.calculate_btc_price_to_surpass_fiat(frame, fiat)
         stock_prices = metrics.calculate_btc_price_for_stock_mkt_caps(frame, ["AAA"])
-        self.assertTrue(pd.isna(fiat_prices["United_States_btc_price"].iloc[0]))
+        self.assertTrue(pd.isna(fiat_prices["united_states_m0_btc_price"].iloc[0]))
         self.assertTrue(pd.isna(stock_prices["AAA_mc_btc_price"].iloc[0]))
         self.assertEqual(stock_prices["AAA_mc_btc_price"].iloc[1], 20.0)
 

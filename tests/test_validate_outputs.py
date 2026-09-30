@@ -138,7 +138,7 @@ class OutputValidationTests(unittest.TestCase):
                 "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
                 "Aug", "Sep", "Oct", "Nov", "Dec",
             )}
-            heatmap_row.update({"time": 2024, "Feb": -5.0, "Yearly": 10.0})
+            heatmap_row.update({"Year": 2024, "Feb": -5.0, "Yearly": 10.0})
             heatmap_path = directory / "monthly_heatmap_data.csv"
             pd.DataFrame([heatmap_row]).to_csv(heatmap_path, index=False)
 
@@ -229,12 +229,13 @@ class CandleTests(unittest.TestCase):
             output = Path(directory)
             for filename in CANDLE_FILES:
                 (output / filename).write_bytes(b'fixture')
-            write_release_manifest(output, '2024-03-02')
+            parameters = {'power_law_exponent': 5.6, 'power_law_scale': 1e-17, 'metcalfe_scale': 3e-4}
+            write_release_manifest(output, '2024-03-02', model_parameters=parameters)
             errors = []
             _validate_release_manifest(output, pd.Timestamp('2024-03-02'), errors, True)
             self.assertEqual(errors, [])
             (output / CANDLE_FILES[-1]).unlink()
-            write_release_manifest(output, '2024-03-02')
+            write_release_manifest(output, '2024-03-02', model_parameters=parameters)
             _validate_release_manifest(output, pd.Timestamp('2024-03-02'), errors, True)
             self.assertTrue(any('inventory' in error for error in errors))
 

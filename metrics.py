@@ -15,7 +15,7 @@ from data_definitions import (
     ELECTRICITY_TARIFFS_USD_PER_KWH,
     HASH_RIBBON_FAST_WINDOW,
     HASH_RIBBON_SLOW_WINDOW,
-    METCALFE_ADDRESS_COLUMNS,
+    METCALFE_ADDRESS_COLUMN,
     POWER_LAW_VALUATION_BANDS,
     SATS_PER_BTC,
 )
@@ -139,7 +139,7 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
 
     new_columns = {
         "sat_per_dollar": SATS_PER_BTC / positive_price,
-        "CapMVRVCur": mvrv_ratio,
+        "mvrv": mvrv_ratio,
         "nupl": (market_cap - realized_cap) / market_cap,
         **calculate_nvt_price_models(data),
         "7_day_ma_price_close": price_close.rolling(window=7).mean(),
@@ -160,14 +160,13 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
         "pct_fee_of_reward": (data["fees_sum_24h"] / data["coinbase_sum_24h"]) * 100,
         "illiquid_supply": illiquid_supply,
         "liquid_supply": supply - illiquid_supply,
-        "daily_active_addresses_sending": data["active_addrs_average_24h"],
         "vocd": vocd,
         "mvocd": mvocd,
         "reserve_risk_calc": price_close / hodl_bank,
         "average_cap_price": average_cap / supply,
         "delta_cap_price": delta_cap / supply,
-        "VtyDayRet30d": daily_returns.rolling(30).std() * np.sqrt(365),
-        "VtyDayRet180d": daily_returns.rolling(180).std() * np.sqrt(365),
+        "volatility_30d": daily_returns.rolling(30).std() * np.sqrt(365),
+        "volatility_180d": daily_returns.rolling(180).std() * np.sqrt(365),
         "supply_in_profit_pct": (data["supply_in_profit"] / supply) * 100,
         "supply_in_loss_pct": (data["supply_in_loss"] / supply) * 100,
     }
@@ -181,6 +180,7 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
 
     # One concat avoids pandas' fragmentation warning from dozens of single assignments.
     data = pd.concat([data, pd.DataFrame(new_columns, index=data.index)], axis=1)
+    data = data.rename(columns={"active_addrs_average_24h": "daily_active_addresses_sending"})
 
     return data
 
@@ -205,11 +205,7 @@ def _positive_supply(data: pd.DataFrame) -> pd.Series:
 def calculate_metal_market_caps(
     data: pd.DataFrame, gold_silver_supply: pd.DataFrame
 ) -> pd.DataFrame:
-    """Add gold and silver market caps: supply x the latest futures close.
-
-    The same latest value fills every row. Despite the ``*_marketcap_billion_usd``
-    column names, values are in USD, not billions.
-    """
+    """Add `gold_market_cap_usd` and `silver_market_cap_usd`: supply x each day's futures close."""
     new_columns = {}
     for _, row in gold_silver_supply.iterrows():
         metal = row["Metal"]
@@ -223,16 +219,14 @@ def calculate_metal_market_caps(
             if "GC=F_close" not in data:
                 warnings.warn("Gold price data column is missing", RuntimeWarning, stacklevel=2)
                 continue
-            price_usd_per_ounce = data["GC=F_close"].ffill()
+            price_usd_per_ounce = data["GC=F_close"]
         elif metal == "Silver":
             if "SI=F_close" not in data:
                 warnings.warn("Silver price data column is missing", RuntimeWarning, stacklevel=2)
                 continue
-            price_usd_per_ounce = data["SI=F_close"].ffill()
+            price_usd_per_ounce = data["SI=F_close"]
 
-        metric_name = f"{metal.lower()}_marketcap_billion_usd"
-        market_cap = supply_troy_ounces * price_usd_per_ounce.iloc[-1]
-        new_columns[metric_name] = pd.Series(market_cap, index=data.index)
+        new_columns[f"{metal.lower()}_market_cap_usd"] = supply_troy_ounces * price_usd_per_ounce
 
     data = pd.concat([data, pd.DataFrame(new_columns)], axis=1)
     return data
@@ -244,19 +238,17 @@ def calculate_btc_price_to_surpass_metal_categories(
     """Add the BTC price at which Bitcoin's market cap equals gold, each gold use and silver."""
     supply = _positive_supply(data)
 
-    new_columns = {}
-    gold_marketcap_billion_usd = data["gold_marketcap_billion_usd"].iloc[-1]
-    new_columns["gold_marketcap_btc_price"] = gold_marketcap_billion_usd / supply
+    gold_market_cap = data["gold_market_cap_usd"]
+    new_columns = {"gold_market_cap_btc_price": gold_market_cap / supply}
 
     for _, row in gold_supply_breakdown.iterrows():
         category = row["Gold Supply Breakdown"].replace(" ", "_").lower()
         percentage_of_market = row["Percentage Of Market"] / 100.0
-        new_columns[f"gold_{category}_marketcap_btc_price"] = (
-            gold_marketcap_billion_usd * percentage_of_market
+        new_columns[f"gold_{category}_market_cap_btc_price"] = (
+            gold_market_cap * percentage_of_market
         ) / supply
 
-    silver_marketcap_billion_usd = data["silver_marketcap_billion_usd"].iloc[-1]
-    new_columns["silver_marketcap_btc_price"] = silver_marketcap_billion_usd / supply
+    new_columns["silver_market_cap_btc_price"] = data["silver_market_cap_usd"] / supply
 
     new_columns_df = pd.DataFrame(new_columns, index=data.index)
     data = pd.concat([data, new_columns_df], axis=1)
@@ -267,14 +259,14 @@ def calculate_btc_price_to_surpass_metal_categories(
 def calculate_btc_price_to_surpass_fiat(
     data: pd.DataFrame, fiat_money_data: pd.DataFrame
 ) -> pd.DataFrame:
-    """Add `{Country}_btc_price`: the BTC price at which Bitcoin's market cap equals that M0."""
+    """Add `{country}_m0_btc_price`: the BTC price at which Bitcoin's market cap equals that M0."""
     supply = _positive_supply(data)
     fiat_marketcap = {}
 
     for _, row in fiat_money_data.iterrows():
-        country = row["Country"].replace(" ", "_")
+        country = row["Country"].replace(" ", "_").lower()
         fiat_supply_usd = row["US Dollar Trillion"] * 1e12
-        fiat_marketcap[f"{country}_btc_price"] = fiat_supply_usd / supply
+        fiat_marketcap[f"{country}_m0_btc_price"] = fiat_supply_usd / supply
 
     data = pd.concat([data, pd.DataFrame(fiat_marketcap)], axis=1)
     return data
@@ -286,7 +278,7 @@ def calculate_btc_price_for_stock_mkt_caps(
     """Add `{ticker}_mc_btc_price`: the BTC price at which Bitcoin's market cap equals the stock's."""
     supply = _positive_supply(data)
     stock_marketcap_prices = {
-        f"{ticker}_mc_btc_price": data[f"{ticker}_MarketCap"] / supply
+        f"{ticker}_mc_btc_price": data[f"{ticker}_market_cap"] / supply
         for ticker in stock_tickers
     }
 
@@ -301,13 +293,15 @@ def calculate_network_model_metrics(data, model_end_date=None):
     the report date), then evaluated across the whole frame. Metcalfe fixes the exponent
     at 2 and fits the scale; the power law fits ``price = scale * age**exponent`` in
     log-log space. Hash ribbons compare the 30- and 60-day hash-rate averages.
+
+    Returns (frame, parameters), where parameters holds the fitted coefficients.
     """
     required = {
         "price_close",
         "market_cap",
         "supply",
         "hash_rate",
-        *METCALFE_ADDRESS_COLUMNS.keys(),
+        METCALFE_ADDRESS_COLUMN,
     }
     missing = sorted(required.difference(data.columns))
     if missing:
@@ -353,36 +347,27 @@ def calculate_network_model_metrics(data, model_end_date=None):
             "power_law_price_multiple": price.div(
                 power_law_price.where(power_law_price > 0)
             ),
-            "power_law_exponent": pd.Series(float(exponent), index=result.index),
-            "power_law_scale": pd.Series(float(np.exp(log_scale)), index=result.index),
         }
     )
 
     # USD curves at the valuation label's band boundaries, for the charts.
     new_columns.update(calculate_power_law_price_bands(power_law_price))
 
-    for address_column, suffix in METCALFE_ADDRESS_COLUMNS.items():
-        addresses = pd.to_numeric(result[address_column], errors="coerce")
-        metcalfe_fit = (
-            fit_mask & model_market_cap.gt(0) & supply.gt(0) & addresses.gt(0)
+    addresses = pd.to_numeric(result[METCALFE_ADDRESS_COLUMN], errors="coerce")
+    metcalfe_fit = fit_mask & model_market_cap.gt(0) & supply.gt(0) & addresses.gt(0)
+    if not metcalfe_fit.any():
+        raise ValueError(
+            f"Metcalfe model requires positive observations for {METCALFE_ADDRESS_COLUMN}"
         )
-        if not metcalfe_fit.any():
-            raise ValueError(
-                f"Metcalfe model requires positive observations for {address_column}"
-            )
-        scale = np.exp(
-            (
-                np.log(model_market_cap.loc[metcalfe_fit])
-                - 2 * np.log(addresses.loc[metcalfe_fit])
-            ).mean()
-        )
-        value = (scale * addresses.pow(2)).div(supply.where(supply > 0))
-        new_columns[f"metcalfe_value_{suffix}"] = value
-        new_columns[f"metcalfe_scale_{suffix}"] = pd.Series(
-            float(scale), index=result.index
-        )
-
-    new_columns["metcalfe_value"] = new_columns["metcalfe_value_any_balance"]
+    metcalfe_scale = np.exp(
+        (
+            np.log(model_market_cap.loc[metcalfe_fit])
+            - 2 * np.log(addresses.loc[metcalfe_fit])
+        ).mean()
+    )
+    new_columns["metcalfe_value"] = (metcalfe_scale * addresses.pow(2)).div(
+        supply.where(supply > 0)
+    )
     new_columns["metcalfe_price_multiple"] = price.div(
         new_columns["metcalfe_value"].where(new_columns["metcalfe_value"] > 0)
     )
@@ -406,7 +391,12 @@ def calculate_network_model_metrics(data, model_end_date=None):
     existing = [column for column in new_columns if column in result.columns]
     if existing:
         result = result.drop(columns=existing)
-    return pd.concat([result, pd.DataFrame(new_columns, index=result.index)], axis=1)
+    parameters = {
+        "power_law_exponent": float(exponent),
+        "power_law_scale": float(np.exp(log_scale)),
+        "metcalfe_scale": float(metcalfe_scale),
+    }
+    return pd.concat([result, pd.DataFrame(new_columns, index=result.index)], axis=1), parameters
 
 
 def calculate_power_law_price_bands(power_law_price):
@@ -421,10 +411,10 @@ def calculate_power_law_price_bands(power_law_price):
 def electric_price_models(data):
     """Add the electricity-cost price models, using Coin Metrics network efficiency.
 
-    - Electricity_Cost_{3..7}c: power expense per BTC earned (subsidy plus fees) at each
-      tariff; Electricity_Cost is the base-tariff scenario.
-    - Hayes_Network_Price_Per_BTC: Hayes cost-of-production price, using the protocol
-      block subsidy; Hayes_Network_Price_Multiple is price over it.
+    - electricity_cost_{3..7}c: power expense per BTC earned (subsidy plus fees) at each
+      tariff.
+    - hayes_network_price: Hayes cost-of-production price, using the protocol block
+      subsidy; hayes_network_price_multiple is price over it.
     """
     SECONDS_PER_DAY = 24 * 60 * 60
     SHA_256_CONSTANT = 2**32
@@ -440,12 +430,9 @@ def electric_price_models(data):
 
     for tariff in ELECTRICITY_TARIFFS_USD_PER_KWH:
         cents = int(round(tariff * 100))
-        data[f"Electricity_Cost_{cents}c"] = (
+        data[f"electricity_cost_{cents}c"] = (
             daily_electricity_consumption_kwh * tariff
         ).div(miner_revenue_btc.where(miner_revenue_btc > 0))
-
-    base_cents = int(round(ELECTRICITY_BASE_TARIFF_USD_PER_KWH * 100))
-    data["Electricity_Cost"] = data[f"Electricity_Cost_{base_cents}c"]
 
     btc_per_day_network_expected = (
         data["hash_rate"]
@@ -461,15 +448,15 @@ def electric_price_models(data):
         * hash_rate_th_s
     )
 
-    data["Hayes_Network_Price_Per_BTC"] = np.where(
+    data["hayes_network_price"] = np.where(
         btc_per_day_network_expected > 0,
         e_day_network / btc_per_day_network_expected,
         np.nan,
     )
 
-    data["Hayes_Network_Price_Multiple"] = np.where(
-        data["Hayes_Network_Price_Per_BTC"] != 0,
-        data["price_close"] / data["Hayes_Network_Price_Per_BTC"],
+    data["hayes_network_price_multiple"] = np.where(
+        data["hayes_network_price"] != 0,
+        data["price_close"] / data["hayes_network_price"],
         np.nan,
     )
 
@@ -477,7 +464,7 @@ def electric_price_models(data):
 
 
 def calculate_rolling_cagr_for_all_columns(data, years):
-    """Rolling `years`-year CAGR of every column, in percentage points (`{col}_{years}_Year_CAGR`)."""
+    """Rolling `years`-year CAGR of every column, in percentage points (`{col}_{years}y_cagr`)."""
     if not isinstance(data.index, pd.DatetimeIndex):
         raise ValueError("Data index must be a DatetimeIndex.")
 
@@ -492,7 +479,7 @@ def calculate_rolling_cagr_for_all_columns(data, years):
     cagr = ((data / start_value) ** (1 / years) - 1) * 100
     cagr = cagr.replace([np.inf, -np.inf], np.nan)
 
-    cagr.columns = [f"{col}_{years}_Year_CAGR" for col in cagr.columns]
+    cagr.columns = [f"{col}_{years}y_cagr" for col in cagr.columns]
 
     return cagr
 
@@ -530,25 +517,25 @@ def _previous_period_positive_close(data, period):
 
 
 def calculate_ytd_change(data):
-    """YTD change of every column from the last close before January 1 (`{col}_YTD_change`)."""
+    """YTD change of every column from the last close before January 1 (`{col}_ytd_change`)."""
     prior_year_close = _previous_period_positive_close(data, "year")
     ytd_change = _safe_pct_change(data, prior_year_close)
-    ytd_change.columns = [f"{col}_YTD_change" for col in ytd_change.columns]
+    ytd_change.columns = [f"{col}_ytd_change" for col in ytd_change.columns]
 
     return ytd_change
 
 
 def calculate_mtd_change(data):
-    """MTD change of every column from the last close before the 1st (`{col}_MTD_change`)."""
+    """MTD change of every column from the last close before the 1st (`{col}_mtd_change`)."""
     prior_month_close = _previous_period_positive_close(data, "month")
     mtd_change = _safe_pct_change(data, prior_month_close)
-    mtd_change.columns = [f"{col}_MTD_change" for col in mtd_change.columns]
+    mtd_change.columns = [f"{col}_mtd_change" for col in mtd_change.columns]
 
     return mtd_change
 
 
 def calculate_yoy_change(data):
-    """Change of every column from the same calendar date a year earlier (`{col}_YOY_change`)."""
+    """Change of every column from the same calendar date a year earlier (`{col}_yoy_change`)."""
     if not isinstance(data.index, pd.DatetimeIndex):
         raise ValueError("Data index must be a DatetimeIndex.")
 
@@ -557,7 +544,7 @@ def calculate_yoy_change(data):
     prior_year = data.reindex(prior_year_dates)
     prior_year.index = data.index
     yoy_change = _safe_pct_change(data, prior_year)
-    yoy_change.columns = [f"{col}_YOY_change" for col in yoy_change.columns]
+    yoy_change.columns = [f"{col}_yoy_change" for col in yoy_change.columns]
 
     return yoy_change
 
@@ -580,10 +567,10 @@ def calculate_all_changes(data: pd.DataFrame, yoy_columns: list, periods: Option
 
 
 def calculate_time_changes(data, periods):
-    """Change of every column over each row-count period (`{col}_{period}_change`)."""
+    """Change of every column over each row-count period (`{col}_{period}d_change`)."""
     changes = pd.concat(
         [
-            _safe_pct_change(data, data.shift(period)).add_suffix(f"_{period}_change")
+            _safe_pct_change(data, data.shift(period)).add_suffix(f"_{period}d_change")
             for period in periods
         ],
         axis=1,

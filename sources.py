@@ -26,6 +26,8 @@ from data_definitions import (
     API_TIMEOUT,
     BRK_BULK_URL,
     BRK_METRICS,
+    BRK_PRICE_DEPENDENT_METRICS,
+    BRK_REALIZED_PRICE_METRICS,
     MARKET_CAP_HISTORY_START_DATE,
     MINER_DATA_SHEET_URL,
     YAHOO_MARKET_CAP_FX_TICKERS,
@@ -383,7 +385,7 @@ def _historical_market_cap(stock, ticker: str, fetch_start: str, fetch_end: str,
     if newest_age > SHARES_OUTSTANDING_MAX_AGE_DAYS:
         warnings.warn(
             f"Shares outstanding for {ticker} last observed {newest_share_date.date()} "
-            f"({newest_age} days before {requested_end.date()}); {ticker}_MarketCap will be "
+            f"({newest_age} days before {requested_end.date()}); {ticker}_market_cap will be "
             f"null past the {SHARES_OUTSTANDING_MAX_AGE_DAYS}-day budget",
             RuntimeWarning,
             stacklevel=2,
@@ -420,7 +422,7 @@ def _live_market_cap_fallback(stock, ticker: str, fx_close, requested_end: pd.Ti
 def get_marketcap(
     tickers: dict, start_date: str, end_date: Optional[str] = None
 ) -> pd.DataFrame:
-    """Daily `{ticker}_MarketCap` in USD: Yahoo close x split-adjusted shares outstanding.
+    """Daily `{ticker}_market_cap` in USD: Yahoo close x split-adjusted shares outstanding.
 
     Values are NaN before Yahoo's first share observation. Renamed tickers are stitched
     under the current ticker, and non-USD listings are converted at the historical FX
@@ -439,7 +441,7 @@ def get_marketcap(
     calendar = pd.date_range(requested_start, requested_end, freq="D", name="time")
     data = pd.DataFrame(index=calendar)
     for ticker in stocks:
-        data[f"{ticker}_MarketCap"] = np.nan
+        data[f"{ticker}_market_cap"] = np.nan
 
     history_start = max(requested_start, pd.to_datetime(MARKET_CAP_HISTORY_START_DATE).normalize())
     if history_start > requested_end:
@@ -449,7 +451,7 @@ def get_marketcap(
     fetch_end = (requested_end + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
     for ticker in stocks:
-        value_column = f"{ticker}_MarketCap"
+        value_column = f"{ticker}_market_cap"
         stock = yf.Ticker(ticker)
         fx_close = None
         try:
@@ -798,8 +800,22 @@ def get_brk_onchain(
     frame = frame.sort_index().reindex(columns=ordered_cols[1:])
     frame = frame.apply(pd.to_numeric, errors="coerce")
     frame = frame.loc[frame.index >= pd.to_datetime(start_date)]
+    frame = _blank_pre_price_placeholders(frame)
     print(f"[BRK] {len(frame)} days x {len(frame.columns)} series through {frame.index.max().date()}")
     return frame.rename_axis("time").reset_index()
+
+
+def _blank_pre_price_placeholders(frame: pd.DataFrame) -> pd.DataFrame:
+    """Blank BRK's 0 placeholders for price-dependent series before Bitcoin had a price,
+    and any realized price of 0."""
+    frame = frame.copy()
+    priced = frame["price_close"].gt(0) if "price_close" in frame else pd.Series(True, frame.index)
+    before_price = ~priced.cummax()
+    columns = [c for c in BRK_PRICE_DEPENDENT_METRICS if c in frame.columns]
+    frame.loc[before_price, columns] = np.nan
+    realized = [c for c in BRK_REALIZED_PRICE_METRICS if c in frame.columns]
+    frame[realized] = frame[realized].where(frame[realized].ne(0))
+    return frame
 
 
 def _normalized_index(data: pd.DataFrame) -> pd.DatetimeIndex:
@@ -855,10 +871,11 @@ def get_data(
         if overlap:
             raise RuntimeError(f"Sources returned duplicate columns: {', '.join(overlap)}")
         data = pd.merge(data, dataset, left_index=True, right_index=True, how="left")
+    data.index.name = "date"
 
     # Keep a column for every configured ticker even when Yahoo returned nothing.
     optional = [f"{ticker}_close" for group in tickers.values() for ticker in group]
-    optional += [f"{ticker}_MarketCap" for ticker in tickers.get("stocks", [])]
+    optional += [f"{ticker}_market_cap" for ticker in tickers.get("stocks", [])]
     data = data.reindex(columns=list(dict.fromkeys([*data.columns, *optional])))
 
     return data

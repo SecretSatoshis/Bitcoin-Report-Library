@@ -57,8 +57,8 @@ const CSV_FILES = [
   "relative_value_comparison.csv",
   "roi_table.csv",
   "onchain_price_models.csv",
-  "mtd_returns_history.csv",
-  "ytd_returns_history.csv",
+  "mtd_price_paths.csv",
+  "ytd_price_paths.csv",
   "price_outlook.csv",
   CANDLE_ARCHIVE,
 ];

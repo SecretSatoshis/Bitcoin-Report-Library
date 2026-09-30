@@ -15,10 +15,10 @@ class PerformanceTableTests(unittest.TestCase):
         report_data = pd.DataFrame(
             {
                 "price_close": [50.0, 100.0, 999.0],
-                "price_close_7_change": [1.0, 2.0, 999.0],
-                "price_close_MTD_change": [3.0, 4.0, 999.0],
-                "price_close_YTD_change": [5.0, 6.0, 999.0],
-                "price_close_90_change": [7.0, 8.0, 999.0],
+                "price_close_7d_change": [1.0, 2.0, 999.0],
+                "price_close_mtd_change": [3.0, 4.0, 999.0],
+                "price_close_ytd_change": [5.0, 6.0, 999.0],
+                "price_close_90d_change": [7.0, 8.0, 999.0],
             },
             index=dates,
         )
@@ -47,7 +47,7 @@ class PerformanceTableTests(unittest.TestCase):
         for ticker in tickers:
             price = ticker if ticker == "price_close" else f"{ticker}_close"
             columns[price] = [10.0]
-            for suffix in ("7", "MTD", "YTD", "90"):
+            for suffix in ("7d", "mtd", "ytd", "90d"):
                 columns[f"{price}_{suffix}_change"] = [1.0]
         report_data = pd.DataFrame(columns, index=pd.to_datetime(["2024-01-05"]))
         correlations = {"price_close_90_days": pd.DataFrame(
@@ -71,8 +71,6 @@ class PerformanceTableTests(unittest.TestCase):
 class OhlcTableTests(unittest.TestCase):
     def test_ohlc_tables_refuse_empty_candles(self):
         empty = pd.DataFrame(columns=data_validation.OHLC_COLUMNS)
-        with self.assertRaisesRegex(RuntimeError, "refusing to overwrite"):
-            report_tables.weekly_ohlc_table(empty)
         with self.assertRaisesRegex(RuntimeError, "refusing to overwrite"):
             report_tables.create_report_ohlc_summary(empty, "2024-01-01")
 
@@ -132,7 +130,7 @@ class PeriodReturnBoundaryTests(unittest.TestCase):
             data, report_date="2023-02-15"
         )
 
-        self.assertEqual(result.index.name, "time")
+        self.assertEqual(result.index.name, "Year")
         self.assertAlmostEqual(result.loc[2023, "Jan"], 50.0)
         self.assertAlmostEqual(result.loc[2023, "Feb"], 10.0)
         self.assertAlmostEqual(result.loc[2023, "Yearly"], 65.0)
@@ -173,10 +171,10 @@ class PeriodReturnBoundaryTests(unittest.TestCase):
     def test_indexed_histories_include_shared_prior_close_anchor(self):
         prices = self.comparison_prices()["price_close"]
 
-        monthly = report_tables.create_indexed_returns_history(
+        monthly = report_tables.create_price_paths(
             prices, report_date="2021-02-02", period="mtd", min_year=2020
         )
-        yearly = report_tables.create_indexed_returns_history(
+        yearly = report_tables.create_price_paths(
             prices, report_date="2021-02-02", period="ytd", min_year=2020
         )
 
@@ -250,7 +248,7 @@ class ReturnAndSummaryTableTests(unittest.TestCase):
             index=dates,
         )
 
-        result = report_tables.create_indexed_returns_history(
+        result = report_tables.create_price_paths(
             prices, report_date="2021-03-01", period="ytd", min_year=2019
         )
 
@@ -316,9 +314,9 @@ class ReturnAndSummaryTableTests(unittest.TestCase):
         sentiment = result[result["Category"] == "Investor Sentiment"]["Value"]
 
         self.assertEqual(list(sentiment.index), [
-            "Bitcoin Supply in Profit", "Bitcoin Market Sentiment", "Bitcoin Valuation",
+            "Bitcoin Supply in Profit (%)", "Bitcoin Market Sentiment", "Bitcoin Valuation",
         ])
-        self.assertEqual(sentiment["Bitcoin Supply in Profit"], 70.0)
+        self.assertEqual(sentiment["Bitcoin Supply in Profit (%)"], 70.0)
         self.assertEqual(sentiment["Bitcoin Market Sentiment"], "Belief / Denial")
         self.assertEqual(sentiment["Bitcoin Valuation"], "Below Fair Value")
 
@@ -372,14 +370,14 @@ class RelativeValueTableTests(unittest.TestCase):
         from data_definitions import FIAT_MONEY_SUPPLY
 
         us_m0 = float(FIAT_MONEY_SUPPLY.set_index("Country").loc["United States", "US Dollar Trillion"]) * 1e12
-        row = {"price_close": 100_000.0, "market_cap": 2e12, "United_States_btc_price": 250_000.0,
-               "AAPL_mc_btc_price": 200_000.0, "AAPL_MarketCap": 4e12}
+        row = {"price_close": 100_000.0, "market_cap": 2e12, "united_states_m0_btc_price": 250_000.0,
+               "AAPL_mc_btc_price": 200_000.0, "AAPL_market_cap": 4e12}
         data = pd.DataFrame([row], index=pd.to_datetime(["2024-01-05"]))
         table = report_tables.create_asset_valuation_table(data, "2024-01-05").set_index("Asset")
 
         self.assertEqual(table.loc["US M0", "Market Cap (USD)"], us_m0)
-        self.assertEqual(table.loc["US M0", "BTC % Move to Marketcap BTC Price"], 150.0)
-        self.assertEqual(table.loc["Bitcoin", "BTC % Move to Marketcap BTC Price"], 0.0)
+        self.assertEqual(table.loc["US M0", "Move Needed (%)"], 150.0)
+        self.assertEqual(table.loc["Bitcoin", "Move Needed (%)"], 0.0)
         caps = table["Market Cap (USD)"].dropna()
         self.assertTrue(caps.is_monotonic_decreasing)
 

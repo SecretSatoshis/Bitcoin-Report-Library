@@ -58,7 +58,7 @@ Bitcoin-Report-Library/
 | `cycles.py` | Drawdown, cycle-low and halving-era series for Chart Library |
 | `report_tables.py` | Builds the published tables: summary, fundamentals, performance, ROI, MTD/YTD comparisons, heatmap, OHLC, relative value |
 | `data_definitions.py` | Central configuration: tickers, API settings, reference data, metric templates, constants |
-| `candle_data.py` | Aggregates BRK daily candles into weekly and monthly periods through the report date, including `ohlc_data.csv` and the frozen chart candle files |
+| `candle_data.py` | Aggregates BRK daily candles into weekly and monthly periods through the report date, and the matching weekly and monthly metric snapshots |
 | `data_validation.py` | Shared contracts: complete daily/weekly calendars and valid OHLC candles |
 | `release_manifest.py` | Writes `release_manifest.json` (report date plus SHA-256 and size of exactly the files the run published) after all exports finish |
 | `validate_outputs.py` | Re-checks the finished release against the report date recorded in the manifest before CI publishes it |
@@ -144,7 +144,7 @@ All configuration is centralized in `data_definitions.py`:
 - **Tickers**: Asset symbols organized by category (stocks, which also get market caps; Bitcoin equities, price only; ETFs, indices, commodities, forex)
 - **Reference Data**: Fiat money supply, precious metals supply, and gold allocation breakdown, each with an explicit reviewed vintage and maximum age
 - **API Settings**: Configured BRK series, endpoint URLs, timeout values
-- **Model Parameters**: Metcalfe address input, Bitcoin genesis anchor, Hash Ribbon windows, electricity-tariff scenarios, trading days, and unit conversions
+- **Model Parameters**: Metcalfe address input, Bitcoin genesis anchor, Hash Ribbon windows, electricity-tariff scenarios, and unit conversions
 - **Report Settings**: Analysis columns, correlation data columns, metrics templates
 
 ## Outputs
@@ -152,6 +152,20 @@ All configuration is centralized in `data_definitions.py`:
 All data outputs are written to `csv/` and served from the GitHub Pages base path `https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/` for remote consumption by downstream projects. The repository root publishes a generated data-release landing page and sitemap covering every `.csv` and `.csv.gz` file; the release date comes from `release_manifest.json`, and file coverage, counts, and download links are read from the same completed release.
 
 The master metrics dataset is exported as gzipped CSV (`.csv.gz`) to keep the file under GitHub's size limits. `pd.read_csv()` reads `.csv.gz` files natively — no manual decompression needed.
+
+**Naming.** Data files use snake_case columns and a `date` column for the day each row
+describes; period files (`bitcoin_candles`, weekly and monthly metrics) are keyed by
+`period_start` with the source row's `observation_date`. Report tables meant for display
+(summary, fundamentals, performance, relative value, ROI, return comparisons, heatmap)
+use Title Case headers. Ticker symbols keep their case (`SPY_close`,
+`NVDA_market_cap`). Change columns end `_7d_change`, `_90d_change`, `_mtd_change`,
+`_ytd_change` and `_yoy_change`; CAGRs end `_4y_cagr`. All percentages are in percentage
+points. Series that need a Bitcoin price are blank before the first traded price
+(2010-08-16), never `0`.
+
+**Model parameters.** The fitted power-law exponent and scale and the Metcalfe scale are
+constants, so they are published once in `release_manifest.json` under
+`model_parameters` rather than repeated on every row.
 
 `metrics.calculate_nvt_price_models` publishes `nvt_price_30d`, `nvt_price_90d`
 and `nvt_price_365d`. Each multiplies the 730-day median NVT by the corresponding
@@ -183,15 +197,14 @@ interpretation of these fixed reviewed ranges, not a forecast confidence interva
 | `performance_table.csv` | Multi-asset performance comparison: one Bitcoin row (category `Bitcoin`), then equity indexes, sectors, macro assets and Bitcoin-industry stocks. The release fails if any asset lacks a price or return. The 90-day BTC correlation pairs each asset's returns between its own trading days with BTC's return over the same span, so weekends and holidays add no artificial zero returns |
 | `mtd_return_comparison.csv` | Month-to-date return from the latest positive close before the month began, plus the historical median projection |
 | `ytd_return_comparison.csv` | Year-to-date return from the latest positive close before January 1, plus the historical median projection |
-| `relative_value_comparison.csv` | Relative valuation metrics |
-| `roi_table.csv` | Historical ROI by labeled time frame and entry date |
-| `monthly_heatmap_data.csv` | Monthly/yearly returns measured from the latest positive prior-period close |
-| `ohlc_data.csv` | Weekly OHLC from 2017, aggregated from BRK daily candles and labeled by Monday week start; the open week closes on `report_date` |
-| `report_ohlc_summary.csv` | Report-date daily OHLC plus week-to-date context capped at the report date |
+| `relative_value_comparison.csv` | Bitcoin's price if its market cap matched each asset (M0 supplies, gold, silver, large stocks): `Market Cap (USD)`, `BTC Price at Market Cap` and `Move Needed (%)`. Gold and silver use each day's futures close |
+| `roi_table.csv` | ROI over each time frame (1 Day to 10 Year) with its `Start Date` and `Start Price` |
+| `monthly_heatmap_data.csv` | Monthly and yearly returns measured from the latest positive prior-period close, one row per `Year` plus 4-Year Average, Median and Average rows |
+| `report_ohlc_summary.csv` | One row: the report-date daily candle (`daily_*`) and the week-to-date candle (`week_to_date_*`) from `week_start` |
 | `summary_history.csv` | 31 daily endpoints spanning 30 calendar days for dashboard sparklines + exact 30d deltas |
-| `onchain_price_models.csv` | Daily valuation models (Metcalfe, power law, Realized, STH/LTH Realized, canonical $0.05/kWh power expense, and 3× Realized) joined to BTC price through `report_date`, plus the 50-day, 3-month, 200-day, 1-year and 200-week moving averages (50, 90, 200, 364 and 1,400 daily closes; empty until the window is complete). The Dashboard price chart draws the 3-month, 1-year and 200-week averages |
-| `mtd_returns_history.csv` | Indexed MTD paths with row 0 as the shared prior-month close anchor; day 1 retains its actual move and the current series is capped at `report_date` |
-| `ytd_returns_history.csv` | Indexed YTD paths with row 0 as the shared prior-year close anchor; calendar dates align across leap years and the current series is capped at `report_date` |
+| `onchain_price_models.csv` | Daily valuation models (Metcalfe, power law, Realized, STH/LTH Realized, canonical $0.05/kWh power expense, and 3× Realized) joined to BTC price from the first traded price through `report_date`, plus the 50-day, 3-month, 200-day, 1-year and 200-week moving averages (50, 90, 200, 364 and 1,400 daily closes; empty until the window is complete). The Dashboard price chart draws the 3-month, 1-year and 200-week averages |
+| `mtd_price_paths.csv` | Each year's month-to-date price path rebased to this month's starting close, one column per year; row 0 is the shared prior-month close and the current year stops at `report_date` |
+| `ytd_price_paths.csv` | Each year's year-to-date price path rebased to this year's starting close, one column per year; row 0 is the shared prior-year close, dates align across leap years, and the current year stops at `report_date` |
 | `price_outlook.csv` | Hand-maintained Bear/Base/Bull cases, their forecast year, and retained support/resistance reference data; the website and bundled dashboard render the three case lines |
 
 ### Chart-Ready Datasets
@@ -202,7 +215,7 @@ These CSV files are pre-computed for downstream visualization by [Bitcoin-Chart-
 |------|-------------|
 | `drawdown_data.csv` | ATH drawdown cycles with days since ATH and percentage decline |
 | `cycle_low_data.csv` | Market cycle performance indexed from the lowest positive price observed inside each configured cycle window |
-| `release_manifest.json` | Shared release ID, report date, generation time, and SHA-256/size records for every published CSV |
+| `release_manifest.json` | Shared release ID, report date, generation time, fitted model parameters, and SHA-256/size records for every published CSV |
 | `halving_data.csv` | Performance indexed from each Bitcoin halving with a positive day-0 source price; the pre-price Genesis era is omitted |
 
 ## Dashboard
@@ -311,15 +324,13 @@ pre-market era, and prepares chart data through the completed report date.
 `candle_data.py` exports `bitcoin_candles.csv.gz` (daily, Monday–Sunday weekly,
 and calendar-month OHLC with period/observation dates and completion flags),
 plus `weekly_metrics_data.csv.gz` and `monthly_metrics_data.csv.gz`. Metric
-snapshots select the exact final included daily row, preserving missing values
-and existing calculations. An initial partial historical week/month is omitted;
+snapshots are keyed by `period_start` and copy the master row for the period's
+`observation_date` (its last included day), preserving missing values. An initial partial historical week/month is omitted;
 the latest partial period is included through the report date.
 
 These files are part of the verified release manifest. Daily candle closes must
 match the master prices; missing daily observations and inconsistent candles
 fail the build. Chart Library performs no source gathering or OHLC aggregation.
-`ohlc_data.csv` keeps its existing schema for its other consumers but is now built
-from the same daily candles, so both weekly exports agree.
 
 
 ## Dashboard presentation

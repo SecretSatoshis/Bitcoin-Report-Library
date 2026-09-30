@@ -18,6 +18,7 @@ from pandas.tseries.offsets import MonthEnd
 import calendar
 from data_validation import OHLC_COLUMNS, assert_ohlc_usable
 from data_definitions import (
+    ELECTRICITY_BASE_TARIFF_USD_PER_KWH,
     NUPL_SENTIMENT_WINDOW_DAYS,
     NUPL_SENTIMENT_ZONES,
     POWER_LAW_VALUATION_BANDS,
@@ -57,7 +58,7 @@ PRICE_MOVING_AVERAGES = {
 # Daily series published in summary_history.csv, by label.
 HEADLINE_METRICS = {
     "Bitcoin Price USD": "price_close",
-    "Bitcoin Marketcap": "market_cap",
+    "Bitcoin Market Cap": "market_cap",
     "Sats Per Dollar": "sat_per_dollar",
     "Bitcoin Supply": "supply",
     "Bitcoin Miner Revenue": "coinbase_sum_24h_usd",
@@ -67,7 +68,7 @@ HEADLINE_METRICS = {
 # Model columns published in onchain_price_models.csv, with their published names.
 ONCHAIN_PRICE_MODEL_COLUMNS = {
     "price_close": "BTC Price",
-    "Electricity_Cost": "Electricity Cost",
+    f"electricity_cost_{round(ELECTRICITY_BASE_TARIFF_USD_PER_KWH * 100)}c": "Electricity Cost",
     "metcalfe_value": "Metcalfe Value",
     "power_law_price": "Power Law Price",
     "sth_realized_price": "STH Realized Price",
@@ -97,15 +98,15 @@ def add_price_moving_averages(frame, price_column="BTC Price"):
     return result
 
 
-def create_indexed_returns_history(
+def create_price_paths(
     price_series, report_date, period, min_year=RETURN_HISTORY_MIN_YEAR
 ):
     """Each year's MTD or YTD price path, rebased to the current period's starting price.
 
     Every year starts from its last close before the period began; row 0 is that shared
     baseline. The current year stops at ``report_date``. YTD rows use a 365-day calendar
-    (February 29 dropped) so dates line up across leap years. Returns one column per year
-    plus Median and Average of past years, indexed by day of month or day of year.
+    (February 29 dropped) so dates line up across leap years. Returns one column per year,
+    indexed by day of month or day of year.
     """
     if not isinstance(price_series, pd.Series):
         raise TypeError("price_series must be a pandas Series.")
@@ -183,12 +184,6 @@ def create_indexed_returns_history(
 
     result = pd.DataFrame(indexed_years).sort_index()
     result.index.name = index_name
-    historical_columns = [
-        column for column in result.columns if int(column) < current_year
-    ]
-    if historical_columns:
-        result["Median"] = result[historical_columns].median(axis=1)
-        result["Average"] = result[historical_columns].mean(axis=1)
     return result
 
 
@@ -230,7 +225,7 @@ def create_summary_history(
 
 def calculate_roi_table(data, report_date, price_column="price_close"):
     """Bitcoin's return from 1 day to 10 years before the report date: Time Frame, ROI (%),
-    Start Date and BTC Price (the start price)."""
+    Start Date and Start Price."""
     if price_column not in data.columns:
         raise ValueError(
             f"The price column '{price_column}' does not exist in the data."
@@ -240,11 +235,11 @@ def calculate_roi_table(data, report_date, price_column="price_close"):
         raise ValueError("The input data is empty.")
 
     period_offsets = {
-        "1 day": pd.DateOffset(days=1),
-        "3 day": pd.DateOffset(days=3),
-        "7 day": pd.DateOffset(days=7),
-        "30 day": pd.DateOffset(days=30),
-        "90 day": pd.DateOffset(days=90),
+        "1 Day": pd.DateOffset(days=1),
+        "3 Day": pd.DateOffset(days=3),
+        "7 Day": pd.DateOffset(days=7),
+        "30 Day": pd.DateOffset(days=30),
+        "90 Day": pd.DateOffset(days=90),
         "1 Year": pd.DateOffset(years=1),
         "2 Year": pd.DateOffset(years=2),
         "4 Year": pd.DateOffset(years=4),
@@ -289,7 +284,7 @@ def calculate_roi_table(data, report_date, price_column="price_close"):
             "Time Frame": period_offsets.keys(),
             "ROI (%)": [roi_data[period] for period in period_offsets],
             "Start Date": [start_dates[period] for period in period_offsets],
-            "BTC Price": [btc_prices[period] for period in period_offsets],
+            "Start Price": [btc_prices[period] for period in period_offsets],
         }
     )
     return roi_table
@@ -438,7 +433,7 @@ def create_summary_table(report_data, report_date):
     categorized_data = {
         "Market Data": {
             "Bitcoin Price USD": price_usd,
-            "Bitcoin Marketcap": market_cap,
+            "Bitcoin Market Cap": market_cap,
             "Sats Per Dollar": sats_per_dollar,
         },
         "On-chain Data": {
@@ -447,7 +442,7 @@ def create_summary_table(report_data, report_date):
             "Bitcoin Transaction Volume": tx_volume,
         },
         "Investor Sentiment": {
-            "Bitcoin Supply in Profit": supply_in_profit_pct,
+            "Bitcoin Supply in Profit (%)": supply_in_profit_pct,
             "Bitcoin Market Sentiment": market_sentiment,
             "Bitcoin Valuation": bitcoin_valuation,
         },
@@ -526,10 +521,10 @@ def _build_performance_table(
                 "Category": category,
                 "Asset": label,
                 "Price": latest[price_col],
-                "7 Day Return (%)": latest[f"{price_col}_7_change"],
-                "MTD Return (%)": latest[f"{price_col}_MTD_change"],
-                "YTD Return (%)": latest[f"{price_col}_YTD_change"],
-                "90 Day Return (%)": latest[f"{price_col}_90_change"],
+                "7 Day Return (%)": latest[f"{price_col}_7d_change"],
+                "MTD Return (%)": latest[f"{price_col}_mtd_change"],
+                "YTD Return (%)": latest[f"{price_col}_ytd_change"],
+                "90 Day Return (%)": latest[f"{price_col}_90d_change"],
                 "52 Week High": window.max() if len(window) else None,
                 "52 Week Low": window.min() if len(window) else None,
                 "90 Day BTC Correlation": 1 if ticker == "price_close" else
@@ -614,23 +609,12 @@ def monthly_heatmap(data, report_date=None):
     heatmap_data = heatmap_data * 100
     month_names = [calendar.month_abbr[i] for i in range(1, 13)] + ["Yearly"]
     heatmap_data.columns = month_names
-    heatmap_data.index.name = "time"
+    heatmap_data.index.name = "Year"
 
     return heatmap_data
 
 
 # --- OHLC and period return tables ---
-
-
-def weekly_ohlc_table(ohlc_data):
-    """Weekly candles for ohlc_data.csv, indexed by Monday week start.
-
-    The open week's Close is the report-date close. Raises if a candle is invalid.
-    """
-    assert_ohlc_usable(ohlc_data, "Weekly OHLC")
-    table = ohlc_data[OHLC_COLUMNS].copy()
-    table.index = pd.to_datetime(table.index)
-    return table.sort_index()
 
 
 def create_report_ohlc_summary(daily_ohlc_data, report_date):
@@ -656,17 +640,17 @@ def create_report_ohlc_summary(daily_ohlc_data, report_date):
     return pd.DataFrame(
         [
             {
-                "Report Date": report_date.strftime("%Y-%m-%d"),
-                "Daily Open": daily_row["Open"],
-                "Daily High": daily_row["High"],
-                "Daily Low": daily_row["Low"],
-                "Daily Close": daily_row["Close"],
-                "Week Start": week_start.strftime("%Y-%m-%d"),
-                "Week-to-Date Open": week_to_date["Open"].iloc[0],
-                "Week-to-Date High": week_to_date["High"].max(),
-                "Week-to-Date Low": week_to_date["Low"].min(),
-                "Week-to-Date Close": daily_row["Close"],
-                "Week-to-Date Days": len(week_to_date),
+                "date": report_date.strftime("%Y-%m-%d"),
+                "daily_open": daily_row["Open"],
+                "daily_high": daily_row["High"],
+                "daily_low": daily_row["Low"],
+                "daily_close": daily_row["Close"],
+                "week_start": week_start.strftime("%Y-%m-%d"),
+                "week_to_date_open": week_to_date["Open"].iloc[0],
+                "week_to_date_high": week_to_date["High"].max(),
+                "week_to_date_low": week_to_date["Low"].min(),
+                "week_to_date_close": daily_row["Close"],
+                "week_to_date_days": len(week_to_date),
             }
         ]
     )
@@ -743,8 +727,8 @@ def create_asset_valuation_table(report_data, report_date=None):
     """Bitcoin's price if its market cap matched each asset (M0 supplies, gold, silver,
     large stocks), with the move needed to get there.
 
-    Columns: Asset, Market Cap (USD), Market Cap BTC Price and BTC % Move to Marketcap BTC
-    Price (percentage points). Sorted by market cap, largest first.
+    Columns: Asset, Market Cap (USD), BTC Price at Market Cap and Move Needed (%). Sorted
+    by market cap, largest first.
     """
     fiat_m0_usd = dict(zip(
         FIAT_MONEY_SUPPLY["Country"], FIAT_MONEY_SUPPLY["US Dollar Trillion"] * 1e12
@@ -754,47 +738,47 @@ def create_asset_valuation_table(report_data, report_date=None):
         # Fiat money (M0)
         {
             "name": "Switzerland M0",
-            "data": "Switzerland_btc_price",
+            "data": "switzerland_m0_btc_price",
             "marketcap_usd": fiat_m0_usd["Switzerland"],
         },
         {
             "name": "UK M0",
-            "data": "United_Kingdom_btc_price",
+            "data": "united_kingdom_m0_btc_price",
             "marketcap_usd": fiat_m0_usd["United Kingdom"],
         },
         {
             "name": "US M0",
-            "data": "United_States_btc_price",
+            "data": "united_states_m0_btc_price",
             "marketcap_usd": fiat_m0_usd["United States"],
         },
         # Precious metals
         {
             "name": "Total Silver Market",
-            "data": "silver_marketcap_btc_price",
-            "marketcap": "silver_marketcap_billion_usd",
+            "data": "silver_market_cap_btc_price",
+            "marketcap": "silver_market_cap_usd",
         },
         {
             "name": "Total Gold Market",
-            "data": "gold_marketcap_btc_price",
-            "marketcap": "gold_marketcap_billion_usd",
+            "data": "gold_market_cap_btc_price",
+            "marketcap": "gold_market_cap_usd",
         },
         # Mega-cap stocks
-        {"name": "Apple", "data": "AAPL_mc_btc_price", "marketcap": "AAPL_MarketCap"},
-        {"name": "Amazon", "data": "AMZN_mc_btc_price", "marketcap": "AMZN_MarketCap"},
-        {"name": "Meta", "data": "META_mc_btc_price", "marketcap": "META_MarketCap"},
-        {"name": "NVIDIA", "data": "NVDA_mc_btc_price", "marketcap": "NVDA_MarketCap"},
-        {"name": "Broadcom", "data": "AVGO_mc_btc_price", "marketcap": "AVGO_MarketCap"},
-        {"name": "Tesla", "data": "TSLA_mc_btc_price", "marketcap": "TSLA_MarketCap"},
-        {"name": "Eli Lilly", "data": "LLY_mc_btc_price", "marketcap": "LLY_MarketCap"},
-        {"name": "Micron", "data": "MU_mc_btc_price", "marketcap": "MU_MarketCap"},
-        {"name": "TSMC", "data": "TSM_mc_btc_price", "marketcap": "TSM_MarketCap"},
-        {"name": "SpaceX", "data": "SPCX_mc_btc_price", "marketcap": "SPCX_MarketCap"},
-        {"name": "Saudi Aramco", "data": "2222.SR_mc_btc_price", "marketcap": "2222.SR_MarketCap"},
-        {"name": "Samsung Electronics", "data": "005930.KS_mc_btc_price", "marketcap": "005930.KS_MarketCap"},
-        {"name": "Berkshire Hathaway Class B", "data": "BRK-B_mc_btc_price", "marketcap": "BRK-B_MarketCap"},
+        {"name": "Apple", "data": "AAPL_mc_btc_price", "marketcap": "AAPL_market_cap"},
+        {"name": "Amazon", "data": "AMZN_mc_btc_price", "marketcap": "AMZN_market_cap"},
+        {"name": "Meta", "data": "META_mc_btc_price", "marketcap": "META_market_cap"},
+        {"name": "NVIDIA", "data": "NVDA_mc_btc_price", "marketcap": "NVDA_market_cap"},
+        {"name": "Broadcom", "data": "AVGO_mc_btc_price", "marketcap": "AVGO_market_cap"},
+        {"name": "Tesla", "data": "TSLA_mc_btc_price", "marketcap": "TSLA_market_cap"},
+        {"name": "Eli Lilly", "data": "LLY_mc_btc_price", "marketcap": "LLY_market_cap"},
+        {"name": "Micron", "data": "MU_mc_btc_price", "marketcap": "MU_market_cap"},
+        {"name": "TSMC", "data": "TSM_mc_btc_price", "marketcap": "TSM_market_cap"},
+        {"name": "SpaceX", "data": "SPCX_mc_btc_price", "marketcap": "SPCX_market_cap"},
+        {"name": "Saudi Aramco", "data": "2222.SR_mc_btc_price", "marketcap": "2222.SR_market_cap"},
+        {"name": "Samsung Electronics", "data": "005930.KS_mc_btc_price", "marketcap": "005930.KS_market_cap"},
+        {"name": "Berkshire Hathaway Class B", "data": "BRK-B_mc_btc_price", "marketcap": "BRK-B_market_cap"},
         # Financials
-        {"name": "JPMorgan", "data": "JPM_mc_btc_price", "marketcap": "JPM_MarketCap"},
-        {"name": "Visa", "data": "V_mc_btc_price", "marketcap": "V_MarketCap"},
+        {"name": "JPMorgan", "data": "JPM_mc_btc_price", "marketcap": "JPM_market_cap"},
+        {"name": "Visa", "data": "V_mc_btc_price", "marketcap": "V_market_cap"},
     ]
 
     latest_data = (
@@ -824,8 +808,8 @@ def create_asset_valuation_table(report_data, report_date=None):
             {
                 "Asset": asset["name"],
                 "Market Cap (USD)": marketcap_value,
-                "Market Cap BTC Price": marketcap_btc_price,
-                "BTC % Move to Marketcap BTC Price": percent_move,
+                "BTC Price at Market Cap": marketcap_btc_price,
+                "Move Needed (%)": percent_move,
             }
         )
 

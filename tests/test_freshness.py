@@ -95,7 +95,7 @@ class FreshnessCheckTests(unittest.TestCase):
                 "price_close": np.arange(7, dtype=float),
                 "SPY_close": [100.0] * 6 + [np.nan],
                 marker: [pd.Timestamp("2024-01-01")] * 6 + [pd.NaT],
-                "AAPL_MarketCap": [3_000.0] * 7,
+                "AAPL_market_cap": [3_000.0] * 7,
             },
             index=index,
         )
@@ -136,7 +136,7 @@ class CalendarAndFillTests(unittest.TestCase):
             for function in ('get_price', 'get_marketcap', 'get_miner_data'):
                 stack.enter_context(patch.object(sources, function, return_value=pd.DataFrame()))
             data = sources.get_data({'stocks':['MISSING']}, '2024-01-01')
-        self.assertTrue(data[['MISSING_close', 'MISSING_MarketCap']].isna().all().all())
+        self.assertTrue(data[['MISSING_close', 'MISSING_market_cap']].isna().all().all())
         filled = freshness.forward_fill_market_data(data)
         self.assertTrue(filled['MISSING_close'].isna().all())
 

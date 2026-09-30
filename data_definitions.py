@@ -423,17 +423,40 @@ BRK_METRICS = [
     "utxos_under_10y_old_supply",
 ]
 
+# BRK series that need a Bitcoin price. BRK reports them as 0 before the first traded
+# price (2010-08-16); those rows are blanked. A realized price of 0 means an empty cohort
+# and is blanked wherever it occurs.
+BRK_PRICE_DEPENDENT_METRICS = [
+    "price_close",
+    "market_cap",
+    "realized_price",
+    "realized_cap",
+    "sth_realized_price",
+    "lth_realized_price",
+    "fees_sum_24h_usd",
+    "coinbase_sum_24h_usd",
+    "velocity_usd",
+    "transfer_volume_sum_24h_usd",
+    "nvt",
+    "puell_multiple",
+    "realized_profit_sum_24h",
+    "realized_loss_sum_24h",
+    "net_realized_pnl_sum_24h",
+    "supply_in_profit",
+    "supply_in_loss",
+    "sopr_24h",
+    "hash_price_ths",
+]
+BRK_REALIZED_PRICE_METRICS = ["realized_price", "sth_realized_price", "lth_realized_price"]
+
 # =============================================================================
 # MODEL PARAMETERS
 # =============================================================================
 
 # Network model inputs. The Metcalfe and power-law coefficients are fitted through the
-# report date; these are the fixed parts. Keys of METCALFE_ADDRESS_COLUMNS are address
-# columns, values the published suffix.
+# report date and published in the release manifest; these are the fixed parts.
 BITCOIN_GENESIS_DATE = pd.Timestamp("2009-01-03")
-METCALFE_ADDRESS_COLUMNS = {
-    "addr_count": "any_balance",
-}
+METCALFE_ADDRESS_COLUMN = "addr_count"
 HASH_RIBBON_FAST_WINDOW = 30
 HASH_RIBBON_SLOW_WINDOW = 60
 
