@@ -233,13 +233,12 @@ class MasterCutoffValidationTests(unittest.TestCase):
             )
             self.assertEqual(errors, [])
 
-    def test_both_large_exports_are_covered(self):
+    def test_master_export_cutoff_is_covered(self):
         import validate_outputs
 
         self.assertIn(
             "master_metrics_data.csv.gz", validate_outputs.INDEX_CUTOFF_OUTPUTS
         )
-        self.assertIn("cagr_data.csv", validate_outputs.INDEX_CUTOFF_OUTPUTS)
 
 
 if __name__ == "__main__":

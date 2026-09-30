@@ -21,7 +21,7 @@ CSV run with a hashed `visual-manifest.json`; see `dashboard/README.md`.
 - **Performance Tracking**: Rolling returns (7d, 90d, MTD, YTD, and YOY for Bitcoin), correlation analysis, volatility, and 4-year CAGR calculations
 - **Cycle Analysis**: ATH drawdown tracking, halving epoch comparisons, and market cycle low indexing
 - **Report Tables**: Pre-built tables for fundamentals summaries, ROI comparisons, monthly heatmaps, and performance comparisons
-- **Chart-Ready Exports**: Pre-computed datasets for downstream visualization (drawdowns, cycle lows, halving eras, CAGR)
+- **Chart-Ready Exports**: Pre-computed datasets for downstream visualization (drawdowns, cycle lows, halving eras)
 
 ## Architecture
 
@@ -145,7 +145,7 @@ The master metrics dataset is exported as gzipped CSV (`.csv.gz`) to keep the fi
 
 | File | Description |
 |------|-------------|
-| `master_metrics_data.csv.gz` | Complete dataset with all calculated metrics and change calculations (gzipped) |
+| `master_metrics_data.csv.gz` | Complete dataset with all calculated metrics, change calculations and 4-year CAGRs (gzipped) |
 | `fundamentals_table.csv` | Network performance, security, economics, valuation metrics |
 | `summary_table.csv` | Labeled summary metrics with `Metric`, `Value`, and `Category` columns. Investor Sentiment is all on-chain: supply in profit (%), a Fear & Greed label from the NUPL zone of the 7-day average (Capitulation, Hope / Fear, Optimism / Anxiety, Belief / Denial, Euphoria / Greed), and a valuation label from price against the power-law fair value in standard-deviation bands (Undervalued below 0.58×, Below Fair Value to 1.00×, Above Fair Value to 1.73×, Overvalued to 3.00×, Extremely Overvalued above) |
 | `performance_table.csv` | Multi-asset performance comparison. The 90-day BTC correlation pairs each asset's returns between its own trading days with BTC's return over the same span, so weekends and holidays add no artificial zero returns |
@@ -172,7 +172,6 @@ These CSV files are pre-computed for downstream visualization by [Bitcoin-Chart-
 | `cycle_low_data.csv` | Market cycle performance indexed from the lowest positive price observed inside each configured cycle window |
 | `release_manifest.json` | Shared release ID, report date, generation time, and SHA-256/size records for every published CSV |
 | `halving_data.csv` | Performance indexed from each Bitcoin halving with a positive day-0 source price; the pre-price Genesis era is omitted |
-| `cagr_data.csv` | Rolling 4-year CAGR values for Bitcoin and the eight comparison prices, measured from the same calendar date 4 years earlier (leap days included) and expressed in percentage points |
 
 ## Dashboard
 

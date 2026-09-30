@@ -134,7 +134,7 @@ The sync script intentionally uses only the CSVs required by the dashboard:
 - `price_outlook.csv` (case levels plus their `outlook_year`, which labels the outlook)
 - `bitcoin_candles.csv.gz` (verified, then decoded to `bitcoin_candles.csv` for Evidence)
 
-Wide files such as `master_metrics_data.csv.gz` and `cagr_data.csv` are intentionally excluded because they can slow or hang Evidence CSV type inference.
+Wide files such as `master_metrics_data.csv.gz` are intentionally excluded because they can slow or hang Evidence CSV type inference.
 
 ## Production Deploy
 

@@ -4,10 +4,6 @@
       "sha256": "61abb657878d733b6823596e8b5455fd388d44e1f977aeeeb9898c27e3fd29a0",
       "size_bytes": 134216
     },
-    "cagr_data.csv": {
-      "sha256": "798b8c6a57cc595e6be27ddfa849cbec5af897fffc6dbf385a301bb2638b22d7",
-      "size_bytes": 2315942
-    },
     "cycle_low_data.csv": {
       "sha256": "d3130723bd73771821577f588d4ab491fae47aa2a2ebd97a6911cb097f69b4ee",
       "size_bytes": 212947

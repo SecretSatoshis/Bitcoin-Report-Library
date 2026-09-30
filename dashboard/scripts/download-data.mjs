@@ -6,7 +6,7 @@
  *   (default) Download CSVs from GitHub Pages.
  *
  * Currently scoped to the CSVs the dashboard actually uses.
- * Wide files (master_metrics_data, cagr_data) are intentionally excluded —
+ * Wide files (master_metrics_data) are intentionally excluded —
  * they cause Evidence's CSV plugin to hang on type inference.
  *
  * Every sync stages one complete release, verifies every file against that release's

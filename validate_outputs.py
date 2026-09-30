@@ -26,7 +26,6 @@ class RowBounds:
 # report tables. They catch truncation, header-only files, accidental duplication,
 # and runaway exports without coupling validation to today's exact history length.
 OUTPUT_RULES = {
-    "cagr_data.csv": RowBounds(365, 100_000),
     "cycle_low_data.csv": RowBounds(1, 100_000),
     "drawdown_data.csv": RowBounds(1, 100_000),
     "fundamentals_table.csv": RowBounds(1, 1_000),
@@ -50,7 +49,6 @@ OUTPUT_RULES = {
 
 
 REQUIRED_COLUMNS = {
-    "cagr_data.csv": {"time", "price_close_4_Year_CAGR"},
     "cycle_low_data.csv": {"days_since_cycle_low", "index_value", "Cycle"},
     "drawdown_data.csv": {"days_since_ath", "drawdown_pct", "Cycle"},
     "fundamentals_table.csv": {"Section", "Metric", "Current Value"},
@@ -58,6 +56,7 @@ REQUIRED_COLUMNS = {
     "master_metrics_data.csv.gz": {
         "time", "price_close", "market_cap", "metcalfe_value",
         "power_law_price", "60_day_ma_hash_rate", "hash_ribbon_capitulation",
+        "price_close_4_Year_CAGR",
     },
     "monthly_heatmap_data.csv": {
         "time", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
@@ -208,11 +207,10 @@ def _validate_dated_output(
 
 
 # Exports too large to retain in memory are checked by streaming their index column
-# only. The master is ~99MB raw; holding it the way RETAINED_OUTPUTS does would be
+# only. The master is large raw; holding it the way RETAINED_OUTPUTS does would be
 # wasteful when the only thing left to assert is the cutoff.
 INDEX_CUTOFF_OUTPUTS = {
     "master_metrics_data.csv.gz": "time",
-    "cagr_data.csv": "time",
 }
 
 

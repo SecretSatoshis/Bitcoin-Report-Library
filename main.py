@@ -103,8 +103,7 @@ data = data_format.electric_price_models(data)
 changes = data_format.calculate_all_changes(data[analysis_columns], yoy_columns)
 report_data = pd.concat([data, changes], axis=1)
 
-## 4-year CAGR for the price columns Chart Library's CAGR charts read.
-## Also exported on its own as cagr_data.csv.
+## 4-year CAGR for the price columns Chart Library's CAGR charts read
 cagr_results = data_format.calculate_rolling_cagr_for_all_columns(data[cagr_columns], 4)
 report_data = report_data.merge(cagr_results, left_index=True, right_index=True, how="left")
 
@@ -164,7 +163,6 @@ report_tables.monthly_heatmap(report_data, report_date)
 ## count, supply issuance) are a fraction of a real day; publishing it puts a spurious
 ## final point on every downstream chart. Do this once, here, so no export can miss it.
 report_data = report_data.loc[:report_date]
-cagr_results = cagr_results.loc[:report_date]
 
 
 
@@ -275,8 +273,6 @@ cycle_low_data.to_csv("csv/cycle_low_data.csv", index=False)
 halving_data = data_format.compute_halving_days(report_data)
 halving_data.to_csv("csv/halving_data.csv", index=False)
 
-## CAGR results
-cagr_results.to_csv("csv/cagr_data.csv", index=True)
 
 # Downstream consumers verify this complete release before rendering.
 # The workflow validates the release before publishing its CSV directory.
