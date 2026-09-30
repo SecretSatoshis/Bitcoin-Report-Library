@@ -132,7 +132,7 @@ All configuration is centralized in `data_definitions.py`:
 - **Tickers**: Asset symbols organized by category (stocks, ETFs, indices, commodities, forex)
 - **Reference Data**: Fiat money supply, precious metals supply, and gold allocation breakdown, each with an explicit reviewed vintage and maximum age
 - **API Settings**: Configured BRK series, endpoint URLs, timeout values
-- **Model Parameters**: Metcalfe address bands, Bitcoin genesis anchor, Hash Ribbon windows, electricity-tariff scenarios, mining overhead assumptions, trading days, and unit conversions
+- **Model Parameters**: Metcalfe address input, Bitcoin genesis anchor, Hash Ribbon windows, electricity-tariff scenarios, trading days, and unit conversions
 - **Report Settings**: Analysis columns, correlation data columns, metrics templates
 
 ## Outputs
