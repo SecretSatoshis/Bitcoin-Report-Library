@@ -12,12 +12,22 @@ import sys
 import numpy as np
 import pandas as pd
 
-# Local configuration only; importing data_definitions performs no I/O.
+# Importing these modules performs no I/O.
+from candle_data import CANDLE_FILES, validate_candle_exports
+from data_definitions import FUNDAMENTALS_TEMPLATE
 from data_definitions import REPORT_DATE as CLOCK_REPORT_DATE
+from data_validation import validate_calendar, validate_candles
+from report_tables import (
+    PERFORMANCE_GROUPS,
+    _nupl_sentiment,
+    _power_law_valuation,
+    create_fundamentals_table,
+)
 
 
 @dataclass(frozen=True)
 class RowBounds:
+    """Inclusive row-count limits for one output; maximum None means unbounded."""
     minimum: int
     maximum: int | None = None
 
@@ -126,6 +136,7 @@ _INFINITY_TOKENS = {
 
 
 def _chunk_has_infinity(chunk: pd.DataFrame) -> bool:
+    """True if a CSV chunk holds an infinite value, numeric or written as text ("inf")."""
     numeric = chunk.select_dtypes(include=[np.number])
     if not numeric.empty and np.isinf(numeric.to_numpy(dtype=float)).any():
         return True
@@ -138,6 +149,7 @@ def _chunk_has_infinity(chunk: pd.DataFrame) -> bool:
 
 
 def _scan_csv(path: Path, retain: bool) -> tuple[int, set[str], bool, pd.DataFrame | None]:
+    """Stream a CSV once: (row count, columns, contains infinity, frame if retained)."""
     row_count = 0
     columns: set[str] = set()
     contains_infinity = False
@@ -167,6 +179,7 @@ def _normalized_dates(
     filename: str,
     errors: list[str],
 ) -> pd.Series | None:
+    """Parse a date column to midnight timestamps; report and return None if any are invalid."""
     if column not in frame.columns:
         return None
     dates = pd.to_datetime(frame[column], errors="coerce").dt.normalize()
@@ -184,6 +197,7 @@ def _validate_dated_output(
     errors: list[str],
     require_every_row: bool = False,
 ) -> None:
+    """Require a dated output to end on the report date (every row, when require_every_row)."""
     frame = frames.get(filename)
     if frame is None or frame.empty:
         return
@@ -236,7 +250,6 @@ def _validate_index_cutoff(
         errors.append(f"{filename}: {column!r} contains invalid or missing dates")
         return
     dates = parsed.dt.normalize()
-    from data_validation import validate_calendar
     try:
         validate_calendar(pd.DatetimeIndex(parsed), filename)
     except (RuntimeError, ValueError) as exc:
@@ -249,6 +262,7 @@ def _validate_index_cutoff(
 
 
 def _current_history_position(report_date: pd.Timestamp, period: str) -> int:
+    """Row position of the report date in the MTD (day) or YTD (common-year ordinal) history."""
     if period == "mtd":
         return report_date.day
     if report_date.month == 2 and report_date.day == 29:
@@ -267,6 +281,7 @@ def _validate_history_position(
     expected_report_date: pd.Timestamp,
     errors: list[str],
 ) -> None:
+    """Require the current year's MTD/YTD return path to end exactly at the report date."""
     frame = frames.get(filename)
     if frame is None or frame.empty:
         return
@@ -295,6 +310,7 @@ def _unique_numeric_values(
     value_column: str,
     mask: pd.Series | None = None,
 ) -> list[float]:
+    """Sorted distinct numeric values of a column, optionally for the masked rows only."""
     values = frame.loc[mask, value_column] if mask is not None else frame[value_column]
     return sorted(pd.to_numeric(values, errors="coerce").dropna().unique().tolist())
 
@@ -304,6 +320,7 @@ def _validate_price_agreement(
     expected_report_date: pd.Timestamp,
     errors: list[str],
 ) -> None:
+    """Require every output that states the report-date Bitcoin price to state the same one."""
     prices: dict[str, float] = {}
 
     summary = frames.get("summary_table.csv")
@@ -375,6 +392,7 @@ def _validate_return_agreement(
     expected_report_date: pd.Timestamp,
     errors: list[str],
 ) -> None:
+    """Require the MTD and YTD returns to agree across performance, comparison and heatmap outputs."""
     returns: dict[str, dict[str, float]] = {"MTD": {}, "YTD": {}}
 
     performance = frames.get("performance_table.csv")
@@ -458,6 +476,7 @@ def _validate_cycle_contracts(
     frames: dict[str, pd.DataFrame],
     errors: list[str],
 ) -> None:
+    """Require cycle-low and halving series to start at day 0 with index 1.0, in order, without gaps."""
     cycle = frames.get("cycle_low_data.csv")
     cycle_columns = {"days_since_cycle_low", "index_value", "Cycle"}
     if cycle is not None and cycle_columns.issubset(cycle.columns):
@@ -516,6 +535,7 @@ def _validate_price_moving_averages(
     frames: dict[str, pd.DataFrame],
     errors: list[str],
 ) -> None:
+    """Recompute the published price moving averages from the published daily prices."""
     filename = "onchain_price_models.csv"
     frame = frames.get(filename)
     columns = {"date", "BTC Price", *PRICE_MOVING_AVERAGE_DAYS}
@@ -545,6 +565,7 @@ def _validate_report_agreement(
     expected_report_date: pd.Timestamp,
     errors: list[str],
 ) -> None:
+    """Cross-file checks: report dates, prices, returns, cycles and moving averages agree."""
     _validate_dated_output(
         frames, "onchain_price_models.csv", "date", expected_report_date, errors
     )
@@ -610,7 +631,6 @@ def _validate_report_agreement(
 
 def _validate_investor_sentiment(summary, master_path, report_date, errors):
     """Recompute the three on-chain Investor Sentiment values from the master file."""
-    from report_tables import _nupl_sentiment, _power_law_valuation
     try:
         master = pd.read_csv(
             master_path,
@@ -652,7 +672,6 @@ def _validate_performance_rows(frames, errors):
     table = frames.get("performance_table.csv")
     if table is None or not {"Category", "Asset"}.issubset(table.columns):
         return
-    from report_tables import PERFORMANCE_GROUPS
     expected = [
         (category, label)
         for category, assets in PERFORMANCE_GROUPS.items()
@@ -674,7 +693,7 @@ def _validate_performance_rows(frames, errors):
 
 
 def _validate_review_contracts(frames, output_dir, report_date, errors):
-    from data_validation import validate_candles, validate_calendar
+    """Recheck OHLC candles, the investor-sentiment rows and the fundamentals table against source data."""
     weekly = frames.get("ohlc_data.csv")
     if weekly is not None:
         try:
@@ -712,8 +731,6 @@ def _validate_review_contracts(frames, output_dir, report_date, errors):
         _validate_investor_sentiment(summary, master_path, report_date, errors)
     fundamentals = frames.get("fundamentals_table.csv")
     if fundamentals is not None and master_path.is_file():
-        from data_definitions import FUNDAMENTALS_TEMPLATE
-        from report_tables import create_fundamentals_table
         try:
             columns = list(dict.fromkeys(["time"] + [item[0] for group in FUNDAMENTALS_TEMPLATE.values() for item in group.values()]))
             master = pd.read_csv(master_path, usecols=columns, parse_dates=["time"]).set_index("time")
@@ -786,7 +803,6 @@ def validate_outputs(
     _validate_report_agreement(retained_frames, expected_report_date, errors)
     _validate_review_contracts(retained_frames, output_dir, expected_report_date, errors)
     _validate_performance_rows(retained_frames, errors)
-    from candle_data import CANDLE_FILES, validate_candle_exports
     if any((output_dir / name).exists() for name in CANDLE_FILES):
         try:
             master = pd.read_csv(output_dir / "master_metrics_data.csv.gz", index_col=0, parse_dates=True, low_memory=False)
@@ -798,6 +814,7 @@ def validate_outputs(
 
 
 def _validate_release_manifest(output_dir, expected_report_date, errors, required=False):
+    """Require the manifest to match the report date and to list and hash exactly the generated files."""
     path = Path(output_dir) / "release_manifest.json"
     if not path.is_file():
         if required:
@@ -817,7 +834,6 @@ def _validate_release_manifest(output_dir, expected_report_date, errors, require
     files = manifest.get("files")
     expected_files = {name for name in OUTPUT_RULES}
     # Older frozen releases are line-only; a new bundle must be complete and hashed.
-    from candle_data import CANDLE_FILES
     if any((Path(output_dir) / name).exists() for name in CANDLE_FILES) or (
         isinstance(files, dict) and any(name in files for name in CANDLE_FILES)
     ):
@@ -840,6 +856,7 @@ def _validate_release_manifest(output_dir, expected_report_date, errors, require
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Command-line options: output directory and an optional explicit report date."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default="csv", help="Generated CSV directory")
     parser.add_argument(
@@ -876,6 +893,7 @@ def _manifest_report_date(output_dir: str | Path, clock_report_date) -> tuple[st
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Validate a release from the command line; exit 1 with the list of errors on failure."""
     args = _parse_args(argv)
     if args.report_date:
         expected_report_date = args.report_date
