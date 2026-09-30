@@ -348,8 +348,7 @@ async function main() {
       const payload = await embedded.evaluate(async () => {
         await document.fonts.ready;
         const chart = await window.SecretSatoshisChart.ready;
-        // Price presentation selects a prepared candle view. The embedded source
-        // stays immutable so we can compare all data, not just its report label.
+        // Compare the frame's full payload with the published chart file.
         return JSON.parse(document.querySelector("#chart-data").textContent);
       });
       const expected = JSON.parse(

@@ -5,8 +5,8 @@
  *   (default) Download from GitHub Pages.
  *
  * Each sync stages one complete release, checks every file against its manifest, then
- * swaps the datasource folder in one step. A failure leaves the current sources untouched.
- * The dashboard consumes a declared subset; the wide master file is not required.
+ * swaps the input folder in one step. A failure leaves the current inputs untouched.
+ * Only the files the dashboard reads (inputFiles in src/data.ts) are synced.
  */
 
 import {
@@ -25,6 +25,7 @@ import { pipeline } from "node:stream/promises";
 import https from "node:https";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { inputFiles } from "../src/data.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOCAL_MODE = process.argv.includes("--local");
@@ -37,28 +38,12 @@ const OUT_DIR = path.resolve(__dirname, "../sources/bitcoin_report_library");
 const STAGING_DIR = path.resolve(__dirname, "../.sync-staging");
 const PREVIOUS_DIR = path.resolve(__dirname, "../.sync-previous");
 const RELEASE_MANIFEST = "release_manifest.json";
-const CANDLE_ARCHIVE = "bitcoin_candles.csv.gz";
-
-// Pages deploys about a minute after the commit that starts the production build and
-// caches files for 10 minutes, so remote sync waits for this checkout's release.
+// Pages deploys a few minutes after a release commit and caches files for 10 minutes, so
+// remote sync waits until Pages serves at least this checkout's release.
 const RELEASE_WAIT_MS = 12 * 60 * 1000;
 const RELEASE_POLL_MS = 15 * 1000;
 
-// Only the files the dashboard queries.
-const CSV_FILES = [
-  "summary_table.csv",
-  "summary_history.csv",
-  "fundamentals_table.csv",
-  "performance_table.csv",
-  "monthly_heatmap_data.csv",
-  "relative_value_comparison.csv",
-  "roi_table.csv",
-  "onchain_price_models.csv",
-  "mtd_price_paths.csv",
-  "ytd_price_paths.csv",
-  "price_outlook.csv",
-  CANDLE_ARCHIVE,
-];
+const CSV_FILES = inputFiles;
 
 const REQUEST_TIMEOUT_MS = 20000;
 const MAX_ATTEMPTS = 3;
@@ -198,8 +183,7 @@ function stageLocal() {
   return manifest;
 }
 
-// The release committed in this checkout, if any. In production that is the release
-// whose commit triggered the build; a local checkout may be older than Pages.
+// The release committed in this checkout, if any.
 function checkoutRelease() {
   try {
     const manifest = readLocalManifest();
@@ -334,7 +318,7 @@ try {
   const manifest = LOCAL_MODE ? stageLocal() : await stageRemote();
   publishStaged(manifest);
   console.log(
-    `\nSynced release ${manifest.release_id}. Next: npm run prepare:data && npm run dev\n`,
+    `\nSynced release ${manifest.release_id}. Next: npm run dev\n`,
   );
 } catch (err) {
   rmSync(STAGING_DIR, { recursive: true, force: true });

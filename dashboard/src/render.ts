@@ -84,12 +84,11 @@ function table(
   return `<div class="table-scroll" role="region" aria-label="${escape(label)}" tabindex="0"><table class="${classes}"><thead><tr>${headings.map((h) => `<th scope="col">${escape(h)}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c, i) => (i === 0 ? `<th scope="row">${c}</th>` : `<td>${c}</td>`)).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Yearly"];
-// Diverging scale: red losses, light neutral near zero, green gains. Fixed bounds keep
+// Diverging scale: red losses, soft grey near zero, green gains. Fixed bounds keep
 // colours comparable across years.
 function heatColor(n: number, yearly: boolean): { background: string; text: string } {
   const bound = yearly ? (n < 0 ? 80 : 150) : 40;
   const weight = Math.min(1, Math.abs(n) / bound);
-  // Subdued tones so near-zero cells read grey rather than bright white.
   const neutral = [170, 172, 182],
     target = n < 0 ? [214, 72, 66] : [26, 142, 78];
   const rgb = neutral.map((c, i) => Math.round(c + weight * (target[i] - c)));

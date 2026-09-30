@@ -8,8 +8,8 @@
   },
   "type": "module",
   "scripts": {
-    "sync:local": "node scripts/download-data.mjs --local",
-    "sync:remote": "node scripts/download-data.mjs",
+    "sync:local": "tsx scripts/download-data.mjs --local",
+    "sync:remote": "tsx scripts/download-data.mjs",
     "prepare:data": "tsx scripts/prepare-data.ts",
     "dev": "npm run prepare:data && vite --host 127.0.0.1",
     "build": "tsx scripts/build.ts",

@@ -67,7 +67,7 @@ test("frozen release: all seven price series, ranges, events and candle payloads
     assert.equal(hash(JSON.stringify(s.values)), expected.valuesHash, s.id);
     assert.equal(s.values.length, expected.valuesLength);
   }
-  // Key order is part of this frozen payload fingerprint, as in the original adapter.
+  // Key order is part of the frozen payload fingerprint.
   for (const [interval, view] of Object.entries(p.candleViews!)) {
     const ordered = {
       x: view.x,

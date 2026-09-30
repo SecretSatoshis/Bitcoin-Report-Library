@@ -34,8 +34,7 @@ export function loadVerified(directory: string): {
   for (const name of inputFiles) {
     const decoded =
       name === "bitcoin_candles.csv.gz" ? "bitcoin_candles.csv" : name;
-    // Sync decodes candles only after hash verification; recompressing would not reproduce
-    // the original gzip bytes. Keep the archive as well to reverify at preparation time.
+    // Candles are read from the verified gzip archive itself.
     const bytes = readFileSync(resolve(directory, name));
     if (
       !release.files[name] ||

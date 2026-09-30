@@ -14,8 +14,8 @@ npm run sync:local   # copy and verify the release in ../csv
 npm run dev          # local preview
 ```
 
-`npm run build` writes the deployable site to `build/`. Use `npm run sync:remote` to work from
-the published release instead of the local one.
+`npm run build` writes the deployable site to `build/`, and `npm run preview` serves it. Use
+`npm run sync:remote` to work from the published release instead of the local one.
 
 ## How it works
 
@@ -71,4 +71,6 @@ charts, controls, layouts and that every displayed value matches the data.
 
 ## Deployment
 
-Vercel builds each new commit with the settings in `vercel.json` and serves `build/`.
+Vercel builds every commit to `main`, including each daily data commit, using `vercel.json`
+(`sync:local`, then `build`, serving `build/`). The project's root directory is `dashboard`,
+and "Include files outside the root directory" must be on, because the build reads `../csv`.
