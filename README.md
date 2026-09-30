@@ -28,17 +28,20 @@ CSV run with a hashed `visual-manifest.json`; see `dashboard/README.md`.
 ```
 Bitcoin-Report-Library/
 ├── main.py              # Pipeline orchestrator
-├── data_format.py       # Data access and feature engineering
-├── report_tables.py     # Table generation and formatting
+├── sources.py           # Fetches and merges BRK, Yahoo Finance and the miner sheet
+├── freshness.py         # Checks that decide whether a run may publish
+├── metrics.py           # Every calculated metric, change, CAGR and correlation
+├── cycles.py            # Drawdown, cycle-low and halving series
+├── report_tables.py     # Published report tables
 ├── data_definitions.py  # Configuration and constants
 ├── candle_data.py       # Daily/weekly/monthly candles and period metric snapshots
 ├── data_validation.py   # Shared calendar and candle contracts
-├── chart_manifest.py    # Writes the hashed release manifest
+├── release_manifest.py  # Writes the hashed release manifest
 ├── validate_outputs.py  # Local publication checks used by CI
 ├── build_release_page.py # Generates the public data landing page and sitemap
 ├── index.html           # Generated public data-release landing page
 ├── sitemap.xml          # Generated public release sitemap
-├── tests/               # Regression tests for calculations and ingestion
+├── tests/               # One test file per module
 ├── csv/                 # Output directory (consumed by Chart Library + dashboard)
 ├── dashboard/           # Live web dashboard (Evidence.dev)
 ├── .github/workflows/   # Daily data refresh
@@ -48,15 +51,18 @@ Bitcoin-Report-Library/
 
 | Module | Responsibility |
 |--------|----------------|
-| `main.py` | Orchestrates end-to-end execution: data ingestion, metric calculation, table assembly, cycle analysis, CSV export |
-| `data_format.py` | Fetches raw data from APIs, normalizes timestamps, engineers features, calculates derived metrics, computes cycle analysis (drawdowns, halvings, cycle lows) |
-| `report_tables.py` | Builds tabular outputs: fundamentals, ROI, performance comparisons, valuations, heatmaps, OHLC |
+| `main.py` | Orchestrates end-to-end execution: fetch, publish checks, metrics, tables, then writes every output in one step |
+| `sources.py` | Fetches BRK on-chain series and daily candles, Yahoo Finance prices and historical market caps, and the Coin Metrics miner-efficiency sheet, and merges them onto the BRK daily calendar |
+| `freshness.py` | Bounds the market-data fill and refuses to publish on stale, gapped or missing on-chain data or on an out-of-date reference figure |
+| `metrics.py` | On-chain valuation models, relative-value prices, network models, electricity costs, changes, CAGRs and correlations |
+| `cycles.py` | Drawdown, cycle-low and halving-era series for Chart Library |
+| `report_tables.py` | Builds the published tables: summary, fundamentals, performance, ROI, MTD/YTD comparisons, heatmap, OHLC, relative value |
 | `data_definitions.py` | Central configuration: tickers, API settings, reference data, metric templates, constants |
 | `candle_data.py` | Aggregates BRK daily candles into weekly and monthly periods through the report date, including `ohlc_data.csv` and the frozen chart candle files |
 | `data_validation.py` | Shared contracts: complete daily/weekly calendars and valid OHLC candles |
-| `chart_manifest.py` | Writes `release_manifest.json` (report date plus SHA-256 and size of every published CSV) after all exports finish |
+| `release_manifest.py` | Writes `release_manifest.json` (report date plus SHA-256 and size of exactly the files the run published) after all exports finish |
 | `validate_outputs.py` | Re-checks the finished release against the report date recorded in the manifest before CI publishes it |
-| `build_release_page.py` | Reads the completed CSV release and regenerates its crawlable landing page, Dataset structured data, file inventory, and sitemap |
+| `build_release_page.py` | Reads the files the manifest lists and regenerates its crawlable landing page, Dataset structured data, file inventory, and sitemap |
 
 ### Data Flow
 
@@ -64,10 +70,16 @@ Bitcoin-Report-Library/
 Sources (BRK, Yahoo Finance, Google Sheets)
     │
     ▼
-data_format.py  ──►  Fetches & calculates all metrics
+sources.py  ──►  Fetches and merges every source
     │
     ▼
-report_tables.py  ──►  Generates formatted report tables
+freshness.py  ──►  Refuses to publish stale or incomplete data
+    │
+    ▼
+metrics.py / cycles.py  ──►  Calculates every metric and cycle series
+    │
+    ▼
+report_tables.py  ──►  Builds the published tables
     │
     ▼
 csv/  ──►  All outputs exported as CSV
@@ -261,13 +273,16 @@ npm run build
 The generated `dashboard/build/` directory and compiled Evidence caches are ignored by
 Git. Only source code, configuration, the lockfile, and report CSV outputs are committed.
 
-The CI workflow runs the regression suite, regenerates and validates the report, rebuilds
-the public release page and sitemap, and reruns the release-page SEO checks against the
-new data before committing the refreshed CSVs and generated public files. The output
-validator rejects missing or truncated required files, non-finite values, implausible row
-counts, report-date disagreements, invalid cycle-low baselines, halving eras without a
-valid day-zero anchor, and inconsistent electricity, Metcalfe, power-law, or Hash Ribbon
-calculations.
+The CI workflow runs the regression suite on every pull request and every push to `main`.
+On the schedule or a manual run it also regenerates the report into an empty `csv/`,
+validates it, rebuilds the public release page and sitemap, reruns the release-page checks
+against the new data, and replaces the published `csv/` folder, so an output the pipeline
+no longer writes is removed rather than left behind. The output validator rejects missing
+or truncated required files, non-finite values, implausible row counts, report-date
+disagreements, Bitcoin prices or returns that disagree between files, recomputed moving
+averages, investor-sentiment rows or fundamentals that disagree with the master data,
+performance rows without a price or return, invalid cycle-low baselines, halving eras
+without a valid day-zero anchor, and a manifest whose file list or hashes do not match.
 
 ## Frozen chart candles
 

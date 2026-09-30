@@ -219,5 +219,3 @@ recomputed independently by `validate_outputs.py` before each release. A window 
 closes stays null. Other consumers read the same published columns, so any level they quote
 matches the chart. The file also carries 50-day and 200-day averages, which the chart does
 not draw.
-
-The Trading Range bucket graphics are no longer displayed.
