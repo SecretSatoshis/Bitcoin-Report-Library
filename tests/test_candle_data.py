@@ -1,7 +1,11 @@
+"""Candle tables (candle_data.py)."""
+
 import unittest
+
 import numpy as np
 import pandas as pd
-from candle_data import build_candle_tables, CANDLE_FILES
+
+from candle_data import CANDLE_FILES, build_candle_tables, weekly_ohlc
 
 
 class CandleTests(unittest.TestCase):
@@ -37,25 +41,6 @@ class CandleTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             build_candle_tables(daily,master,'2024-03-02')
 
-    def test_release_manifest_accepts_complete_candle_bundle_only(self):
-        from pathlib import Path
-        from tempfile import TemporaryDirectory
-        from unittest.mock import patch
-        from release_manifest import write_release_manifest
-        from validate_outputs import _validate_release_manifest
-        with TemporaryDirectory() as directory, patch('validate_outputs.OUTPUT_RULES', {}):
-            output = Path(directory)
-            for filename in CANDLE_FILES:
-                (output / filename).write_bytes(b'fixture')
-            write_release_manifest(output, '2024-03-02')
-            errors = []
-            _validate_release_manifest(output, pd.Timestamp('2024-03-02'), errors, True)
-            self.assertEqual(errors, [])
-            (output / CANDLE_FILES[-1]).unlink()
-            write_release_manifest(output, '2024-03-02')
-            _validate_release_manifest(output, pd.Timestamp('2024-03-02'), errors, True)
-            self.assertTrue(any('inventory' in error for error in errors))
-
     def test_leading_zero_era_and_initial_incomplete_period(self):
         daily, master = self.fixture()
         daily.loc[:'2024-01-02'] = 0
@@ -64,4 +49,21 @@ class CandleTests(unittest.TestCase):
         self.assertEqual(result.loc[result.interval=='weekly'].period_start.min(),pd.Timestamp('2024-01-08'))
         self.assertEqual(result.loc[result.interval=='monthly'].period_start.min(),pd.Timestamp('2024-02-01'))
 
-if __name__ == '__main__': unittest.main()
+
+class WeeklyOhlcTests(unittest.TestCase):
+    def test_weekly_ohlc_is_cut_off_at_the_report_date(self):
+        dates = pd.date_range('2024-01-01', '2024-01-17')  # Monday start
+        close = np.arange(100.0, 100.0 + len(dates))
+        daily = pd.DataFrame({'Open': close, 'High': close + 5, 'Low': close - 5,
+                              'Close': close}, index=dates)
+        weekly = weekly_ohlc(daily, '2024-01-16', start='2024-01-03')
+        self.assertEqual(weekly.index.name, 'Time')
+        self.assertEqual(list(weekly.index), list(pd.to_datetime(['2024-01-01', '2024-01-08', '2024-01-15'])))
+        # The open week closes on the report date, not on the later partial day.
+        self.assertEqual(weekly['Close'].iloc[-1], daily.loc['2024-01-16', 'Close'])
+        with self.assertRaisesRegex(ValueError, 'report date'):
+            weekly_ohlc(daily, '2024-01-20')
+
+
+if __name__ == "__main__":
+    unittest.main()

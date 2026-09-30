@@ -1,79 +1,23 @@
-"""Regression tests for report cutoffs and publication validation."""
+"""Release validation (validate_outputs.py)."""
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
 
 import report_tables
+import validate_outputs as validator
+from candle_data import CANDLE_FILES
 from validate_outputs import (
     REQUIRED_COLUMNS,
     RowBounds,
     SUMMARY_HISTORY_METRICS,
     validate_outputs,
 )
-
-
-class AsOfReportTests(unittest.TestCase):
-    def test_performance_table_uses_one_resolved_asof_row(self):
-        dates = pd.to_datetime(["2023-01-06", "2024-01-05", "2024-01-11"])
-        report_data = pd.DataFrame(
-            {
-                "price_close": [50.0, 100.0, 999.0],
-                "price_close_7_change": [1.0, 2.0, 999.0],
-                "price_close_MTD_change": [3.0, 4.0, 999.0],
-                "price_close_YTD_change": [5.0, 6.0, 999.0],
-                "price_close_90_change": [7.0, 8.0, 999.0],
-            },
-            index=dates,
-        )
-
-        result = report_tables._build_performance_table(
-            report_data=report_data,
-            report_date="2024-01-10",
-            correlation_results={},
-            asset_groups={"Bitcoin": [("Bitcoin - [BTC]", "price_close")]},
-        ).iloc[0]
-
-        self.assertEqual(result["Price"], 100.0)
-        self.assertEqual(result["7 Day Return (%)"], 2.0)
-        self.assertEqual(result["MTD Return (%)"], 4.0)
-        self.assertEqual(result["YTD Return (%)"], 6.0)
-        self.assertEqual(result["90 Day Return (%)"], 8.0)
-        self.assertEqual(result["52 Week High"], 100.0)
-        self.assertEqual(result["52 Week Low"], 50.0)
-
-    def test_performance_table_lists_bitcoin_once_in_its_own_category(self):
-        tickers = ["price_close"] + [
-            ticker for assets in report_tables.PERFORMANCE_GROUPS.values()
-            for _, ticker in assets if ticker != "price_close"
-        ]
-        columns = {}
-        for ticker in tickers:
-            price = ticker if ticker == "price_close" else f"{ticker}_close"
-            columns[price] = [10.0]
-            for suffix in ("7", "MTD", "YTD", "90"):
-                columns[f"{price}_{suffix}_change"] = [1.0]
-        report_data = pd.DataFrame(columns, index=pd.to_datetime(["2024-01-05"]))
-        correlations = {"price_close_90_days": pd.DataFrame(
-            0.5, index=["price_close"], columns=[f"{t}_close" for t in tickers[1:]])}
-
-        result = report_tables.create_full_performance_table(
-            report_data, "2024-01-05", correlations)
-
-        bitcoin = result[result["Asset"] == "Bitcoin - [BTC]"]
-        self.assertEqual(len(bitcoin), 1)
-        self.assertEqual(bitcoin["Category"].iloc[0], "Bitcoin")
-        self.assertEqual(result["Asset"].iloc[0], "Bitcoin - [BTC]")
-        self.assertEqual(len(result), 17)
-        self.assertEqual(
-            result.groupby("Category", sort=False).size().to_dict(),
-            {"Bitcoin": 1, "Equity Market Indexes": 4, "Sectors": 4,
-             "Macro Asset Classes": 4, "Bitcoin Industry Performance": 4},
-        )
-
 
 
 class OutputValidationTests(unittest.TestCase):
@@ -86,8 +30,18 @@ class OutputValidationTests(unittest.TestCase):
         ]
         return pd.DataFrame(rows)
 
+    def _write_summary_history(self, directory: Path, end_date: str) -> Path:
+        dates = pd.date_range(end=pd.Timestamp(end_date), periods=31, freq="D")
+        rows = [
+            {"Metric": metric, "date": date.strftime("%Y-%m-%d"), "Value": 100.0}
+            for metric in sorted(SUMMARY_HISTORY_METRICS)
+            for date in dates
+        ]
+        path = directory / "summary_history.csv"
+        pd.DataFrame(rows).to_csv(path, index=False)
+        return path
+
     def test_validator_rejects_performance_rows_without_prices(self):
-        import validate_outputs as validator
 
         errors = []
         validator._validate_performance_rows({"performance_table.csv": self._performance_frame()}, errors)
@@ -103,17 +57,6 @@ class OutputValidationTests(unittest.TestCase):
         validator._validate_performance_rows(
             {"performance_table.csv": self._performance_frame().iloc[:-1]}, errors)
         self.assertIn("rows do not match", errors[0])
-
-    def _write_summary_history(self, directory: Path, end_date: str) -> Path:
-        dates = pd.date_range(end=pd.Timestamp(end_date), periods=31, freq="D")
-        rows = [
-            {"Metric": metric, "date": date.strftime("%Y-%m-%d"), "Value": 100.0}
-            for metric in sorted(SUMMARY_HISTORY_METRICS)
-            for date in dates
-        ]
-        path = directory / "summary_history.csv"
-        pd.DataFrame(rows).to_csv(path, index=False)
-        return path
 
     def test_validator_accepts_complete_summary_window_and_rejects_infinity(self):
         rules = {"summary_history.csv": RowBounds(31, 1_000)}
@@ -273,6 +216,129 @@ class OutputValidationTests(unittest.TestCase):
             published.to_csv(path, index=False)
             errors = validate_outputs(directory, "2024-02-15", rules=rules)
             self.assertTrue(any("200-day MA" in error for error in errors))
+
+
+class CandleTests(unittest.TestCase):
+    def test_release_manifest_accepts_complete_candle_bundle_only(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from unittest.mock import patch
+        from release_manifest import write_release_manifest
+        from validate_outputs import _validate_release_manifest
+        with TemporaryDirectory() as directory, patch('validate_outputs.OUTPUT_RULES', {}):
+            output = Path(directory)
+            for filename in CANDLE_FILES:
+                (output / filename).write_bytes(b'fixture')
+            write_release_manifest(output, '2024-03-02')
+            errors = []
+            _validate_release_manifest(output, pd.Timestamp('2024-03-02'), errors, True)
+            self.assertEqual(errors, [])
+            (output / CANDLE_FILES[-1]).unlink()
+            write_release_manifest(output, '2024-03-02')
+            _validate_release_manifest(output, pd.Timestamp('2024-03-02'), errors, True)
+            self.assertTrue(any('inventory' in error for error in errors))
+
+
+class MasterCutoffValidationTests(unittest.TestCase):
+    """Large dated exports are asserted to end on the report date."""
+
+    def write(self, tmpdir, name, last_date):
+        frame = pd.DataFrame(
+            {
+                "time": pd.date_range(end=last_date, periods=5, freq="D"),
+                "value": 1.0,
+            }
+        )
+        path = tmpdir / name
+        frame.to_csv(path, index=False)
+        return path
+
+    def test_partial_day_in_master_is_reported(self):
+        import tempfile
+        from pathlib import Path
+
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            self.write(tmpdir, "master_metrics_data.csv.gz", "2026-08-28")
+            errors = []
+            validator._validate_index_cutoff(
+                tmpdir,
+                "master_metrics_data.csv.gz",
+                "time",
+                pd.Timestamp("2026-08-27"),
+                errors,
+            )
+            self.assertEqual(len(errors), 1)
+            self.assertIn("2026-08-28", errors[0])
+            self.assertIn("expected 2026-08-27", errors[0])
+
+    def test_truncated_master_passes(self):
+        import tempfile
+        from pathlib import Path
+
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            self.write(tmpdir, "master_metrics_data.csv.gz", "2026-08-27")
+            errors = []
+            validator._validate_index_cutoff(
+                tmpdir,
+                "master_metrics_data.csv.gz",
+                "time",
+                pd.Timestamp("2026-08-27"),
+                errors,
+            )
+            self.assertEqual(errors, [])
+
+    def test_master_export_cutoff_is_covered(self):
+
+        self.assertIn(
+            "master_metrics_data.csv.gz", validator.INDEX_CUTOFF_OUTPUTS
+        )
+
+
+class ReleaseSourceAgreementTests(unittest.TestCase):
+    def test_release_rejects_an_inconsistent_candle(self):
+        summary = {f'{prefix} {column}':[value] for prefix in ('Daily','Week-to-Date')
+                   for column,value in zip(('Open','High','Low','Close'), (100,110,90,105))}
+        summary.update({'Week Start':['2026-09-07'], 'Week-to-Date Days':[2]})
+        frames = {'report_ohlc_summary.csv':pd.DataFrame(summary)}
+        frames['report_ohlc_summary.csv']['Daily High'] = 1
+        errors=[]
+        validator._validate_review_contracts(frames, Path('/nonexistent'), pd.Timestamp('2026-09-08'), errors)
+        self.assertTrue(any('report_ohlc_summary.csv' in error for error in errors))
+
+    def test_release_rejects_missing_day_and_mutated_fundamental(self):
+        from data_definitions import FUNDAMENTALS_TEMPLATE
+        columns = {item[0] for group in FUNDAMENTALS_TEMPLATE.values() for item in group.values()}
+        dates = pd.date_range('2024-01-01', periods=400)
+        master = pd.DataFrame(10.0, index=dates, columns=sorted(columns))
+        master.index.name = 'time'
+        fundamentals = report_tables.create_fundamentals_table(master, FUNDAMENTALS_TEMPLATE, dates[-1])
+        fundamentals.loc[0,'Current Value'] = '999999999'
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            master.drop(index=dates[10]).to_csv(output/'master_metrics_data.csv.gz')
+            errors=[]
+            validator._validate_index_cutoff(output, 'master_metrics_data.csv.gz', 'time', dates[-1], errors)
+            validator._validate_review_contracts({'fundamentals_table.csv': fundamentals}, output, dates[-1], errors)
+        self.assertTrue(any('complete' in error for error in errors))
+        self.assertTrue(any('fundamentals_table.csv' in error for error in errors))
+
+
+class ManifestReportDateTests(unittest.TestCase):
+    def test_validator_reads_the_report_date_from_the_manifest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'release_manifest.json'
+            path.write_text(json.dumps({'report_date': '2026-09-26'}))
+            # Generation crossed UTC midnight: the clock now says 09-27.
+            self.assertEqual(validator._manifest_report_date(directory, '2026-09-27'), ('2026-09-26', None))
+            date, error = validator._manifest_report_date(directory, '2026-09-29')
+            self.assertIsNone(date)
+            self.assertIn('not a current release', error)
+            path.unlink()
+            self.assertIsNone(validator._manifest_report_date(directory, '2026-09-27')[0])
 
 
 if __name__ == "__main__":
