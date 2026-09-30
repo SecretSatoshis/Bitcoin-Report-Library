@@ -50,7 +50,6 @@ export interface ChartPayload {
   unavailable: string[];
   readingPoint: string | number;
   note: string;
-  gridlines: boolean;
   defaultPresentation?: string;
   defaultInterval?: string;
   rangeEndDate?: string;
@@ -330,7 +329,6 @@ function baseChart(id: string, title: string, date: string): ChartPayload {
     readingPoint: date,
     note: "Daily observations.",
     family: "timeseries",
-    gridlines: false,
   };
 }
 function futureCalendar(
@@ -593,7 +591,7 @@ export function seasonalPayload(
     ),
   );
   p.series.find((s) => s.id === "median")!.lineStyle = "dashed";
-  p.seriesOrder = [year, ...past.slice().reverse(), "median", "mean"];
+  p.seriesOrder = [year, "median", "mean", ...past.slice().reverse()];
   p.readingPoint = position;
   p.xAxisLabel = period === "mtd" ? "Day of Month" : "Day of Year";
   p.axes.right.label =
@@ -603,7 +601,6 @@ export function seasonalPayload(
   p.note =
     `Historical paths are rebased comparisons. Average and Median exclude ${HIDDEN_SEASONAL_YEARS.join(", ")} and the current year. YTD removes February 29.`;
   p.coverage = `2014/${date}`;
-  p.gridlines = true;
   return p;
 }
 export function createDashboard(

@@ -186,7 +186,7 @@
     for(const [panelIndex,visibleAxes] of configs.entries()){
       const div=document.createElement('div');div.className='chart-pane';host.append(div);nodes.push(div);
       const options={autoSize:true,layout:{background:{type:lwc.ColorType.Solid,color:THEME.bg},textColor:THEME.dim,fontFamily:'JetBrains Mono',fontSize:10,attributionLogo:true},
-        grid:{vertLines:{visible:false},horzLines:{visible:payload.gridlines!==false,color:'#1c1c2b'}},
+        grid:{vertLines:{visible:false},horzLines:{visible:false}},
         rightPriceScale:{visible:false},leftPriceScale:{visible:false},
         timeScale:{visible:!panels||panelIndex===configs.length-1,borderColor:THEME.border,minBarSpacing:0.02,rightOffset:5,lockVisibleTimeRangeOnResize:true},
         crosshair:{mode:lwc.CrosshairMode.Normal,vertLine:{color:'#69697c',labelBackgroundColor:'#292938'},horzLine:{color:'#69697c',labelBackgroundColor:'#292938'}},
@@ -293,7 +293,8 @@
   }
   function orderedSeries(payload,time=payload.readingPoint){
     if(payload.seriesOrder){const rank=new Map(payload.seriesOrder.map((id,i)=>[id,i]));return payload.series.slice().sort((a,b)=>(rank.get(a.id)??Infinity)-(rank.get(b.id)??Infinity));}
-    const priority=s=>s.id==='price_close'?0:s.id.startsWith('price_close')||s.role==='highlight'?1:2;
+    // Bitcoin (or the current year) first, then Median and Average, then the rest by value.
+    const priority=s=>s.id==='price_close'?0:s.id.startsWith('price_close')||s.role==='highlight'?1:s.role==='median'?2:s.role==='mean'?3:4;
     const values=new Map(payload.series.map(s=>[s.id,valueAt(s,time,payload)]));
     const compare=(a,b)=>{
       const pinned=priority(a)-priority(b);if(pinned)return pinned;
