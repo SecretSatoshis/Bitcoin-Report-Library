@@ -91,7 +91,7 @@ jobs:
           # The suite above ran before generation, so it validated the previous
           # commit's output; this catches a stale page in the same run rather
           # than one run later.
-          uv run --no-sync python -m unittest tests.test_release_page_seo -v
+          uv run --no-sync python -m unittest tests.test_release_page -v
 
       - name: Upload generated reports
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
