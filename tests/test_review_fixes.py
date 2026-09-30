@@ -43,12 +43,8 @@ class ReviewFixTests(unittest.TestCase):
     def test_missing_week_candle_cannot_replace_output(self):
         candles = pd.DataFrame([[100,110,90,105]]*3, columns=data_validation.OHLC_COLUMNS,
                                index=pd.to_datetime(['2024-01-01','2024-01-03','2024-01-04']))
-        with tempfile.TemporaryDirectory() as directory:
-            target = Path(directory)/'summary.csv'
-            target.write_text('previous')
-            with self.assertRaisesRegex(ValueError, 'missing a day'):
-                tables.create_report_ohlc_summary(candles, '2024-01-04', target)
-            self.assertEqual(target.read_text(), 'previous')
+        with self.assertRaisesRegex(ValueError, 'missing a day'):
+            tables.create_report_ohlc_summary(candles, '2024-01-04')
 
     def test_fundamentals_exact_dates_and_calendar_range(self):
         dates = pd.date_range('2023-01-01', periods=400)
@@ -93,7 +89,7 @@ class ReviewFixTests(unittest.TestCase):
 
     def test_completed_december_year_included_in_average(self):
         frame = pd.DataFrame({'price_close':[100,200,800]}, index=pd.to_datetime(['2022-12-31','2023-12-31','2024-12-31']))
-        result = tables.monthly_heatmap(frame, export_csv=False)
+        result = tables.monthly_heatmap(frame)
         self.assertAlmostEqual(float(result.loc['Average','Yearly']), 200.0)
 
     def test_release_rejects_missing_day_and_mutated_fundamental(self):

@@ -56,7 +56,7 @@ class PeriodReturnBoundaryTests(unittest.TestCase):
         )
 
         result = report_tables.monthly_heatmap(
-            data, report_date="2023-02-15", export_csv=False
+            data, report_date="2023-02-15"
         )
 
         self.assertEqual(result.index.name, "time")
@@ -97,14 +97,21 @@ class PeriodReturnBoundaryTests(unittest.TestCase):
             ),
         )
 
+    def test_period_table_without_current_data_raises(self):
+        prices = pd.DataFrame(
+            {"price_close": [100.0, 110.0]}, index=pd.to_datetime(["2020-01-01", "2020-01-02"])
+        )
+        with self.assertRaisesRegex(ValueError, "No MTD price history for 2021-02-02"):
+            report_tables.create_period_returns_table(prices, "2021-02-02", "mtd")
+
     def test_monthly_and_yearly_comparisons_share_boundary_semantics(self):
         prices = self.comparison_prices()
 
-        monthly = report_tables.create_monthly_returns_table(
-            prices, report_date="2021-02-02"
+        monthly = report_tables.create_period_returns_table(
+            prices, "2021-02-02", "mtd"
         ).set_index("Year")
-        yearly = report_tables.create_yearly_returns_table(
-            prices, report_date="2021-02-02"
+        yearly = report_tables.create_period_returns_table(
+            prices, "2021-02-02", "ytd"
         ).set_index("Year")
 
         self.assertEqual(monthly.loc[2021, "Start Price ($)"], 200.0)

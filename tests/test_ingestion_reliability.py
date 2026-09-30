@@ -1,8 +1,6 @@
-import tempfile
 """Regression tests for source ingestion and freshness controls."""
 
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
@@ -48,27 +46,12 @@ class IngestionReliabilityTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "returned no day1 OHLC"):
                 sources.get_brk_ohlc()
 
-    def test_ohlc_writers_do_not_replace_existing_files_with_empty_data(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            weekly_path = Path(temp_dir) / "weekly.csv"
-            daily_path = Path(temp_dir) / "daily.csv"
-            weekly_path.write_text("existing-weekly\n", encoding="utf-8")
-            daily_path.write_text("existing-daily\n", encoding="utf-8")
-
-            empty = pd.DataFrame(columns=data_validation.OHLC_COLUMNS)
-            with self.assertRaisesRegex(ValueError, "refusing to overwrite"):
-                report_tables.calculate_ohlc(empty, output_file=weekly_path)
-            with self.assertRaisesRegex(ValueError, "refusing to overwrite"):
-                report_tables.create_report_ohlc_summary(
-                    empty, "2024-01-01", output_file=daily_path
-                )
-
-            self.assertEqual(
-                weekly_path.read_text(encoding="utf-8"), "existing-weekly\n"
-            )
-            self.assertEqual(
-                daily_path.read_text(encoding="utf-8"), "existing-daily\n"
-            )
+    def test_ohlc_tables_refuse_empty_candles(self):
+        empty = pd.DataFrame(columns=data_validation.OHLC_COLUMNS)
+        with self.assertRaisesRegex(RuntimeError, "refusing to overwrite"):
+            report_tables.weekly_ohlc_table(empty)
+        with self.assertRaisesRegex(RuntimeError, "refusing to overwrite"):
+            report_tables.create_report_ohlc_summary(empty, "2024-01-01")
 
     def test_brk_bulk_retries_request_errors_and_transient_statuses(self):
         transient = FakeResponse(status_code=503, text="unavailable")

@@ -1,21 +1,15 @@
 """
-Report Tables Module - Bitcoin Analytics Table Generation
+Report tables: every published summary table, built from the merged daily frame.
 
-This module generates formatted tabular outputs for Bitcoin market and on-chain analytics.
-All functions produce CSV-ready DataFrames without styling, optimized for direct ingestion
-into spreadsheets, BI tools, or visualization platforms.
+    - Summary: snapshot cards, 30-day history, investor sentiment
+    - Fundamentals: network metrics with weekly detail and 52-week range
+    - Performance: Bitcoin against equity, sector, macro and Bitcoin-industry assets
+    - Returns: ROI by time frame, MTD/YTD comparisons, indexed return paths, monthly heatmap
+    - OHLC: weekly candles and the report-date summary
+    - Relative value: Bitcoin's price at other assets' market caps
 
-Key Responsibilities:
-    - Fundamentals Tables: Network performance, security, economics, and valuation metrics
-    - Performance Tables: Multi-asset return comparisons across equities, sectors, macro, and Bitcoin
-    - ROI Analysis: Historical return calculations for multiple time periods
-    - Price Distribution: Trading day counts by price bucket ranges
-    - Temporal Analysis: Monthly/yearly return comparisons, OHLC exports, heatmaps
-    - Valuation Models: Relative value comparisons and end-of-year projections
-
-Output Format:
-    All functions return unstyled pandas DataFrames ready for CSV export. Formatting is
-    minimal and data-focused to ensure compatibility with downstream analysis tools.
+Functions return DataFrames; main.py writes them. Values are numeric except the
+fundamentals table, whose rows mix units and are published as formatted text.
 """
 
 import pandas as pd
@@ -23,6 +17,7 @@ from datetime import timedelta
 import numpy as np
 from pandas.tseries.offsets import MonthEnd
 import calendar
+from data_validation import OHLC_COLUMNS, assert_ohlc_usable
 from data_definitions import (
     NUPL_SENTIMENT_WINDOW_DAYS,
     NUPL_SENTIMENT_ZONES,
@@ -30,6 +25,11 @@ from data_definitions import (
     SATS_PER_BTC,
     FIAT_MONEY_SUPPLY,
 )
+
+
+# Earliest year in the MTD/YTD comparisons and return paths. Earlier Bitcoin data is too
+# thin and volatile for a meaningful comparison.
+RETURN_HISTORY_MIN_YEAR = 2014
 
 
 def _positive_price_series(price_series):
@@ -58,6 +58,39 @@ PRICE_MOVING_AVERAGES = {
 }
 
 
+# Daily series published in summary_history.csv, by label.
+HEADLINE_METRICS = {
+    "Bitcoin Price USD": "price_close",
+    "Bitcoin Marketcap": "market_cap",
+    "Sats Per Dollar": "sat_per_dollar",
+    "Bitcoin Supply": "supply",
+    "Bitcoin Miner Revenue": "coinbase_sum_24h_usd",
+    "Bitcoin Transaction Volume": "transfer_volume_sum_24h_usd",
+}
+
+# Model columns published in onchain_price_models.csv, with their published names.
+ONCHAIN_PRICE_MODEL_COLUMNS = {
+    "price_close": "BTC Price",
+    "Electricity_Cost": "Electricity Cost",
+    "metcalfe_value": "Metcalfe Value",
+    "power_law_price": "Power Law Price",
+    "sth_realized_price": "STH Realized Price",
+    "lth_realized_price": "LTH Realized Price",
+    "realized_price": "Realized Price",
+}
+
+
+def create_onchain_price_models(report_data, report_date):
+    """Daily BTC price, valuation models, 3x realized price and price moving averages."""
+    models = report_data.loc[:report_date, list(ONCHAIN_PRICE_MODEL_COLUMNS)].dropna(
+        subset=["price_close"]
+    )
+    models["3x Realized Price"] = models["realized_price"] * 3
+    models = add_price_moving_averages(models.rename(columns=ONCHAIN_PRICE_MODEL_COLUMNS))
+    models.index.name = "date"
+    return models
+
+
 def add_price_moving_averages(frame, price_column="BTC Price"):
     """Return a copy of a date-indexed frame with the published price moving averages."""
     result = frame.copy()
@@ -69,7 +102,7 @@ def add_price_moving_averages(frame, price_column="BTC Price"):
 
 
 def create_indexed_returns_history(
-    price_series, report_date, period, min_year=2014
+    price_series, report_date, period, min_year=RETURN_HISTORY_MIN_YEAR
 ):
     """Create a wide, price-indexed MTD or YTD history through an as-of date.
 
@@ -110,8 +143,6 @@ def create_indexed_returns_history(
         empty.index.name = index_name
         return empty
 
-    # Collapse any duplicate/intraday rows so each calendar position has one value.
-    prices = prices.groupby(prices.index.normalize()).last()
     current_year = report_date.year
     current_month = report_date.month
 
@@ -604,7 +635,7 @@ def create_full_performance_table(report_data, report_date, correlation_results)
     )
 
 
-def monthly_heatmap(data, report_date=None, export_csv=True):
+def monthly_heatmap(data, report_date=None):
     """
     Creates monthly and yearly Bitcoin returns heatmap data with statistical aggregations.
 
@@ -616,7 +647,6 @@ def monthly_heatmap(data, report_date=None, export_csv=True):
     data (pd.DataFrame): DataFrame with DatetimeIndex and 'price_close' column. Data is filtered
                          to start from 2012-01-01 within the function.
     report_date (str or datetime, optional): As-of date used to cap current-period returns.
-    export_csv (bool): If True, exports heatmap data to csv/monthly_heatmap_data.csv. Default: True.
 
     Returns:
     pd.DataFrame: Heatmap matrix with:
@@ -705,130 +735,53 @@ def monthly_heatmap(data, report_date=None, export_csv=True):
     heatmap_data.columns = month_names
     heatmap_data.index.name = "time"
 
-    # Optionally export the heatmap data to CSV
-    if export_csv:
-        heatmap_data.to_csv("csv/monthly_heatmap_data.csv")
-
     return heatmap_data
 
 
-## CSV Exports
+## OHLC and period return tables
 
 
-def calculate_ohlc(ohlc_data, output_file="csv/ohlc_data.csv"):
+def weekly_ohlc_table(ohlc_data):
     """
-    Saves weekly OHLC data to CSV.
+    Weekly OHLC candles for ohlc_data.csv, indexed by Monday week start.
 
-    Rows are Monday week-start labels aggregated from daily BRK candles through
-    the report date (candle_data.weekly_ohlc). The open week's Close is the
-    report-date close, not a finalized weekly close.
-
-    Parameters:
-    ohlc_data (pd.DataFrame): DataFrame with DatetimeIndex and columns: 'Open', 'High', 'Low', 'Close'.
-                              Index must be datetime-compatible for export.
-    output_file (str): Path for CSV export. Default: "csv/ohlc_data.csv"
-
-    Returns:
-    pd.DataFrame: Weekly OHLC DataFrame with columns:
-        - Open: First open price of the week
-        - High: Highest price during the week
-        - Low: Lowest price during the week
-        - Close: Last close price of the week
-        Index is Monday week-start date labels.
+    Rows are aggregated from daily BRK candles through the report date
+    (candle_data.weekly_ohlc), so the open week's Close is the report-date close, not a
+    finalized weekly close. Raises before anything is written if the candles are unusable.
     """
-    required_columns = ["Open", "High", "Low", "Close"]
-    if ohlc_data is None or ohlc_data.empty:
-        raise ValueError("Weekly OHLC data is empty; refusing to overwrite output")
-    missing = [column for column in required_columns if column not in ohlc_data.columns]
-    if missing:
-        raise ValueError(
-            f"Weekly OHLC data is missing required columns {missing}; refusing to overwrite output"
-        )
-
-    # Ensure the index is a datetime index before export without mutating the caller.
-    from data_validation import validate_candles
-    validate_candles(ohlc_data, "Weekly OHLC")
-    ohlc_data = ohlc_data.copy()
-    ohlc_data.index = pd.to_datetime(ohlc_data.index)
-    weekly_ohlc = (
-        ohlc_data[required_columns]
-        .apply(pd.to_numeric, errors="coerce")
-        .replace([np.inf, -np.inf], np.nan)
-        .sort_index()
-        .dropna()
-    )
-    if weekly_ohlc.empty:
-        raise ValueError(
-            "Weekly OHLC data has no complete numeric candles; refusing to overwrite output"
-        )
-
-    # Export full history to CSV.
-    weekly_ohlc.to_csv(output_file)
-
-    return weekly_ohlc
+    assert_ohlc_usable(ohlc_data, "Weekly OHLC")
+    table = ohlc_data[OHLC_COLUMNS].copy()
+    table.index = pd.to_datetime(table.index)
+    return table.sort_index()
 
 
-def create_report_ohlc_summary(
-    daily_ohlc_data, report_date, output_file="csv/report_ohlc_summary.csv"
-):
+def create_report_ohlc_summary(daily_ohlc_data, report_date):
     """
-    Create report-date OHLC context from daily candles.
+    One-row report-date OHLC context from daily candles.
 
-    The daily close is the canonical report-date close used in narrative/report
-    logic. The weekly fields are week-to-date values derived from daily candles
-    through the report date, so they provide weekly context without pulling in
-    post-report-date movement from an open weekly candle.
-
-    Parameters:
-    daily_ohlc_data (pd.DataFrame): Daily OHLC DataFrame with DatetimeIndex.
-    report_date (str or datetime): Canonical report as-of date.
-    output_file (str): Path for CSV export.
-
-    Returns:
-    pd.DataFrame: One-row report OHLC summary.
+    The daily close is the canonical report-date close. The weekly fields are week-to-date
+    values from daily candles through the report date, so they never include movement after
+    the report date. Raises if the report date or any day of its week is missing.
     """
-    required_columns = ["Open", "High", "Low", "Close"]
-    if daily_ohlc_data is None or daily_ohlc_data.empty:
-        raise ValueError("Daily OHLC data is empty; refusing to overwrite output")
-    missing = [
-        column for column in required_columns if column not in daily_ohlc_data.columns
-    ]
-    if missing:
-        raise ValueError(
-            f"Daily OHLC data is missing required columns {missing}; refusing to overwrite output"
-        )
-
-    from data_validation import validate_candles
-    validate_candles(daily_ohlc_data, "Daily OHLC")
-    daily_ohlc_data = daily_ohlc_data[required_columns].copy()
-    daily_ohlc_data = daily_ohlc_data.apply(pd.to_numeric, errors="coerce")
-    daily_ohlc_data = daily_ohlc_data.replace([np.inf, -np.inf], np.nan)
-    daily_ohlc_data.index = pd.to_datetime(daily_ohlc_data.index).normalize()
-    daily_ohlc_data = daily_ohlc_data.sort_index().dropna()
-    if daily_ohlc_data.empty:
-        raise ValueError(
-            "Daily OHLC data has no complete numeric candles; refusing to overwrite output"
-        )
+    assert_ohlc_usable(daily_ohlc_data, "Daily OHLC")
+    daily = daily_ohlc_data[OHLC_COLUMNS].copy()
+    daily.index = pd.to_datetime(daily.index).normalize()
+    daily = daily.sort_index()
 
     report_date = pd.to_datetime(report_date).normalize()
-    available_dates = daily_ohlc_data.index[daily_ohlc_data.index <= report_date]
-    if len(available_dates) == 0:
-        raise ValueError("No daily OHLC data available on or before the report date.")
-
-    actual_report_date = available_dates.max()
-    if actual_report_date != report_date:
+    if report_date not in daily.index:
         raise ValueError("Daily OHLC is missing the report date")
-    daily_row = daily_ohlc_data.loc[actual_report_date]
+    daily_row = daily.loc[report_date]
 
-    week_start = actual_report_date - pd.Timedelta(days=actual_report_date.weekday())
-    week_to_date = daily_ohlc_data.loc[week_start:actual_report_date]
+    week_start = report_date - pd.Timedelta(days=report_date.weekday())
+    week_to_date = daily.loc[week_start:report_date]
     if not week_to_date.index.equals(pd.date_range(week_start, report_date)):
         raise ValueError("Daily OHLC is missing a day in the report week")
 
-    out = pd.DataFrame(
+    return pd.DataFrame(
         [
             {
-                "Report Date": actual_report_date.strftime("%Y-%m-%d"),
+                "Report Date": report_date.strftime("%Y-%m-%d"),
                 "Daily Open": daily_row["Open"],
                 "Daily High": daily_row["High"],
                 "Daily Low": daily_row["Low"],
@@ -842,255 +795,82 @@ def create_report_ohlc_summary(
             }
         ]
     )
-    out.to_csv(output_file, index=False)
-    return out
 
 
-def create_monthly_returns_table(selected_metrics, report_date=None):
+def create_period_returns_table(report_data, report_date, period):
     """
-    Generates a month-to-date (MTD) return comparison table indexed to the current month.
+    Month-to-date or year-to-date return comparison for mtd/ytd_return_comparison.csv.
 
-    This function compares Bitcoin's performance for the current month across all historical
-    years where data is available. It calculates returns from the final positive close
-    before the current month to both the current date and month end, providing historical
-    context for current performance.
-
-    Parameters:
-    selected_metrics (pd.DataFrame): DataFrame with DatetimeIndex containing at minimum
-                                      a 'price_close' column. Data filtered to 2014-01-01+.
+    Every year's period return is measured from the final positive close before the
+    period began (the month for "mtd", January 1 for "ytd"). The table publishes two rows:
+    the current year, and a "Median Projection" that applies the median historical full-
+    period return (current year excluded) to the current period's start price.
 
     Returns:
-    pd.DataFrame: Table with columns:
-        - Year: The calendar year
-        - Start Price ($): Final positive price before the month began for that year
-        - End Price ($): Price at end of current month for that year
-        - Return (%): Full month return percentage
-        - Report Date Return (%): Return from month start to current date
-        Final rows include current year data and median historical projection.
+    pd.DataFrame: Year, Start Price ($), End Price ($), Return (%), and Report Date
+                  Return (%), the return to the same calendar date in each year.
     """
-    today = (
-        pd.to_datetime(report_date).date()
-        if report_date is not None
-        else pd.to_datetime(selected_metrics.index.max()).date()
-    )
-    current_year = today.year
-    current_month = today.month
-    current_day = today.day
+    if period not in {"mtd", "ytd"}:
+        raise ValueError("period must be either 'mtd' or 'ytd'.")
+    report_date = pd.to_datetime(report_date).normalize()
+    prices = _positive_price_series(report_data.sort_index().loc[:report_date, "price_close"])
 
-    selected_metrics = selected_metrics.sort_index()
-    if report_date is not None:
-        selected_metrics = selected_metrics.loc[: pd.to_datetime(report_date).normalize()]
+    def period_prices(year):
+        mask = prices.index.year == year
+        if period == "mtd":
+            mask &= prices.index.month == report_date.month
+        return prices.loc[mask]
 
-    # Keep earlier rows available for the January 2014/prior-month boundary lookup;
-    # the publication-year cutoff is applied to the loop, not the source history.
-    all_prices = _positive_price_series(selected_metrics["price_close"])
-    publication_years = [
-        year for year in all_prices.index.year.unique() if year >= 2014
-    ]
+    def period_start_price(year):
+        month = report_date.month if period == "mtd" else 1
+        return _last_positive_before(prices, pd.Timestamp(year, month, 1))
 
-    monthly_returns = {}
-    report_date_returns = {}
+    current_start_price = period_start_price(report_date.year)
+    if period_prices(report_date.year).empty or pd.isna(current_start_price):
+        raise ValueError(f"No {period.upper()} price history for {report_date.date()}")
 
-    # Get the starting price for the current month of the current year
-    current_month_data = all_prices.loc[
-        (all_prices.index.year == current_year)
-        & (all_prices.index.month == current_month)
-    ]
-    current_start_price = _last_positive_before(
-        all_prices, pd.Timestamp(current_year, current_month, 1)
-    )
-    if current_month_data.empty or pd.isna(current_start_price):
-        return None  # No data for current month
-
-    # Calculate monthly returns for each year
-    for year in publication_years:
-        monthly_data = all_prices.loc[
-            (all_prices.index.year == year)
-            & (all_prices.index.month == current_month)
+    rows = {}
+    for year in prices.index.year.unique():
+        year_prices = period_prices(year)
+        start_price = period_start_price(year)
+        if year < RETURN_HISTORY_MIN_YEAR or year_prices.empty or pd.isna(start_price):
+            continue
+        end_price = year_prices.iloc[-1]
+        # Match the calendar date, not the day of year: after February a leap year's
+        # ordinal runs one ahead of a common year's.
+        same_date = year_prices[
+            (year_prices.index.month == report_date.month)
+            & (year_prices.index.day == report_date.day)
         ]
+        rows[year] = (
+            start_price,
+            end_price,
+            (end_price / start_price - 1) * 100,
+            (same_date.iloc[-1] / start_price - 1) * 100 if not same_date.empty else np.nan,
+        )
 
-        if not monthly_data.empty:
-            start_price = _last_positive_before(
-                all_prices, pd.Timestamp(year, current_month, 1)
-            )
-            if pd.isna(start_price):
-                continue
-            end_price = monthly_data.iloc[-1]
-            return_pct = (end_price / start_price - 1) * 100
-            monthly_returns[year] = (start_price, end_price, return_pct)
-
-            # Report Date Return Calculation
-            report_date_data = monthly_data[(monthly_data.index.day == current_day)]
-            if not report_date_data.empty:
-                report_date_price = report_date_data.iloc[-1]
-                report_date_return = (report_date_price / start_price - 1) * 100
-                report_date_returns[year] = report_date_return
-            else:
-                report_date_returns[year] = None
-
-    # Convert dictionary to DataFrame
-    df = pd.DataFrame.from_dict(
-        monthly_returns,
+    table = pd.DataFrame.from_dict(
+        rows,
         orient="index",
-        columns=["Start Price ($)", "End Price ($)", "Return (%)"],
+        columns=["Start Price ($)", "End Price ($)", "Return (%)", "Report Date Return (%)"],
     )
-    df.index.name = "Year"
+    table.index.name = "Year"
 
-    # Add report date return column
-    df["Report Date Return (%)"] = pd.Series(report_date_returns)
-
-    # Extract the current year's data
-    current_year_row = df.loc[[current_year]].reset_index()
-
-    # The projection is a historical benchmark for the current period to be measured
-    # against, so it must exclude the current period. Including the in-progress month
-    # folds today's partial return into the very median it is being compared to.
-    historical = df.drop(index=current_year, errors="ignore")
-
-    # Calculate the historical median return
+    # The projection is a benchmark for the current period, so it excludes the current
+    # period: including it would fold today's partial return into the median it is
+    # compared against.
+    historical = table.drop(index=report_date.year, errors="ignore")
     median_return = historical["Return (%)"].median()
-    median_end_price = current_start_price * (1 + median_return / 100)
-
-    # Calculate the median return at the current date (not full period)
-    median_report_date_return = historical["Report Date Return (%)"].median()
-
-    # Create the projected median row
     median_row = pd.DataFrame(
         {
             "Year": ["Median Projection"],
             "Start Price ($)": [current_start_price],
-            "End Price ($)": [median_end_price],
+            "End Price ($)": [current_start_price * (1 + median_return / 100)],
             "Return (%)": [median_return],
-            "Report Date Return (%)": [median_report_date_return],
+            "Report Date Return (%)": [historical["Report Date Return (%)"].median()],
         }
     )
-
-    # Concatenate current year and median projection rows
-    df_filtered = pd.concat([current_year_row, median_row], ignore_index=True)
-
-    return df_filtered
-
-
-def create_yearly_returns_table(selected_metrics, report_date=None):
-    """
-    Generates a year-to-date (YTD) return comparison table indexed to the current day of year.
-
-    This function compares Bitcoin's performance for the current year across all historical
-    years where data is available. It calculates returns from the final positive close
-    before January 1 to both the current calendar date and year end, providing historical
-    context for current YTD performance.
-
-    Parameters:
-    selected_metrics (pd.DataFrame): DataFrame with DatetimeIndex containing at minimum
-                                      a 'price_close' column. Data filtered to 2014-01-01+.
-
-    Returns:
-    pd.DataFrame: Table with columns:
-        - Year: The calendar year
-        - Start Price ($): Final positive price before January 1 for that year
-        - End Price ($): Price on December 31st for that year
-        - Return (%): Full year return percentage
-        - Report Date Return (%): Return from January 1st to current day of year
-        Final rows include current year data and median historical projection.
-    """
-    today = (
-        pd.to_datetime(report_date).date()
-        if report_date is not None
-        else pd.to_datetime(selected_metrics.index.max()).date()
-    )
-    current_year = today.year
-    selected_metrics = selected_metrics.sort_index()
-    if report_date is not None:
-        selected_metrics = selected_metrics.loc[: pd.to_datetime(report_date).normalize()]
-
-    # Keep earlier rows available for the January 2014 boundary lookup.
-    all_prices = _positive_price_series(selected_metrics["price_close"])
-    publication_years = [
-        year for year in all_prices.index.year.unique() if year >= 2014
-    ]
-
-    yearly_returns = {}
-    report_date_returns = {}
-
-    # Get the starting price for the current year
-    current_year_data = all_prices.loc[all_prices.index.year == current_year]
-    current_start_price = _last_positive_before(
-        all_prices, pd.Timestamp(current_year, 1, 1)
-    )
-    if current_year_data.empty or pd.isna(current_start_price):
-        return None  # No data for current year
-
-    # Calculate yearly returns for each year
-    for year in publication_years:
-        yearly_data = all_prices.loc[all_prices.index.year == year]
-
-        if not yearly_data.empty:
-            start_price = _last_positive_before(
-                all_prices, pd.Timestamp(year, 1, 1)
-            )
-            if pd.isna(start_price):
-                continue
-            end_price = yearly_data.iloc[-1]
-            return_pct = (end_price / start_price - 1) * 100
-            yearly_returns[year] = (start_price, end_price, return_pct)
-
-            # Report Date Return Calculation.
-            # Match on calendar date, not day-of-year: after February, a leap year's
-            # ordinal day is one ahead of a common year's, so comparing dayofyear lines
-            # today up against the previous calendar day in every leap year.
-            report_date_data = yearly_data[
-                (yearly_data.index.month == today.month)
-                & (yearly_data.index.day == today.day)
-            ]
-            if not report_date_data.empty:
-                report_date_price = report_date_data.iloc[-1]
-                report_date_return = (report_date_price / start_price - 1) * 100
-                report_date_returns[year] = report_date_return
-            else:
-                report_date_returns[year] = None
-
-    # Convert dictionary to DataFrame
-    df = pd.DataFrame.from_dict(
-        yearly_returns,
-        orient="index",
-        columns=["Start Price ($)", "End Price ($)", "Return (%)"],
-    )
-    df.index.name = "Year"
-
-    # Add report date return column
-    df["Report Date Return (%)"] = pd.Series(report_date_returns)
-
-    # Extract the current year's data
-    current_year_row = df.loc[[current_year]].reset_index()
-
-    # The projection is a historical benchmark for the current year to be measured
-    # against, so it must exclude the current year. Including the in-progress year folds
-    # today's partial return into the very median it is being compared to, and drags the
-    # projected year-end price toward the current year's performance.
-    historical = df.drop(index=current_year, errors="ignore")
-
-    # Calculate the historical median return
-    median_return = historical["Return (%)"].median()
-    median_end_price = current_start_price * (1 + median_return / 100)
-
-    # Median return as of the same calendar date in prior years
-    median_report_date_return_pct = historical["Report Date Return (%)"].dropna().median()
-
-    # Create the projected median row
-    median_row = pd.DataFrame(
-        {
-            "Year": ["Median Projection"],
-            "Start Price ($)": [current_start_price],
-            "End Price ($)": [median_end_price],
-            "Return (%)": [median_return],
-            "Report Date Return (%)": [median_report_date_return_pct],
-        }
-    )
-
-    # Concatenate current year and median projection rows
-    df_filtered = pd.concat([current_year_row, median_row], ignore_index=True)
-
-    return df_filtered
+    return pd.concat([table.loc[[report_date.year]].reset_index(), median_row], ignore_index=True)
 
 
 def create_asset_valuation_table(report_data, report_date=None):
