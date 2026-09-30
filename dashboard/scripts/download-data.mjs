@@ -307,6 +307,7 @@ function publishStaged(manifest) {
     JSON.stringify(manifest, null, 2) + "\n",
   );
   rmSync(PREVIOUS_DIR, { recursive: true, force: true });
+  mkdirSync(path.dirname(OUT_DIR), { recursive: true });
   if (existsSync(OUT_DIR)) renameSync(OUT_DIR, PREVIOUS_DIR);
   renameSync(STAGING_DIR, OUT_DIR);
   rmSync(PREVIOUS_DIR, { recursive: true, force: true });
