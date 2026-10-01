@@ -9,7 +9,7 @@
     "fonts/JetBrainsMono-400.ttf": "abc6c66d3c566c3a42e00d3263b46ca85f12d7735c9e5dc7a2b60e8e26b84a38",
     "fonts/JetBrainsMono-600.ttf": "e7cccd8573ef7d2392cf52de43d9ccf747ee41de10f5f54ba44af1a3901689ab",
     "fonts/Syne-700.ttf": "bf35fabe05b34b18fed68b1a26b5b474af4c86d4f1a0f0eb6412d8782947c583",
-    "scripts/sync-dashboard.py": "1e3a5fc9f5570f16478ce59168c57f4ff3fccfe07830761438d7e5d2ebd0173f"
+    "scripts/sync-dashboard.py": "c9c2df6c24b44489f33fecf2ebdbfe22e386aca52028ff3606150f22f828bc4b"
   },
   "assets": {
     "STYLE": "assets/chart.714ec02638c2d66a.css",
