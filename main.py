@@ -74,7 +74,7 @@ data = metrics.calculate_moving_averages(data, MOVING_AVERAGE_METRICS)
 data = metrics.calculate_btc_price_to_surpass_fiat(data, FIAT_MONEY_SUPPLY)
 data = metrics.calculate_metal_market_caps(data, GOLD_SILVER_SUPPLY)
 data = metrics.calculate_btc_price_to_surpass_metal_categories(data, GOLD_SUPPLY_BREAKDOWN)
-data = metrics.calculate_btc_price_for_stock_mkt_caps(data, STOCK_TICKERS)
+data = metrics.calculate_btc_price_to_surpass_stocks(data, STOCK_TICKERS)
 data, model_parameters = metrics.calculate_network_model_metrics(data, REPORT_DATE)
 data = metrics.electric_price_models(data)
 

@@ -269,13 +269,13 @@ def calculate_btc_price_to_surpass_fiat(
     return data
 
 
-def calculate_btc_price_for_stock_mkt_caps(
+def calculate_btc_price_to_surpass_stocks(
     data: pd.DataFrame, stock_tickers: list
 ) -> pd.DataFrame:
-    """Add `{ticker}_mc_btc_price`: the BTC price at which Bitcoin's market cap equals the stock's."""
+    """Add `{ticker}_market_cap_btc_price`: the BTC price at which Bitcoin's market cap equals the stock's."""
     supply = _positive_supply(data)
     stock_prices = {
-        f"{ticker}_mc_btc_price": data[f"{ticker}_market_cap"] / supply
+        f"{ticker}_market_cap_btc_price": data[f"{ticker}_market_cap"] / supply
         for ticker in stock_tickers
     }
 

@@ -497,11 +497,11 @@ class YahooMarketCapTests(unittest.TestCase):
 
         downstream = result.copy()
         downstream["supply"] = 20.0
-        downstream = metrics.calculate_btc_price_for_stock_mkt_caps(
+        downstream = metrics.calculate_btc_price_to_surpass_stocks(
             downstream, ["TEST"]
         )
         self.assertEqual(
-            downstream.loc["2020-09-01", "TEST_mc_btc_price"], 50.0
+            downstream.loc["2020-09-01", "TEST_market_cap_btc_price"], 50.0
         )
 
     def test_split_adjustment_finds_leading_and_lagging_share_transitions(self):

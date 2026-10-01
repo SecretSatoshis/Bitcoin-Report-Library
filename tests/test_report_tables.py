@@ -374,7 +374,7 @@ class RelativeValueTableTests(unittest.TestCase):
 
         us_m0 = float(FIAT_MONEY_SUPPLY.set_index("Country").loc["United States", "US Dollar Trillion"]) * 1e12
         row = {"price_close": 100_000.0, "market_cap": 2e12, "united_states_m0_btc_price": 250_000.0,
-               "AAPL_mc_btc_price": 200_000.0, "AAPL_market_cap": 4e12}
+               "AAPL_market_cap_btc_price": 200_000.0, "AAPL_market_cap": 4e12}
         data = pd.DataFrame([row], index=pd.to_datetime(["2024-01-05"]))
         table = report_tables.create_asset_valuation_table(data, "2024-01-05").set_index("Asset")
 
