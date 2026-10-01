@@ -3,8 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1"><title>MTD Returns Comparison</title><style>@media (min-width:761px){.embedded .plot-wrap{height:520px;min-height:520px}.embedded #legend{max-height:296px}}</style>
-  <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="assets/chart.b7491b7fa07c6986.css">
+  <link rel="stylesheet" href="assets/chart.714ec02638c2d66a.css">
   <script defer src="assets/lightweight-charts.e21cc5caa0226ef3.js"></script>
   <script defer src="embed-host.js"></script>
 </head>
@@ -15,24 +14,22 @@
     <div class="heading"><div><h1>MTD Returns Comparison</h1><p class="description"></p></div><div class="asof"><span>DAILY CLOSE THROUGH</span><strong></strong></div></div>
     <section class="chart-card" aria-label="MTD Returns Comparison">
       <div class="toolbar">
-        <div class="button-group" id="ranges" aria-label="Visible date range">
-          <button data-range="YTD" aria-pressed="false">YTD</button><button data-range="1Y" aria-pressed="false">1Y</button><button data-range="4Y" aria-pressed="true">4Y</button><button data-range="10Y" aria-pressed="false">10Y</button><button data-range="ALL" aria-pressed="false">All</button>
-        </div>
-        <div class="chart-actions"><div id="bitcoin-controls" class="button-group" hidden><label class="axis-control">Bitcoin <select id="bitcoin-style" aria-label="Bitcoin display"><option value="line">Line</option><option value="candles">Candles</option></select></label><label id="interval-control" class="axis-control" hidden>Interval <select id="candle-interval" aria-label="Candle interval"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label></div><div class="button-group" id="scales" aria-label="Price scale"><button data-scale="linear" aria-pressed="false">Linear</button><button data-scale="log" aria-pressed="true">Log</button></div><button id="events" class="quiet" aria-pressed="true">Events</button><button id="reset" class="quiet">Reset</button><button id="export" class="export">Export PNG <span aria-hidden="true">↗</span></button></div>
+        <div class="button-group" id="ranges" aria-label="Visible date range"></div>
+        <div class="chart-actions"><div id="bitcoin-controls" class="button-group" hidden><label class="axis-control">Bitcoin <select id="bitcoin-style" aria-label="Bitcoin display"><option value="line">Line</option><option value="candles">Candles</option></select></label><label id="interval-control" class="axis-control" hidden>Interval <select id="candle-interval" aria-label="Candle interval"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label></div><div class="button-group" id="scales" aria-label="Axis scales"></div><button id="events" aria-pressed="true">Events</button><button id="reset">Reset</button><button id="export" class="export">Export PNG <span aria-hidden="true">↗</span></button></div>
       </div>
       <div class="chart-layout">
         <div class="plot-wrap"><div class="plot-label">RIGHT: Indexed to Month Start ($)</div><div id="chart" role="img" aria-label="MTD Returns Comparison. Exact values and series controls are in the adjacent panel."></div><div id="loading" role="status">Loading verified chart data…</div></div>
         <aside class="indicators" aria-label="Data series values and visibility">
           <div class="panel-heading"><h2>DATA SERIES</h2><div class="series-actions"><button id="show-all" class="text-button">Show all</button><button id="remove-all" class="text-button">Remove all</button></div></div>
-          <div class="reading-date"><span id="reading-mode">LATEST CLOSE</span><strong id="reading-date"></strong></div>
+          <div class="reading-date"><span id="reading-mode">REPORT DATE</span><strong id="reading-date"></strong></div>
           <div id="candle-reading" class="candle-reading" hidden></div>
           <div id="legend"></div>
           <p class="legend-hint">Select a series to show or hide it.<br>Move across the chart to compare values.</p>
         </aside>
       </div>
-      <div class="chart-foot"><span id="view-range">4-year view</span><span>Scroll to zoom · Drag to explore · Double-click price axis to fit</span></div>
+      <div class="chart-foot"><span id="view-range"></span><span>Scroll to zoom · Drag to explore · Double-click price axis to fit</span></div>
     </section>
-    <div class="below-chart"><p>Bitview · Bitcoin Report Library<br><span id="observation-note">Daily observations.</span></p><a href="#" id="download-data">Download chart data <span aria-hidden="true">↓</span></a></div>
+    <div class="below-chart"><p>Data Source: BRK · Bitcoin Report Library<br><span id="observation-note">Daily observations.</span></p><a href="#" id="download-data">Download chart data <span aria-hidden="true">↓</span></a></div>
     <details class="events-list"><summary>Historical events in this chart</summary><ul id="event-list"></ul></details>
     <p id="status" class="status" role="status" aria-live="polite"></p>
     <noscript>This interactive chart requires JavaScript. The chart data is embedded in this document.</noscript>

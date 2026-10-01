@@ -314,7 +314,7 @@ function baseChart(id: string, title: string, date: string): ChartPayload {
     title,
     description: "",
     category: "Market Intelligence",
-    source: "Bitview",
+    source: "Data Source: BRK",
     reportDate: date,
     coverage: date,
     axisKind: "time",

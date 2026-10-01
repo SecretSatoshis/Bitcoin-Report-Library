@@ -5,7 +5,7 @@ addEventListener('message',event=>{
  const payload=event.data.payload;
  if(payload?.schemaVersion!==2||payload.id!==document.body.dataset.chartId)return;
  initialized=true;document.getElementById('chart-data').textContent=JSON.stringify(payload);
- const script=document.createElement('script');script.src="assets/renderer.1660362d9b3f7396.js";
+ const script=document.createElement('script');script.src="assets/renderer.d457daa3b83e25bf.js";
  const fail=error=>parent.postMessage({type:'ss-chart-error',id:payload.id,message:error.message||String(error)},location.origin);
  script.onerror=()=>fail(new Error('Shared renderer could not load'));
  script.onload=async()=>{try{

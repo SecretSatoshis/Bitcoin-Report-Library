@@ -1,19 +1,19 @@
 {
   "source": "Bitcoin-Chart-Library",
   "files": {
-    "renderer.js": "1660362d9b3f73963edaf8ee8db492e620706d7501d64524076d06611c829b79",
-    "chart.html": "18d0cd8c8b8d67456c8d82d2b411aa675f726a1cf88cea1d5f44ad7f82b3842f",
-    "chart.css": "2870f9956982db34f7861ab06541fcf3507a5b2c1a5d6c61d1ea7751816c860f",
-    "site.css": "2010c7f2fced4ea101796010d30a3354eaff3ab53524090939103013c044ddd6",
+    "renderer.js": "d457daa3b83e25bf5217d417877323d4d4cca250334f7842d6524a6f087653b6",
+    "chart.html": "46916c7191f25a216a20dc0806ae177c9a357823351c0751ff8afbfb9f288775",
+    "chart.css": "b32c46717989d506ed99f7f761bab033f7b54257f75ae35b9869cb785f97231a",
+    "site.css": "f3e18513840db190b554037c27304ee5320193b347264a643b27bbd8826e02a6",
     "vendor-lock.json": "3b38781476f5ed3b5331e3710752e47c43b9e90c28931835f579765185a45c89",
     "fonts/JetBrainsMono-400.ttf": "abc6c66d3c566c3a42e00d3263b46ca85f12d7735c9e5dc7a2b60e8e26b84a38",
     "fonts/JetBrainsMono-600.ttf": "e7cccd8573ef7d2392cf52de43d9ccf747ee41de10f5f54ba44af1a3901689ab",
     "fonts/Syne-700.ttf": "bf35fabe05b34b18fed68b1a26b5b474af4c86d4f1a0f0eb6412d8782947c583",
-    "scripts/sync-dashboard.py": "eed3eb4ba6fba1bd7c8975dc6528298ae48e4ec77f10bb79cfc015e487e71683"
+    "scripts/sync-dashboard.py": "1e3a5fc9f5570f16478ce59168c57f4ff3fccfe07830761438d7e5d2ebd0173f"
   },
   "assets": {
-    "STYLE": "assets/chart.b7491b7fa07c6986.css",
-    "RENDERER": "assets/renderer.1660362d9b3f7396.js",
+    "STYLE": "assets/chart.714ec02638c2d66a.css",
+    "RENDERER": "assets/renderer.d457daa3b83e25bf.js",
     "RUNTIME": "assets/lightweight-charts.e21cc5caa0226ef3.js",
     "LICENSE": "assets/LICENSE",
     "NOTICEFILE": "assets/NOTICE"
@@ -24,14 +24,14 @@
     "seasonal-ytd.html"
   ],
   "vendored_hashes": {
-    "assets/chart.b7491b7fa07c6986.css": "b7491b7fa07c69865a3e1c1ec7e0411f387320fccffc5537b17d71d9c76de489",
-    "assets/renderer.1660362d9b3f7396.js": "1660362d9b3f73963edaf8ee8db492e620706d7501d64524076d06611c829b79",
+    "assets/chart.714ec02638c2d66a.css": "714ec02638c2d66ad1f8bb8fab1bf986f1043d9dd59d02313a4ecb2ae837576d",
+    "assets/renderer.d457daa3b83e25bf.js": "d457daa3b83e25bf5217d417877323d4d4cca250334f7842d6524a6f087653b6",
     "assets/lightweight-charts.e21cc5caa0226ef3.js": "e21cc5caa0226ef30bd8549c50b9ef926615f2a4ee6b4e486353477a55f598cf",
     "assets/LICENSE": "70c9d5382506dd184465425c08a99ad9bd6d9ac1313c252968ba0b585e5ef823",
     "assets/NOTICE": "f76c6afab94884448f0426e30d6e9d555ca7247894cd3484e477d2f87513036e",
-    "frame.html": "c3849f064a300893c559c08048d1e372150df3905b216a1b498d5ed05f76e6cd",
-    "seasonal-mtd.html": "c22a72fb8ff76f0f7886ef87f61b993f01db72eb7627b293175f6fe75c9b79f2",
-    "seasonal-ytd.html": "4b807c5bd906de637d7d6977bedcfb36d3323a44c8a2f24f95e6cd3fe3a367c2",
-    "embed-host.js": "169e0082d8df2e06c17978e9b6037c6440619869925614b47a6e3bd17927de98"
+    "frame.html": "55fec426e073e91abc0aaaf4ed94e29f460499f2fc71695068142bfc425d5729",
+    "seasonal-mtd.html": "c6271192bb163c87b6839f763accc6c350b7bc187d01f6652a4ee1d6bc6869ca",
+    "seasonal-ytd.html": "5ba3650a4d488fb6092754a88bc5617bf3045fa41b805d558675c1f7065e583e",
+    "embed-host.js": "2badfc4be6be2b0dbeb20e50851e0ef4b0dcbef875334660f220b25285d1b883"
   }
 }

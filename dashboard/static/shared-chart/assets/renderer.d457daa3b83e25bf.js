@@ -1,4 +1,4 @@
-/* Shared renderer. Market calculations belong to the Python data adapters. */
+/* Shared chart renderer. All market calculations happen in Python before the page is built. */
 (() => {
   'use strict';
   const THEME={bg:'#08080c',surface:'#0e0e16',border:'#2a2a42',text:'#e4e4ef',dim:'#9090a8',accent:'#F7931A',candleUp:'#78C99A',candleDown:'#E87878'};
@@ -146,7 +146,6 @@
   const xLabel=(x,p)=>p.axisKind==='days'?`${p.xAxisLabel||'Day'} ${x}`:dateString(x);
   const rgba=(color,opacity)=>{
     if(opacity===1)return color;
-    if(color.startsWith('hsl('))return color.replace('hsl(','hsla(').replace(')',`, ${opacity})`);
     if(/^#[0-9a-f]{6}$/i.test(color))return `rgba(${[1,3,5].map(i=>parseInt(color.slice(i,i+2),16)).join(',')}, ${opacity})`;
     return color;
   };
