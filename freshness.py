@@ -49,8 +49,9 @@ REQUIRED_ONCHAIN_METRICS = [
     "supply_in_profit",
 ]
 
-# A hole in a cumulative input shifts every later total without looking wrong, and
-# supply is the divisor of every per-coin price. Neither may have an interior gap.
+# Miner revenue feeds the all-time total behind thermocap, so a hole in it shifts every later
+# total without looking wrong; supply is the divisor of every per-coin price. Neither may have
+# an interior gap.
 CUMULATIVE_ONCHAIN_INPUTS = ["coinbase_sum_24h_usd"]
 GAP_CHECKED_ONCHAIN_INPUTS = CUMULATIVE_ONCHAIN_INPUTS + ["supply"]
 

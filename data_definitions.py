@@ -557,7 +557,8 @@ WORLD_BANK_INDICATORS = {
     "SP.POP.TOTL": "world_population",
 }
 
-# The published release. A failed annual fetch reuses that series from the last release.
+# The published release. A failed annual fetch reuses that series from it, and the ETF
+# tables carry their history from it (read locally in the release workflow).
 RELEASE_BASE_URL = "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv"
 
 

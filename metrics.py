@@ -284,7 +284,7 @@ def calculate_btc_price_to_surpass_stocks(
 
 
 def calculate_network_model_metrics(data, model_end_date=None):
-    """Add the Metcalfe, power-law and hash-ribbon series used by the strategy notebook.
+    """Add the Metcalfe, power-law and hash-ribbon series.
 
     Coefficients are fitted on positive observations through ``model_end_date`` (normally
     the report date), then evaluated across the whole frame. Metcalfe fixes the exponent
@@ -319,7 +319,7 @@ def calculate_network_model_metrics(data, model_end_date=None):
     fit_mask = result.index.normalize() <= fit_end
     price = pd.to_numeric(result["price_close"], errors="coerce")
     supply = pd.to_numeric(result["supply"], errors="coerce")
-    # Fit against price x supply, as the strategy notebook does, not BRK's market_cap.
+    # Market cap as price x supply, the same two inputs as every per-coin model.
     model_market_cap = price * supply
     days_since_genesis = pd.Series(
         (result.index.normalize() - BITCOIN_GENESIS_DATE).days.astype(float),

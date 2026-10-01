@@ -6,7 +6,7 @@ Sources:
       stock market caps (close x shares outstanding)
     - Google Sheets: Coin Metrics monthly miner efficiency
 
-The annual reference series are fetched separately, in annual_data.py.
+The annual reference series are fetched in annual_data.py and the ETF tables built in etf/.
 
 Market fetchers keep each value's real observation date in a temporary column so the
 freshness checks measure true source age, not the age of a carried-forward value.

@@ -303,7 +303,7 @@ def ezbc_history() -> pd.DataFrame:
 # --------------------------------------------------------------------------- BTCO
 
 def btco_current() -> Snapshot:
-    # Invesco's API answers this package's plain agent but rejects browser user agents.
+    # Invesco's API answers this library's user agent but rejects browser user agents.
     details = get(f"{BTCO_API}?expand=nav&idType=cusip&variationType=fundDetails&productType=ETF").json()
     prices = get(f"{BTCO_API}/prices?idType=cusip&variationType=priceListing&productType=ETF"
                  "&productSubType=ETF-Non-40%20Act").json()
@@ -327,11 +327,12 @@ def _btcw_page() -> dict:
     """WisdomTree sits behind a Cloudflare challenge, so BTCW is read in a headless browser,
     once per run for both today's holdings and the NAV history.
 
-    Uses Playwright from PLAYWRIGHT_MODULE (default: the Chart Library's install) and Node 18 or
-    newer from NODE_BINARY (default: the newest nvm install, else `node` on PATH).
+    Needs PLAYWRIGHT_MODULE (the path to playwright or playwright-core's index.mjs) and Node
+    18 or newer from NODE_BINARY (default: the newest nvm install, else `node` on PATH).
     """
-    module = os.environ.get("PLAYWRIGHT_MODULE", str(Path.home() / "Documents/Development/Bitcoin-Chart-Library/"
-                                                     "node_modules/playwright/index.mjs"))
+    module = os.environ.get("PLAYWRIGHT_MODULE")
+    if not module:
+        raise RuntimeError("PLAYWRIGHT_MODULE is not set")
     result = subprocess.run([_node(), str(HERE / "btcw.mjs"), module, BTCW_PAGE], capture_output=True,
                             text=True, timeout=180)
     if result.returncode:

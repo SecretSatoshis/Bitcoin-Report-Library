@@ -8,8 +8,8 @@ etf_daily.csv, one row per fund and trading day, all on trade-date basis:
   price_usd, price_basis   the 4pm bitcoin price used for the fund and where it comes from
   flow_btc          coins created minus coins redeemed that day
   flow_usd          the same flow in dollars (shares change x NAV, else flow_btc x price_usd)
-  other_change_btc  any other change in holdings: sponsor fees paid in bitcoin and, for rebuilt
-                    funds, the correction that makes the series meet its anchors
+  other_change_btc  any other change in holdings: sponsor fees paid in bitcoin and, in rows
+                    fitted to SEC quarter ends, the fitting correction
   market_share_pct  share of all US spot ETF bitcoin that day
 
 etf_totals_daily.csv, one row per trading day across all funds: total_btc, total_flow_btc,
