@@ -12,6 +12,30 @@
       "sha256": "cad95acfb13353ccf85e24a92a9773d83aa14cdaab831e8d836dfcb72438169b",
       "size_bytes": 139310
     },
+    "etf_daily.csv": {
+      "sha256": "18a2a8d1d1722c61813ae85d324f16fafb88d7286647e002d882bed241b38f9c",
+      "size_bytes": 1234701
+    },
+    "etf_filing_counts.csv": {
+      "sha256": "ae40297015bf39bd8716a7284c29db2c66eaa449dedfabf16a296ee1cf43bc72",
+      "size_bytes": 12738
+    },
+    "etf_nav_history.csv": {
+      "sha256": "54fc67ef0462806386431b5d19c59cd235d4f714e2eea1f2240231deb8bcdd02",
+      "size_bytes": 46760
+    },
+    "etf_quarterly.csv": {
+      "sha256": "eacb5fbaccb2aa5a95b95c81651a6b135803a2c5fb13dbd2d853cc2930383683",
+      "size_bytes": 22695
+    },
+    "etf_snapshots.csv": {
+      "sha256": "92de34f7a60a1b2cbfb83b6207a6a9d7c829ffa28802d889fbf1405e39b28575",
+      "size_bytes": 2519
+    },
+    "etf_totals_daily.csv": {
+      "sha256": "3dbf9659f57965df09ca3e5b3445a1461a84681de4f62120e2e80bc369041c3b",
+      "size_bytes": 67339
+    },
     "fundamentals_table.csv": {
       "sha256": "e26f73c0fb8a609315b3ad69d4d6cfb3e3d486930ba729c0ad4dc7a35103e90c",
       "size_bytes": 2620

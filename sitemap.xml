@@ -25,6 +25,42 @@
     <priority>0.5</priority>
   </url>
   <url>
+    <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/etf_daily.csv</loc>
+    <lastmod>2026-09-30</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/etf_filing_counts.csv</loc>
+    <lastmod>2026-09-30</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/etf_nav_history.csv</loc>
+    <lastmod>2026-09-30</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/etf_quarterly.csv</loc>
+    <lastmod>2026-09-30</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/etf_snapshots.csv</loc>
+    <lastmod>2026-09-30</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/etf_totals_daily.csv</loc>
+    <lastmod>2026-09-30</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/fundamentals_table.csv</loc>
     <lastmod>2026-09-30</lastmod>
     <changefreq>daily</changefreq>
