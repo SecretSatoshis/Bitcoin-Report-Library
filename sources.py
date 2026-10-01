@@ -6,6 +6,8 @@ Sources:
       stock market caps (close x shares outstanding)
     - Google Sheets: Coin Metrics monthly miner efficiency
 
+The annual reference series are fetched separately, in annual_data.py.
+
 Market fetchers keep each value's real observation date in a temporary column so the
 freshness checks measure true source age, not the age of a carried-forward value.
 """
@@ -25,6 +27,7 @@ from yfinance.exceptions import YFException
 from data_definitions import (
     API_TIMEOUT,
     BRK_BULK_URL,
+    BRK_DAILY_FLOWS,
     BRK_METRICS,
     BRK_PRICE_DEPENDENT_METRICS,
     BRK_REALIZED_PRICE_METRICS,
@@ -715,10 +718,12 @@ def get_brk_onchain(
     index: str = "dateindex",
     verbose: bool = False,
 ) -> pd.DataFrame:
-    """Every BRK_METRICS series from `start_date`, with a `date` column and BRK's names.
+    """Every BRK_METRICS series and the BRK_DAILY_FLOWS from `start_date`, with a `date`
+    column.
 
-    Series are fetched in chunks and joined on `timestamp`. The partial current UTC day
-    is included; main.py applies the report-date cutoff.
+    Series are fetched in chunks and joined on `timestamp`, starting a day early so the
+    first day has a flow. The partial current UTC day is included; main.py applies the
+    report-date cutoff.
     """
     metric_list = BRK_METRICS[:]
     if "timestamp" not in metric_list:
@@ -737,11 +742,12 @@ def get_brk_onchain(
 
     missing_series = []
 
+    fetch_start = (pd.Timestamp(start_date) - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
     for chunk in chunks:
         responses = _brk_fetch_csv_resilient(
             chunk,
             index=index,
-            start=start_date,
+            start=fetch_start,
             timeout=API_TIMEOUT,
             verbose=verbose,
             missing=missing_series,
@@ -783,10 +789,25 @@ def get_brk_onchain(
     frame.index = pd.to_datetime(frame.index.astype(float).astype(int), unit="s")
     frame = frame.sort_index().reindex(columns=ordered_cols[1:])
     frame = frame.apply(pd.to_numeric, errors="coerce")
+    frame = _add_daily_flows(frame)
     frame = frame.loc[frame.index >= pd.to_datetime(start_date)]
     frame = _blank_pre_price_placeholders(frame)
     print(f"[BRK] {len(frame)} days x {len(frame.columns)} series through {frame.index.max().date()}")
     return frame.rename_axis("date").reset_index()
+
+
+def _add_daily_flows(frame: pd.DataFrame) -> pd.DataFrame:
+    """Daily flows from running totals, and the BRK ratios built on daily flows.
+
+    Net realized P&L, NVT and hash price are recomputed from the calendar-day flows with
+    BRK's own formulas, so they carry no rolling-window overcount.
+    """
+    flows = {name: frame[cumulative].diff() for name, cumulative in BRK_DAILY_FLOWS.items()}
+    volume = flows["transfer_volume_sum_24h_usd"]
+    flows["net_realized_pnl_sum_24h"] = flows["realized_profit_sum_24h"] - flows["realized_loss_sum_24h"]
+    flows["nvt"] = frame["market_cap"] / volume.where(volume > 0)
+    flows["hash_price_ths"] = flows["coinbase_sum_24h_usd"] / (frame["hash_rate"] / 1e12)
+    return pd.concat([frame, pd.DataFrame(flows, index=frame.index)], axis=1)
 
 
 def _blank_pre_price_placeholders(frame: pd.DataFrame) -> pd.DataFrame:

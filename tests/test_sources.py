@@ -372,7 +372,7 @@ class BrkOnchainTests(unittest.TestCase):
         ]
         with patch.object(sources, "BRK_METRICS", ["timestamp", "a", "b"]), patch.object(
             sources, "_brk_fetch_csv_resilient", return_value=responses
-        ):
+        ), patch.object(sources, "_add_daily_flows", side_effect=lambda frame: frame):
             frame = sources.get_brk_onchain("2024-01-01")
 
         self.assertEqual(list(frame.columns), ["date", "a", "b"])
@@ -390,6 +390,22 @@ class BrkOnchainTests(unittest.TestCase):
             sources, "_brk_fetch_csv_resilient", side_effect=fetch
         ), self.assertRaisesRegex(RuntimeError, "required series: b"):
             sources.get_brk_onchain("2024-01-01")
+
+
+class DailyFlowTests(unittest.TestCase):
+    def test_flows_count_each_block_once_and_ratios_use_them(self):
+        index = pd.date_range("2024-01-01", periods=3)
+        frame = pd.DataFrame({cumulative: [100.0, 110.0, 125.0]
+                              for cumulative in sources.BRK_DAILY_FLOWS.values()}, index=index)
+        frame["realized_loss_cumulative"] = [10.0, 14.0, 15.0]
+        frame["market_cap"] = 1_000.0
+        frame["hash_rate"] = 5e12
+        result = sources._add_daily_flows(frame)
+        self.assertTrue(pd.isna(result["subsidy_sum_24h"].iloc[0]))
+        self.assertEqual(result["subsidy_sum_24h"].iloc[1:].tolist(), [10.0, 15.0])
+        self.assertEqual(result["net_realized_pnl_sum_24h"].iloc[1:].tolist(), [6.0, 14.0])
+        self.assertEqual(result["nvt"].iloc[2], 1_000.0 / 15.0)
+        self.assertEqual(result["hash_price_ths"].iloc[2], 15.0 / 5.0)
 
 
 class PrePricePlaceholderTests(unittest.TestCase):

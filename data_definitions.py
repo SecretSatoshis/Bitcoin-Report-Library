@@ -101,6 +101,7 @@ FIAT_MONEY_AS_OF = pd.Timestamp("2026-08-22")
 PRECIOUS_METALS_AS_OF = pd.Timestamp("2026-08-22")
 GOLD_BREAKDOWN_AS_OF = pd.Timestamp("2026-08-22")
 POWER_LAW_BANDS_AS_OF = pd.Timestamp("2026-09-29")
+BITCOIN_OWNERS_AS_OF = pd.Timestamp("2026-09-30")
 
 # Gold supply grows ~1.7% a year and M0 faster, so a year-old figure is materially off.
 REFERENCE_DATA_MAX_AGE_DAYS = 365
@@ -110,6 +111,7 @@ REFERENCE_DATA_VINTAGES = {
     "GOLD_SILVER_SUPPLY": PRECIOUS_METALS_AS_OF,
     "GOLD_SUPPLY_BREAKDOWN": GOLD_BREAKDOWN_AS_OF,
     "POWER_LAW_VALUATION_BANDS": POWER_LAW_BANDS_AS_OF,
+    "BITCOIN_OWNER_ESTIMATES": BITCOIN_OWNERS_AS_OF,
 }
 
 
@@ -161,6 +163,45 @@ GOLD_SUPPLY_BREAKDOWN = pd.DataFrame(
         "Percentage Of Market": [47.00, 22.00, 17.00, 14.00],
     }
 )
+
+# Estimated bitcoin owners worldwide, millions, from Crypto.com's yearly market sizing.
+# 2020 and 2021 report all crypto owners only; bitcoin is taken as about half of them.
+BITCOIN_OWNER_ESTIMATES = pd.DataFrame(
+    {
+        "year": [2020, 2021, 2022, 2023, 2024, 2025],
+        "value": [53, 148, 222, 296, 337, 365],
+        "note": [
+            "Inferred as approximately 50% of total crypto owners",
+            "Inferred as approximately 50% of total crypto owners",
+            "Bitcoin-specific estimate",
+            "Bitcoin-specific estimate",
+            "Bitcoin-specific estimate",
+            "Bitcoin-specific estimate",
+        ],
+        "source_url": [
+            "https://crypto.com/company-news/global-cryptocurrency-owners-grow-to-106-million",
+            "https://crypto.com/research/2021-crypto-market-sizing-report-2022-forecast",
+            "https://crypto.com/research/crypto-market-sizing-report-2022",
+            "https://crypto.com/research/crypto-market-sizing-report-2023",
+            "https://crypto.com/research/crypto-market-sizing-report-2024",
+            "https://crypto.com/research/crypto-market-sizing-report-2025",
+        ],
+    }
+)
+
+# Internet users worldwide before the World Bank's world share begins in 2005 (Our World
+# in Data, from ITU). These years are settled history, so they carry no vintage.
+EARLY_INTERNET_USERS = pd.DataFrame(
+    {
+        "year": list(range(1990, 2005)),
+        "value": [
+            2_601_283.5, 4_270_533.5, 6_892_746.5, 10_009_239.0, 20_460_824.0,
+            39_337_868.0, 77_498_790.0, 121_025_464.0, 188_656_720.0, 282_097_730.0,
+            416_202_340.0, 503_744_830.0, 666_635_970.0, 783_017_900.0, 915_793_860.0,
+        ],
+    }
+)
+EARLY_INTERNET_USERS_URL = "https://ourworldindata.org/grapher/number-of-internet-users"
 
 # The year the case levels below forecast, set by the annual Year Ahead Outlook. The
 # build fails once the report date moves past it.
@@ -367,31 +408,18 @@ BRK_METRICS = [
     "realized_cap",
     "sth_realized_price",
     "lth_realized_price",
-    "coindays_destroyed_sum_24h",
     "supply",
     "sth_supply",
     "lth_supply",
-    "fees_sum_24h_usd",
-    "fees_sum_24h",
-    "subsidy_sum_24h",
-    "coinbase_sum_24h_usd",
-    "coinbase_sum_24h",
     "utxos_over_1y_old_supply",
-    "tx_count_sum_24h",
     "velocity_usd",
-    "transfer_volume_sum_24h_usd",
     "inflation_rate",
     # Valuation and profitability metrics
-    "nvt",
     "puell_multiple",
     "liveliness",
-    "realized_profit_sum_24h",
-    "realized_loss_sum_24h",
-    "net_realized_pnl_sum_24h",
     "supply_in_profit",
     "supply_in_loss",
     "sopr_24h",
-    "hash_price_ths",
     # Non-zero address count (Metcalfe model)
     "addr_count",
     # Address counts by threshold (cumulative)
@@ -420,10 +448,48 @@ BRK_METRICS = [
     "utxos_under_4y_old_supply",
     "utxos_under_5y_old_supply",
     "utxos_under_10y_old_supply",
+    # Running totals from genesis; the daily flows below are built from them.
+    "coinbase_cumulative",
+    "coinbase_cumulative_usd",
+    "subsidy_cumulative",
+    "fees_cumulative",
+    "fees_cumulative_usd",
+    "tx_count_cumulative",
+    "transfer_volume_cumulative_usd",
+    "coindays_destroyed_cumulative",
+    "realized_profit_cumulative",
+    "realized_loss_cumulative",
+    "lth_realized_profit_cumulative",
+    "lth_realized_loss_cumulative",
+    "sth_realized_profit_cumulative",
+    "sth_realized_loss_cumulative",
+    "utxos_over_1y_old_transfer_volume_cumulative",
+    "utxos_over_2y_old_transfer_volume_cumulative",
+    "utxos_over_3y_old_transfer_volume_cumulative",
+    "utxos_over_4y_old_transfer_volume_cumulative",
+    "utxos_over_5y_old_transfer_volume_cumulative",
+    "utxos_over_10y_old_transfer_volume_cumulative",
 ]
 
-# BRK series that need a Bitcoin price. BRK reports them as 0 before the first traded
-# price (2010-08-16); those rows are blanked. A realized price of 0 means an empty cohort
+# Daily flows, published under BRK's *_sum_24h names, each the difference between
+# consecutive days' running totals so every block counts on exactly one UTC day. BRK's own
+# *_sum_24h series are rolling 24-hour windows ending at each day's last block; they can
+# count a block on two days and run about 0.6% a year high.
+BRK_DAILY_FLOWS = {
+    "coinbase_sum_24h": "coinbase_cumulative",
+    "coinbase_sum_24h_usd": "coinbase_cumulative_usd",
+    "subsidy_sum_24h": "subsidy_cumulative",
+    "fees_sum_24h": "fees_cumulative",
+    "fees_sum_24h_usd": "fees_cumulative_usd",
+    "tx_count_sum_24h": "tx_count_cumulative",
+    "transfer_volume_sum_24h_usd": "transfer_volume_cumulative_usd",
+    "coindays_destroyed_sum_24h": "coindays_destroyed_cumulative",
+    "realized_profit_sum_24h": "realized_profit_cumulative",
+    "realized_loss_sum_24h": "realized_loss_cumulative",
+}
+
+# Series that need a Bitcoin price. BRK reports them as 0 before the first traded price
+# (2010-08-16); those rows are blanked. A realized price of 0 means an empty cohort
 # and is blanked wherever it occurs.
 BRK_PRICE_DEPENDENT_METRICS = [
     "price_close",
@@ -433,13 +499,22 @@ BRK_PRICE_DEPENDENT_METRICS = [
     "sth_realized_price",
     "lth_realized_price",
     "fees_sum_24h_usd",
+    "fees_cumulative_usd",
     "coinbase_sum_24h_usd",
+    "coinbase_cumulative_usd",
     "velocity_usd",
     "transfer_volume_sum_24h_usd",
+    "transfer_volume_cumulative_usd",
     "nvt",
     "puell_multiple",
     "realized_profit_sum_24h",
     "realized_loss_sum_24h",
+    "realized_profit_cumulative",
+    "realized_loss_cumulative",
+    "lth_realized_profit_cumulative",
+    "lth_realized_loss_cumulative",
+    "sth_realized_profit_cumulative",
+    "sth_realized_loss_cumulative",
     "net_realized_pnl_sum_24h",
     "supply_in_profit",
     "supply_in_loss",
@@ -472,6 +547,18 @@ SATS_PER_BTC = 100_000_000
 
 # Coin Metrics monthly miner efficiency
 MINER_DATA_SHEET_URL = "https://docs.google.com/spreadsheets/d/1GXaY6XE2mx5jnCu5uJFejwV95a0gYDJYHtDE0lmkGeA/edit?usp=sharing"
+
+# Annual series published in annual_reference_data.csv
+FRED_MEDIAN_INCOME_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=MEHOINUSA646N"
+WORLD_BANK_INDICATOR_URL = "https://api.worldbank.org/v2/country/WLD/indicator/{code}"
+# World Bank indicator code -> published series name
+WORLD_BANK_INDICATORS = {
+    "IT.NET.USER.ZS": "world_internet_users_pct",
+    "SP.POP.TOTL": "world_population",
+}
+
+# The published release. A failed annual fetch reuses that series from the last release.
+RELEASE_BASE_URL = "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv"
 
 
 # =============================================================================

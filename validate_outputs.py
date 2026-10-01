@@ -12,7 +12,9 @@ import sys
 import numpy as np
 import pandas as pd
 
+from annual_data import ANNUAL_REFERENCE_FILE, ANNUAL_SERIES
 from candle_data import CANDLE_FILES, validate_candle_exports
+from etf import ETF_FILES
 from data_definitions import FUNDAMENTALS_TEMPLATE
 from data_definitions import REPORT_DATE as CLOCK_REPORT_DATE
 from data_validation import validate_calendar, validate_candles
@@ -34,6 +36,7 @@ class RowBounds:
 # Row-count bounds: loose for growing histories, tight for fixed-shape tables. They catch
 # truncated, header-only, duplicated and runaway files.
 OUTPUT_RULES = {
+    ANNUAL_REFERENCE_FILE: RowBounds(50, 10_000),
     "cycle_low_data.csv": RowBounds(1, 100_000),
     "drawdown_data.csv": RowBounds(1, 100_000),
     "fundamentals_table.csv": RowBounds(1, 1_000),
@@ -55,7 +58,23 @@ OUTPUT_RULES = {
 }
 
 
+# The ETF files are optional (a release without them still publishes) but checked when present.
+ETF_RULES = {
+    "etf_daily.csv": RowBounds(1_000, 1_000_000),
+    "etf_totals_daily.csv": RowBounds(100, 100_000),
+    "etf_quarterly.csv": RowBounds(10, 100_000),
+    "etf_snapshots.csv": RowBounds(1, 1_000_000),
+    "etf_nav_history.csv": RowBounds(1, 1_000_000),
+    "etf_filing_counts.csv": RowBounds(1, 100_000),
+}
+
+
 REQUIRED_COLUMNS = {
+    "etf_daily.csv": {"fund", "date", "btc_held", "btc_source", "flow_btc", "flow_usd", "market_share_pct"},
+    "etf_totals_daily.csv": {"date", "total_btc", "total_flow_btc", "cumulative_flow_usd", "flow_weighted_entry_price"},
+    "etf_quarterly.csv": {"fund", "quarter_end", "btc", "cost_usd", "cost_per_btc"},
+    "etf_snapshots.csv": {"fund", "as_of", "btc_held"},
+    ANNUAL_REFERENCE_FILE: {"series", "year", "value", "unit", "source", "source_url", "retrieved_date"},
     "cycle_low_data.csv": {"days_since_cycle_low", "index_value", "Cycle"},
     "drawdown_data.csv": {"days_since_ath", "drawdown_pct", "Cycle"},
     "fundamentals_table.csv": {"Section", "Metric", "Current Value"},
@@ -104,6 +123,9 @@ SUMMARY_HISTORY_METRICS = {
 
 
 RETAINED_OUTPUTS = {
+    "etf_daily.csv",
+    "etf_totals_daily.csv",
+    ANNUAL_REFERENCE_FILE,
     "fundamentals_table.csv",
     "cycle_low_data.csv",
     "halving_data.csv",
@@ -730,7 +752,9 @@ def validate_outputs(
     """Return validation errors for generated outputs; an empty list means success."""
     output_dir = Path(output_dir)
     expected_report_date = pd.to_datetime(expected_report_date).normalize()
-    rules = OUTPUT_RULES if rules is None else rules
+    if rules is None:
+        rules = dict(OUTPUT_RULES)
+        rules.update({name: bounds for name, bounds in ETF_RULES.items() if (output_dir / name).is_file()})
     errors: list[str] = []
     retained_frames: dict[str, pd.DataFrame] = {}
 
@@ -776,6 +800,8 @@ def validate_outputs(
     _validate_report_agreement(retained_frames, expected_report_date, errors)
     _validate_review_contracts(retained_frames, output_dir, expected_report_date, errors)
     _validate_performance_rows(retained_frames, errors)
+    _validate_annual_reference(retained_frames, errors)
+    _validate_etf(retained_frames, errors)
     if any((output_dir / name).exists() for name in CANDLE_FILES):
         try:
             master = pd.read_csv(output_dir / "master_metrics_data.csv.gz", index_col=0, parse_dates=True, low_memory=False)
@@ -784,6 +810,33 @@ def validate_outputs(
             errors.append(f"Chart candle exports: {exc}")
     _validate_release_manifest(output_dir, expected_report_date, errors, require_release_manifest)
     return errors
+
+
+def _validate_annual_reference(frames, errors):
+    """Every annual series is present, once per year."""
+    table = frames.get(ANNUAL_REFERENCE_FILE)
+    if table is None or "series" not in table or "year" not in table:
+        return
+    missing = sorted(set(ANNUAL_SERIES) - set(table["series"]))
+    if missing:
+        errors.append(f"{ANNUAL_REFERENCE_FILE}: missing series {missing}")
+    if table.duplicated(["series", "year"]).any():
+        errors.append(f"{ANNUAL_REFERENCE_FILE}: a series repeats a year")
+
+
+def _validate_etf(frames, errors):
+    """Holdings are non-negative, each fund appears once a day, and totals equal the funds' sum."""
+    daily, totals = frames.get("etf_daily.csv"), frames.get("etf_totals_daily.csv")
+    if daily is None or totals is None:
+        return
+    if daily.duplicated(["fund", "date"]).any():
+        errors.append("etf_daily.csv: a fund repeats a date")
+    if pd.to_numeric(daily["btc_held"], errors="coerce").lt(0).any():
+        errors.append("etf_daily.csv: negative holdings")
+    summed = daily.groupby("date")["btc_held"].sum()
+    published = totals.set_index("date")["total_btc"]
+    if not np.allclose(summed.reindex(published.index), published, rtol=1e-6):
+        errors.append("etf_totals_daily.csv: totals disagree with the funds in etf_daily.csv")
 
 
 # Fitted coefficients published in the manifest instead of as constant columns.
@@ -822,6 +875,11 @@ def _validate_release_manifest(output_dir, expected_report_date, errors, require
         isinstance(files, dict) and any(name in files for name in CANDLE_FILES)
     ):
         expected_files.update(CANDLE_FILES)
+    # The ETF files are listed whenever the release has them.
+    if any((Path(output_dir) / name).exists() for name in ETF_FILES) or (
+        isinstance(files, dict) and any(name in files for name in ETF_FILES)
+    ):
+        expected_files.update(ETF_FILES)
     if not isinstance(files, dict) or set(files) != expected_files:
         errors.append("release_manifest.json: file inventory does not match generated outputs")
         return

@@ -95,9 +95,22 @@ jobs:
       - name: Run regression tests
         run: uv run --no-sync python -m unittest discover -s tests -t . -v
 
+      # FBTC's daily holdings are a PDF, and BTCW's are read in a headless browser.
+      - name: Install ETF reader tools
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q poppler-utils
+          npm install --no-save --no-package-lock --prefix "$RUNNER_TEMP/playwright" playwright-core@1.63.0
+          node "$RUNNER_TEMP/playwright/node_modules/playwright-core/cli.js" install --with-deps chromium
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/playwright/node_modules/playwright-core/index.mjs" >> "$GITHUB_ENV"
+          echo "NODE_BINARY=node" >> "$GITHUB_ENV"
+
       - name: Generate and validate reports
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: |
+          # The ETF history and the annual fallbacks are carried from the committed release.
+          cp -R csv "$RUNNER_TEMP/previous-release"
+          export PREVIOUS_RELEASE_DIR="$RUNNER_TEMP/previous-release"
           # Start empty so a retired output cannot linger in the artifact.
           rm -rf csv && mkdir csv
           uv run --no-sync python main.py

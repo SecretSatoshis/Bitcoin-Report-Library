@@ -15,7 +15,9 @@ if __name__ != "__main__":
 
 import pandas as pd
 
+import annual_data
 import cycles
+import etf
 import freshness
 import metrics
 import report_tables
@@ -49,6 +51,8 @@ DAILY_OHLC_START = "2009-01-03"
 # --- Fetch and check sources ---
 
 data = sources.get_data(TICKERS, MARKET_DATA_START_DATE)
+annual_reference = annual_data.get_annual_reference_data(REPORT_DATE)
+etf_files = etf.get_etf_files(REPORT_DATE)
 
 freshness.warn_on_stale_market_data(data, REPORT_DATE)
 # Correlations need each asset's real trading days, so capture them before the fill.
@@ -128,6 +132,8 @@ tables = {
     "drawdown_data.csv": cycles.compute_drawdowns(report_data),
     "cycle_low_data.csv": cycles.compute_cycle_lows(report_data),
     "halving_data.csv": cycles.compute_halving_days(report_data),
+    annual_data.ANNUAL_REFERENCE_FILE: annual_reference,
+    **etf_files,
 }
 # Published with their date index.
 indexed_tables = {
