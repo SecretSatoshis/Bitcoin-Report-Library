@@ -126,6 +126,8 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
+    outputs:
+      generated_at: ${{ steps.release.outputs.generated_at }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -152,3 +154,42 @@ jobs:
           gh auth setup-git
           git pull --rebase origin main
           git push origin HEAD:main
+
+      - name: Record the release
+        id: release
+        run: python3 -c "import json; print('generated_at=' + json.load(open('csv/release_manifest.json'))['generated_at'])" >> "$GITHUB_OUTPUT"
+
+  # The Chart Library builds from the release on GitHub Pages, so it is rebuilt only once
+  # Pages serves this run's release; an earlier build would chart the previous one.
+  charts:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions: {}
+    steps:
+      - name: Wait for GitHub Pages to serve the release
+        env:
+          GENERATED_AT: ${{ needs.publish.outputs.generated_at }}
+        run: |
+          python3 - <<'PY'
+          import json, os, time, urllib.request
+          url = "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/release_manifest.json"
+          for _ in range(48):
+              try:
+                  with urllib.request.urlopen(f"{url}?t={time.time_ns()}", timeout=30) as response:
+                      if json.load(response).get("generated_at") == os.environ["GENERATED_AT"]:
+                          print("Pages serves the new release")
+                          break
+              except OSError as error:
+                  print(f"Retrying after {error}")
+              time.sleep(15)
+          else:
+              raise SystemExit("GitHub Pages did not serve the new release within 12 minutes")
+          PY
+
+      - name: Ask Vercel to rebuild the Chart Library
+        env:
+          DEPLOY_HOOK: ${{ secrets.CHARTS_DEPLOY_HOOK_URL }}
+        run: |
+          test -n "$DEPLOY_HOOK" || { echo "::error::CHARTS_DEPLOY_HOOK_URL secret is not set"; exit 1; }
+          curl --fail --silent --show-error -X POST "$DEPLOY_HOOK" > /dev/null

@@ -119,7 +119,8 @@ master = pd.read_csv(f"{base}/master_metrics_data.csv.gz", index_col="date",
 
 GitHub Actions runs the pipeline daily, scheduled for 00:30 UTC. Each run tests the code,
 builds and validates the release, and commits it to `csv/`, which GitHub Pages serves. The
-dashboard and Chart Library pick up each new release automatically.
+dashboard rebuilds from that commit, and once Pages serves the release the run asks the Chart
+Library to rebuild.
 
 ## License
 
