@@ -10,6 +10,8 @@
 <meta name="theme-color" content="#08080c">
 <link rel="icon" href="https://secretsatoshis.com/favicon.ico" sizes="32x32">
 <link rel="apple-touch-icon" href="https://secretsatoshis.com/assets/images/favicon.png">
+<link rel="stylesheet" href="https://secretsatoshis.com/css/fonts.css?v=1">
+<link rel="stylesheet" href="https://secretsatoshis.com/css/style.css?v=25">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Secret Satoshis">
 <meta property="og:title" content="Bitcoin Data Release | Secret Satoshis">
@@ -215,15 +217,15 @@
 </script>
 <style>
   :root { color-scheme: dark; }
-  body { margin:0; background:#08080c; color:#e4e4ef;
+  .wrap { box-sizing:content-box; max-width:1000px; margin:0 auto;
+         padding:calc(var(--nav-h) + 64px) clamp(20px,5vw,48px) 96px;
          font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:15px; line-height:1.65; }
-  .wrap { max-width:1000px; margin:0 auto; padding:64px clamp(20px,5vw,48px) 96px; }
-  .eyebrow { font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:#5a5a74; margin:0 0 16px; }
-  .eyebrow span { color:#F7931A; }
-  h1 { font-size:clamp(28px,5vw,40px); line-height:1.1; margin:0 0 20px; letter-spacing:-.02em; }
-  p { max-width:66ch; color:#9090a8; font-weight:300; }
-  a { color:#F7931A; text-underline-offset:3px; }
-  h2 { font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#5a5a74; margin:48px 0 14px; }
+  .wrap .eyebrow { font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:#5a5a74; margin:0 0 16px; }
+  .wrap .eyebrow span { color:#F7931A; }
+  .wrap h1 { font-size:clamp(28px,5vw,40px); line-height:1.1; margin:0 0 20px; letter-spacing:-.02em; }
+  .wrap p { max-width:66ch; margin:1em 0; color:#9090a8; font-weight:300; }
+  .wrap a { color:#F7931A; text-decoration:underline; text-underline-offset:3px; }
+  .wrap h2 { font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#5a5a74; margin:48px 0 14px; }
   .tablewrap { overflow-x:auto; border:1px solid #1c1c2e; background:#0e0e16; }
   table { border-collapse:collapse; width:100%; min-width:720px; font-size:13px; }
   th { text-align:left; font-size:10px; letter-spacing:.14em; text-transform:uppercase;
@@ -233,11 +235,25 @@
   td.f { color:#e4e4ef; }
   td.f code { display:inline-block; margin-top:3px; font-size:11px; color:#5a5a74; }
   td.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
-  footer { margin-top:56px; padding-top:22px; border-top:1px solid #1c1c2e; font-size:12px; color:#5a5a74; }
+  .wrap .release-updated { margin:56px 0 0; padding-top:22px; border-top:1px solid #1c1c2e; font-size:12px; color:#5a5a74; }
 </style>
 </head>
-<body>
-  <div class="wrap">
+<body id="top">
+  <a class="skip-link" href="#main-content">Skip to content</a>
+<nav aria-label="Primary navigation">
+  <a href="https://secretsatoshis.com/" class="nav-logo" aria-label="Secret Satoshis home">
+    <span class="accent">//</span> <span class="nav-typewriter">SECRET SATOSHIS</span>
+  </a>
+  <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false" aria-controls="navLinks">≡</button>
+  <ul class="nav-links" id="navLinks">
+    <li><a href="https://newsletter.secretsatoshis.com/p/start-here" target="_blank" rel="noopener noreferrer">Start Here</a></li>
+    <li><a href="https://newsletter.secretsatoshis.com/" target="_blank" rel="noopener noreferrer">Newsletter</a></li>
+    <li><a href="https://chatgpt.com/g/g-BZXtVdU6M-agent-21" target="_blank" rel="noopener noreferrer">Agent 21</a></li>
+    <li><a href="https://charts.secretsatoshis.com/">Charts</a></li>
+    <li><a href="https://dashboard.secretsatoshis.com/">Dashboard</a></li>
+  </ul>
+</nav>
+  <main class="wrap" id="main-content">
     <p class="eyebrow"><span>//</span> Open Data</p>
     <h1>Bitcoin Data Release</h1>
     <p>
@@ -456,10 +472,55 @@
       </table>
     </div>
 
-    <footer>
-      Updated 2026-09-30. Created by <a href="https://treybrunson.com/">Trey Brunson</a>.
-      Don't trust. Verify.
-    </footer>
+    <p class="release-updated">Updated 2026-09-30.</p>
+  </main>
+<footer class="section-divider">
+  <div class="footer-inner">
+    <div class="footer-top">
+      <div>
+        <a href="https://secretsatoshis.com/" class="footer-brand" aria-label="Secret Satoshis home">
+          <span class="accent">//</span> SECRET SATOSHIS
+        </a>
+        <p class="footer-tagline">AI-native Bitcoin market intelligence</p>
+      </div>
+      <div>
+        <h2 class="footer-col-title">Platform</h2>
+        <ul class="footer-links">
+          <li><a href="https://newsletter.secretsatoshis.com/p/start-here" target="_blank" rel="noopener noreferrer">Start Here</a></li>
+          <li><a href="https://chatgpt.com/g/g-BZXtVdU6M-agent-21" target="_blank" rel="noopener noreferrer">Agent 21</a></li>
+          <li><a href="https://newsletter.secretsatoshis.com/" target="_blank" rel="noopener noreferrer">Newsletter</a></li>
+        </ul>
+      </div>
+      <div>
+        <h2 class="footer-col-title">Data</h2>
+        <ul class="footer-links">
+          <li><a href="https://dashboard.secretsatoshis.com/">Market Dashboard</a></li>
+          <li><a href="https://charts.secretsatoshis.com/">Chart Library</a></li>
+          <li><a href="https://github.com/SecretSatoshis" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+        </ul>
+      </div>
+      <div>
+        <h2 class="footer-col-title">Connect</h2>
+        <ul class="footer-links">
+          <li><a href="https://x.com/SecretSatoshis" target="_blank" rel="noopener noreferrer">𝕏 @SecretSatoshis</a></li>
+          <li><a href="https://www.linkedin.com/company/secretsatoshis/" target="_blank" rel="noopener noreferrer">LinkedIn</a></li>
+          <li><a href="https://treybrunson.com/" target="_blank" rel="noopener noreferrer">TreyBrunson.com</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <div class="footer-credit">
+        <span>© 2026 Secret Satoshis · Don't trust. Verify.</span>
+        <span>Created by <a href="https://treybrunson.com/" target="_blank" rel="noopener noreferrer">Trey Brunson</a>.</span>
+      </div>
+      <div class="footer-legal">
+        <a href="https://secretsatoshis.com/privacy.html">Privacy</a>
+        <a href="https://newsletter.secretsatoshis.com/p/secret-satoshis-newsletter-disclaimer" target="_blank" rel="noopener noreferrer">Disclaimer</a>
+      </div>
+    </div>
   </div>
+</footer>
+<script src="https://secretsatoshis.com/js/main.js?v=18"></script>
 </body>
 </html>

@@ -143,6 +143,11 @@ def write_sitemap(files: list[dict], last: str) -> None:
 
 def write_index(files: list[dict], first: str, last: str) -> None:
     esc = html.escape
+    # Reuse the homepage shell; its assets provide the existing styles and mobile menu.
+    templates = ROOT / "templates"
+    navigation = (templates / "site-nav.html").read_text(encoding="utf-8").strip()
+    footer = (templates / "site-footer.html").read_text(encoding="utf-8").strip()
+    footer = footer.replace("{{YEAR}}", esc(last[:4]))
     rows = "\n".join(
         "        <tr>\n"
         f'          <td class="f"><a href="csv/{f["name"]}">{esc(f["label"])}</a>'
@@ -171,6 +176,8 @@ def write_index(files: list[dict], first: str, last: str) -> None:
 <meta name="theme-color" content="#08080c">
 <link rel="icon" href="{SITE}/favicon.ico" sizes="32x32">
 <link rel="apple-touch-icon" href="{SITE}/assets/images/favicon.png">
+<link rel="stylesheet" href="{SITE}/css/fonts.css?v=1">
+<link rel="stylesheet" href="{SITE}/css/style.css?v=25">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Secret Satoshis">
 <meta property="og:title" content="Bitcoin Data Release | Secret Satoshis">
@@ -185,15 +192,15 @@ def write_index(files: list[dict], first: str, last: str) -> None:
 </script>
 <style>
   :root {{ color-scheme: dark; }}
-  body {{ margin:0; background:#08080c; color:#e4e4ef;
+  .wrap {{ box-sizing:content-box; max-width:1000px; margin:0 auto;
+         padding:calc(var(--nav-h) + 64px) clamp(20px,5vw,48px) 96px;
          font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:15px; line-height:1.65; }}
-  .wrap {{ max-width:1000px; margin:0 auto; padding:64px clamp(20px,5vw,48px) 96px; }}
-  .eyebrow {{ font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:#5a5a74; margin:0 0 16px; }}
-  .eyebrow span {{ color:#F7931A; }}
-  h1 {{ font-size:clamp(28px,5vw,40px); line-height:1.1; margin:0 0 20px; letter-spacing:-.02em; }}
-  p {{ max-width:66ch; color:#9090a8; font-weight:300; }}
-  a {{ color:#F7931A; text-underline-offset:3px; }}
-  h2 {{ font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#5a5a74; margin:48px 0 14px; }}
+  .wrap .eyebrow {{ font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:#5a5a74; margin:0 0 16px; }}
+  .wrap .eyebrow span {{ color:#F7931A; }}
+  .wrap h1 {{ font-size:clamp(28px,5vw,40px); line-height:1.1; margin:0 0 20px; letter-spacing:-.02em; }}
+  .wrap p {{ max-width:66ch; margin:1em 0; color:#9090a8; font-weight:300; }}
+  .wrap a {{ color:#F7931A; text-decoration:underline; text-underline-offset:3px; }}
+  .wrap h2 {{ font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#5a5a74; margin:48px 0 14px; }}
   .tablewrap {{ overflow-x:auto; border:1px solid #1c1c2e; background:#0e0e16; }}
   table {{ border-collapse:collapse; width:100%; min-width:720px; font-size:13px; }}
   th {{ text-align:left; font-size:10px; letter-spacing:.14em; text-transform:uppercase;
@@ -203,11 +210,13 @@ def write_index(files: list[dict], first: str, last: str) -> None:
   td.f {{ color:#e4e4ef; }}
   td.f code {{ display:inline-block; margin-top:3px; font-size:11px; color:#5a5a74; }}
   td.num {{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }}
-  footer {{ margin-top:56px; padding-top:22px; border-top:1px solid #1c1c2e; font-size:12px; color:#5a5a74; }}
+  .wrap .release-updated {{ margin:56px 0 0; padding-top:22px; border-top:1px solid #1c1c2e; font-size:12px; color:#5a5a74; }}
 </style>
 </head>
-<body>
-  <div class="wrap">
+<body id="top">
+  <a class="skip-link" href="#main-content">Skip to content</a>
+{navigation}
+  <main class="wrap" id="main-content">
     <p class="eyebrow"><span>//</span> Open Data</p>
     <h1>Bitcoin Data Release</h1>
     <p>
@@ -238,11 +247,10 @@ def write_index(files: list[dict], first: str, last: str) -> None:
       </table>
     </div>
 
-    <footer>
-      Updated {last}. Created by <a href="https://treybrunson.com/">Trey Brunson</a>.
-      Don't trust. Verify.
-    </footer>
-  </div>
+    <p class="release-updated">Updated {last}.</p>
+  </main>
+{footer}
+<script src="{SITE}/js/main.js?v=18"></script>
 </body>
 </html>
 """, encoding="utf-8")
