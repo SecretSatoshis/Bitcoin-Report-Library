@@ -6,84 +6,72 @@
       "2016-07-09",
       "2020-05-11",
       "2024-04-20"
-    ],
-    "orientation": "v"
+    ]
   },
   {
     "name": "MtGox Launch",
     "dates": [
       "2010-07-01"
-    ],
-    "orientation": "v"
+    ]
   },
   {
     "name": "MtGox Hack",
     "dates": [
       "2011-06-11"
-    ],
-    "orientation": "v"
+    ]
   },
   {
     "name": "MtGox Bankrupt",
     "dates": [
       "2014-02-01"
-    ],
-    "orientation": "v"
+    ]
   },
   {
     "name": "BitLicense",
     "dates": [
       "2015-08-08"
-    ],
-    "orientation": "v"
+    ]
   },
   {
     "name": "CME Futures",
     "dates": [
       "2017-12-17"
-    ],
-    "orientation": "v"
+    ]
   },
   {
     "name": "Bitcoin Winter",
     "dates": [
       "2018-12-15"
-    ],
-    "orientation": "v"
+    ]
   },
   {
     "name": "Coinbase IPO",
     "dates": [
       "2021-04-14"
-    ],
-    "orientation": "v"
+    ]
   },
   {
     "name": "FTX Bankrupt",
     "dates": [
       "2022-11-11"
-    ],
-    "orientation": "v"
+    ]
   },
   {
     "name": "Spot ETF Launch",
     "dates": [
       "2024-01-11"
-    ],
-    "orientation": "v"
+    ]
   },
   {
     "name": "U.S. Strategic Bitcoin Reserve",
     "dates": [
       "2025-03-06"
-    ],
-    "orientation": "v"
+    ]
   },
   {
     "name": "Strategy Sells Bitcoin",
     "dates": [
       "2026-06-29"
-    ],
-    "orientation": "v"
+    ]
   }
 ]
