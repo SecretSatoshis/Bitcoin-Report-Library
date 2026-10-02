@@ -1,5 +1,5 @@
-// Read WisdomTree's BTCW holdings and NAV history from inside a headless browser, since every
-// WisdomTree host sits behind a Cloudflare challenge. Usage: node btcw.mjs <playwright index.mjs> <page url>
+// Read WisdomTree's BTCW holdings and NAV history from inside a headless browser, since the fund
+// data loads only within its web page. Usage: node btcw.mjs <playwright index.mjs> <page url>
 const [module, page] = process.argv.slice(2);
 const { chromium } = await import(module);
 

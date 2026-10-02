@@ -138,8 +138,9 @@ export const correlationName = (row: Row) =>
 export function readCorrelationMatrix(t: Tables, date: string): CorrelationMatrices | null {
   const rows = t[CORRELATION_FILE];
   if (!rows) return null;
-  if (rows.length !== 51 || rows.some((r) => !correlationPeriods.includes(Number(r["Window Days"]))))
-    throw new Error(`${CORRELATION_FILE}: expected 17 assets for each 30/90/365-day window`);
+  const assets = correlationGroups.flatMap((group) => group.tickers).length;
+  if (rows.length !== assets * correlationPeriods.length || rows.some((r) => !correlationPeriods.includes(Number(r["Window Days"]))))
+    throw new Error(`${CORRELATION_FILE}: expected ${assets} assets for each 30/90/365-day window`);
   return Object.fromEntries(correlationPeriods.map((period) => [period,
     readCorrelationWindow(rows.filter((r) => Number(r["Window Days"]) === period), date, period, t["performance_table.csv"]),
   ]));

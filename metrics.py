@@ -598,13 +598,13 @@ def observed_market_values(data: pd.DataFrame, columns: list) -> pd.DataFrame:
     return frame
 
 
-def _paired_return_correlation(btc, asset, as_of, period):
+def _paired_return_correlation(first, second, as_of, period):
     """Pearson return correlation, measured between the two series' shared observations.
 
     A Friday-to-Monday equity return is paired with BTC's Friday-to-Monday return. NaN
-    unless the data covers the whole window and the asset traded recently.
+    unless both series cover the whole window and traded recently.
     """
-    pair = pd.concat([btc, asset], axis=1).loc[:as_of].dropna()
+    pair = pd.concat([first, second], axis=1).loc[:as_of].dropna()
     if pair.empty:
         return np.nan
     window_start = as_of - pd.Timedelta(days=period)

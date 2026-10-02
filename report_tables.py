@@ -506,7 +506,7 @@ CORRELATION_MATRIX_PERIODS = (30, 90, 365)
 
 
 def create_correlation_matrix_table(correlations_data, report_date):
-    """30/90/365-day matrices for Bitcoin and 16 assets, in window and group order."""
+    """30/90/365-day matrices for Bitcoin and the performance-table assets, in window and group order."""
     columns = [column for _, _, _, column in CORRELATION_ASSETS]
     tickers = [ticker for _, _, ticker, _ in CORRELATION_ASSETS]
     tables = []

@@ -84,12 +84,12 @@ function table(
   return `<div class="table-scroll" role="region" aria-label="${escape(label)}" tabindex="0"><table class="${classes}"><thead><tr>${headings.map((h) => `<th scope="col">${escape(h)}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c, i) => (i === 0 ? `<th scope="row">${c}</th>` : `<td>${c}</td>`)).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Yearly"];
-// Diverging scale: red losses, soft grey near zero, green gains. Fixed bounds keep
-// colours comparable across years.
+// Fixed bounds keep return colours comparable across years.
 function heatColor(n: number, yearly: boolean): { background: string; text: string } {
   const bound = yearly ? (n < 0 ? 80 : 150) : 40;
   return divergingColor(n, bound);
 }
+// Diverging scale: red below zero, soft grey near zero, green above; full colour at ±bound.
 function divergingColor(n: number, bound: number): { background: string; text: string } {
   const weight = Math.min(1, Math.abs(n) / bound);
   const neutral = [170, 172, 182],
@@ -124,7 +124,7 @@ export function correlationMatrix(rows: Row[] | null, period = 90): string {
     }).join("");
     return `<tbody>${body}</tbody>`;
   }).join("");
-  return `<div class="table-scroll correlation-scroll" role="region" aria-label="${period}-day asset correlation matrix" tabindex="0"><table class="heatmap correlation-matrix"><caption class="sr-only">${period}-day Pearson return correlations for Bitcoin and 16 assets, grouped on both axes. Each pair appears once in the lower triangle.</caption><colgroup><col class="correlation-group-column"><col class="correlation-ticker-column"></colgroup>${correlationGroups.map((g) => `<colgroup span="${g.tickers.length}"></colgroup>`).join("")}<thead><tr><th rowspan="2" scope="col" class="correlation-group">Asset group</th><th rowspan="2" scope="col" class="correlation-ticker">Asset</th>${correlationGroups.map((g) => `<th colspan="${g.tickers.length}" scope="colgroup" class="correlation-boundary">${escape(g.title)}</th>`).join("")}</tr><tr>${tickers.map((t) => `<th id="corr-${period}-col-${escape(t)}" scope="col" class="${starts.has(t) ? "correlation-boundary" : ""}" title="${escape(rows.find((r) => r.Ticker === t)!.Asset)}">${escape(correlationLabel(t))}</th>`).join("")}</tr></thead>${groups}</table></div><div class="correlation-legend" aria-label="Correlation color scale"><span class="correlation-scale" aria-hidden="true"></span><span>−1 <span class="muted">Opposite</span></span><span>0 <span class="muted">Uncorrelated</span></span><span>+1 <span class="muted">Together</span></span></div><p class="methodology">Pearson return correlations over ${period} calendar days, using shared observation dates. Each pair appears once; — indicates insufficient data. DXY = DX-Y.NYB · GSCI = ^SPGSCI.</p>`;
+  return `<div class="table-scroll correlation-scroll" role="region" aria-label="${period}-day asset correlation matrix" tabindex="0"><table class="heatmap correlation-matrix"><caption class="sr-only">${period}-day Pearson return correlations for Bitcoin and ${tickers.length - 1} assets, grouped on both axes. Each pair appears once in the lower triangle.</caption><colgroup><col class="correlation-group-column"><col class="correlation-ticker-column"></colgroup>${correlationGroups.map((g) => `<colgroup span="${g.tickers.length}"></colgroup>`).join("")}<thead><tr><th rowspan="2" scope="col" class="correlation-group">Asset group</th><th rowspan="2" scope="col" class="correlation-ticker">Asset</th>${correlationGroups.map((g) => `<th colspan="${g.tickers.length}" scope="colgroup" class="correlation-boundary">${escape(g.title)}</th>`).join("")}</tr><tr>${tickers.map((t) => `<th id="corr-${period}-col-${escape(t)}" scope="col" class="${starts.has(t) ? "correlation-boundary" : ""}" title="${escape(rows.find((r) => r.Ticker === t)!.Asset)}">${escape(correlationLabel(t))}</th>`).join("")}</tr></thead>${groups}</table></div><div class="correlation-legend" aria-label="Correlation color scale"><span class="correlation-scale" aria-hidden="true"></span><span>−1 <span class="muted">Opposite</span></span><span>0 <span class="muted">Uncorrelated</span></span><span>+1 <span class="muted">Together</span></span></div><p class="methodology">Pearson return correlations over ${period} calendar days, using shared observation dates. Each pair appears once; — indicates insufficient data. DXY = DX-Y.NYB · GSCI = ^SPGSCI.</p>`;
 }
 function correlationSection(d: DashboardData): string {
   if (!d.correlations) return correlationMatrix(null);

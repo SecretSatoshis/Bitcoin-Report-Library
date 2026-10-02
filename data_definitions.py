@@ -310,7 +310,8 @@ CHANGE_COLUMNS = [
 # Columns that get a year-over-year change (Chart Library's YoY chart).
 YOY_COLUMNS = ["price_close"]
 
-# Columns correlated with Bitcoin over 7, 30, 90 and 365 days.
+# Market series whose real observations feed the correlations: Bitcoin against each over
+# 7, 30, 90 and 365 days, and the 30/90/365-day matrices (report_tables.CORRELATION_ASSETS).
 CORRELATION_COLUMNS = [
     "price_close",
     "AAPL_close",

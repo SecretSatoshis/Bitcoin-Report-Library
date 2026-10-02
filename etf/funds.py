@@ -324,8 +324,8 @@ def btco_nav_history() -> pd.DataFrame:
 
 @cache
 def _btcw_page() -> dict:
-    """WisdomTree sits behind a Cloudflare challenge, so BTCW is read in a headless browser,
-    once per run for both today's holdings and the NAV history.
+    """WisdomTree's fund data loads only inside its web page, so BTCW is read in a headless
+    browser, once per run for both today's holdings and the NAV history.
 
     Needs PLAYWRIGHT_MODULE (the path to playwright or playwright-core's index.mjs) and Node
     18 or newer from NODE_BINARY (default: the newest nvm install, else `node` on PATH).
@@ -351,7 +351,7 @@ def btcw_current() -> Snapshot:
 
 
 def btcw_history() -> pd.DataFrame:
-    """WisdomTree's daily NAV history: NAV, shares outstanding and AUM (in thousands)."""
+    """WisdomTree's daily NAV history: NAV and shares outstanding; net assets is their product."""
     rows = [row for row in _btcw_page()["navHistory"] if row.get("nav") and row.get("sharesOutstanding")]
     frame = pd.DataFrame({
         "date": [row["dt"][:10] for row in rows],

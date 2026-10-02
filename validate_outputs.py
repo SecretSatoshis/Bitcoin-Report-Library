@@ -38,7 +38,8 @@ class RowBounds:
 # Row-count bounds: loose for growing histories, tight for fixed-shape tables. They catch
 # truncated, header-only, duplicated and runaway files.
 OUTPUT_RULES = {
-    "correlation_matrix.csv": RowBounds(51, 51),
+    "correlation_matrix.csv": RowBounds(len(CORRELATION_ASSETS) * len(CORRELATION_MATRIX_PERIODS),
+                                        len(CORRELATION_ASSETS) * len(CORRELATION_MATRIX_PERIODS)),
     ANNUAL_REFERENCE_FILE: RowBounds(50, 10_000),
     "cycle_low_data.csv": RowBounds(1, 100_000),
     "drawdown_data.csv": RowBounds(1, 100_000),
@@ -825,8 +826,9 @@ def _validate_correlation_matrix(frames, report_date, errors):
     if table is None or not REQUIRED_COLUMNS[name].issubset(table.columns):
         return
     periods = pd.to_numeric(table["Window Days"], errors="coerce")
-    if len(table) != 51 or not periods.isin(CORRELATION_MATRIX_PERIODS).all() or set(periods) != set(CORRELATION_MATRIX_PERIODS):
-        errors.append(f"{name}: expected 17 assets for each 30/90/365-day window")
+    if (len(table) != len(CORRELATION_ASSETS) * len(CORRELATION_MATRIX_PERIODS)
+            or not periods.isin(CORRELATION_MATRIX_PERIODS).all() or set(periods) != set(CORRELATION_MATRIX_PERIODS)):
+        errors.append(f"{name}: expected {len(CORRELATION_ASSETS)} assets for each 30/90/365-day window")
         return
     for period in CORRELATION_MATRIX_PERIODS:
         _validate_correlation_window(table.loc[periods.eq(period)], frames, report_date, period, errors)

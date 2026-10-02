@@ -203,13 +203,15 @@ def build_tables(inputs: dict[str, pd.DataFrame], through: pd.Timestamp) -> dict
     # A settlement-dated fund's file for the day after the cutoff holds the cutoff's trades.
     snapshots = _trade_date_snapshots(snapshots, calendar.union(pd.DatetimeIndex([through + pd.offsets.BDay(1)])))
     snapshots = snapshots[snapshots["date"] <= through]
-    # A quarter end that falls on a weekend or holiday belongs to the last trading day before it.
     sec = sec[sec["quarter_end"] <= through]
+    # A quarter end that falls on a weekend or holiday belongs to the last trading day before it.
     sec["trade_date"] = calendar[np.clip(calendar.searchsorted(sec["quarter_end"], side="right") - 1, 0, None)]
     nav_only = {fund: group.set_index("date")["nav"].sort_index() for fund, group in nav_history.groupby("fund")}
 
     prices = _reference_prices(histories)
+    # Funds whose own index is not published are priced at VanEck's index, else 21Shares'.
     fallback = prices.get(funds.MARKETVECTOR, prices.get(funds.BRRNY)).reindex(calendar).ffill()
+    fallback_basis = f"{'VanEck' if funds.MARKETVECTOR in prices else '21Shares'} 4pm index (fallback)"
     index_prices = {index: series.reindex(calendar) for index, series in prices.items()}
     history = histories.copy()
     own = pd.Series([index_prices.get(funds.FUND_INDEX[f], pd.Series(dtype=float)).get(d, np.nan)
@@ -247,7 +249,7 @@ def build_tables(inputs: dict[str, pd.DataFrame], through: pd.Timestamp) -> dict
             frame.loc[frame.index > latest, "btc_source"] = "carried forward"
         own = index_prices.get(funds.FUND_INDEX[fund], pd.Series(np.nan, index=calendar))
         frame["price_usd"] = own.fillna(fallback)
-        frame["price_basis"] = np.where(own.notna(), funds.FUND_INDEX[fund], "VanEck 4pm index (fallback)")
+        frame["price_basis"] = np.where(own.notna(), funds.FUND_INDEX[fund], fallback_basis)
         frame = frame[frame["btc_held"].notna()].copy()
         exact = snapshots[snapshots.fund == fund].set_index("date")
         if "shares_outstanding" not in frame:
