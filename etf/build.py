@@ -140,7 +140,7 @@ def _interpolated_fund(fund, nav_only, snapshots, sec, calendar, start=None):
     btc[calendar < launch] = np.nan
     filed = sec[(sec.fund == fund) & (sec.coin_source != "fair value / price")]["trade_date"]
     source = pd.Series("interpolated", index=calendar).where(~calendar.isin(exact.index.union(filed)), "exact")
-    return pd.DataFrame({"btc_held": btc, "btc_source": source, "nav": nav.reindex(calendar).ffill()})
+    return pd.DataFrame({"btc_held": btc, "btc_source": source, "nav": nav.reindex(calendar)})
 
 
 def _recover_estimated_coins(sec: pd.DataFrame, issuer: dict) -> pd.DataFrame:
@@ -198,7 +198,8 @@ def build_tables(inputs: dict[str, pd.DataFrame], through: pd.Timestamp) -> dict
 
     calendar = _calendar(histories, snapshots, through)
     if previous is not None:
-        calendar = calendar.union(pd.DatetimeIndex(previous["date"].unique())[lambda d: d <= through])
+        published = pd.DatetimeIndex(previous["date"].unique())
+        calendar = calendar.union(published[published <= through])
     # A settlement-dated fund's file for the day after the cutoff holds the cutoff's trades.
     snapshots = _trade_date_snapshots(snapshots, calendar.union(pd.DatetimeIndex([through + pd.offsets.BDay(1)])))
     snapshots = snapshots[snapshots["date"] <= through]
@@ -253,9 +254,12 @@ def build_tables(inputs: dict[str, pd.DataFrame], through: pd.Timestamp) -> dict
             frame["shares_outstanding"] = exact["shares_outstanding"].reindex(frame.index)
         frame["btc_per_share"] = frame["btc_held"] / frame["shares_outstanding"]
         if funds.FUND_INDEX[fund] == funds.BRRNY and current_only:
-            # NAV / the fund's own index is its bitcoin per share, so shares follow from holdings.
-            frame["btc_per_share"] = frame["nav"] / frame["price_usd"]
-            frame["shares_outstanding"] = frame["btc_held"] / frame["btc_per_share"]
+            # NAV / the fund's own index is its bitcoin per share, so shares follow from holdings
+            # on days without a published count; only a NAV published for that day is used.
+            same_day_nav = nav_only.get(fund, pd.Series(dtype=float)).reindex(frame.index)
+            derived = frame["btc_held"] / (same_day_nav / frame["price_usd"])
+            frame["shares_outstanding"] = frame["shares_outstanding"].fillna(derived)
+            frame["btc_per_share"] = frame["btc_held"] / frame["shares_outstanding"]
         change = frame["btc_held"].diff()
         split = frame.pop("split_factor") if "split_factor" in frame else pd.Series(1.0, index=frame.index)
         created = frame["shares_outstanding"] - frame["shares_outstanding"].shift() * split

@@ -99,6 +99,28 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(values.tolist(), [1.0, 1.0, 2.0, 3.0, 3.0])
 
 
+class CarriedHistoryTests(unittest.TestCase):
+    def test_published_rows_of_funds_without_history_are_kept(self):
+        """A run on the next day keeps the last release's rows and adds the new day."""
+        days = pd.bdate_range("2026-09-28", "2026-10-01")
+        histories = pd.DataFrame([
+            {"fund": fund, "date": day, "shares_outstanding": 100.0, "nav": 50.0, "net_assets": 5000.0,
+             "index_price": 100_000.0 if fund in ("HODL", "ARKB") else float("nan")}
+            for fund in ("IBIT", "GBTC", "HODL", "ARKB") for day in days])
+        previous = pd.DataFrame({"fund": "FBTC", "date": days[:3].strftime("%Y-%m-%d"), "btc_held": [10.0, 11.0, 12.0],
+                                 "btc_source": "rebuilt", "flow_btc": [0.0, 1.0, 1.0]})
+        snapshots = pd.DataFrame({"fund": ["FBTC"], "as_of": ["2026-10-01"], "btc_held": [13.0],
+                                  "shares_outstanding": [1000.0], "btc_per_share": [0.013]})
+        sec = pd.DataFrame(columns=["fund", "quarter_end", "fair_value_usd", "cost_usd", "reported_btc",
+                                    "price_usd", "price_source", "coin_source", "btc", "cost_per_btc"])
+        sec["quarter_end"] = pd.to_datetime(sec["quarter_end"])
+        tables = build.build_tables({"histories": histories, "snapshots": snapshots, "sec": sec,
+                                     "nav_history": pd.DataFrame(columns=["fund", "date", "nav"]),
+                                     "previous_daily": previous}, pd.Timestamp("2026-10-01"))
+        fbtc = tables["etf_daily.csv"].query("fund == 'FBTC'").set_index("date")["btc_held"]
+        self.assertEqual(fbtc.tolist(), [10.0, 11.0, 12.0, 13.0])
+
+
 class ReleaseStepTests(unittest.TestCase):
     def test_a_failed_collection_never_stops_the_release(self):
         previous = {name: pd.DataFrame({"x": [1]}) for name in etf.ETF_FILES}
