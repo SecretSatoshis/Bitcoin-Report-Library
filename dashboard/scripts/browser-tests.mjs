@@ -81,7 +81,7 @@ try {
   );
   if (data.reportDate === reference.date) {
     const tables = await page
-      .locator("table")
+      .locator("table:not(.correlation-matrix)")
       .evaluateAll((tables) =>
         tables.map((t) =>
           [...t.querySelectorAll("tbody tr")].map((r) =>
@@ -237,6 +237,27 @@ try {
     );
   }
   const button = page.locator(".help-button").first();
+  if (data.correlations) {
+    for (const period of [30, 365, 90]) {
+      const tab = page.getByRole("tab", { name: `${period} days`, exact: true });
+      await tab.click();
+      assert.equal(await tab.getAttribute("aria-selected"), "true");
+      assert.equal(await page.locator(`#correlation-panel-${period}`).isVisible(), true);
+      assert.equal(await page.locator("#correlation-matrix-title").textContent(), `${period}-Day Correlation Matrix`);
+      const actual = await page.locator(`#correlation-panel-${period} tbody tr`).evaluateAll((rows) =>
+        rows.map((r) => [...r.querySelectorAll("td")].map((c) => c.textContent.trim())),
+      );
+      const tickers = data.correlations[period].map((r) => r.Ticker);
+      assert.deepEqual(actual, data.correlations[period].map((r, i) => tickers.map((ticker, j) =>
+        j > i ? "" : r[ticker].trim() ? Number(r[ticker]).toFixed(2) : "—",
+      )), `${period}-day values must match the release`);
+    }
+    await page.getByRole("tab", { name: "90 days", exact: true }).press("End");
+    assert.equal(await page.getByRole("tab", { name: "365 days", exact: true }).getAttribute("aria-selected"), "true");
+    await page.getByRole("tab", { name: "365 days", exact: true }).press("Home");
+    await page.getByRole("tab", { name: "30 days", exact: true }).press("ArrowRight");
+    assert.equal(await page.getByRole("tab", { name: "90 days", exact: true }).getAttribute("aria-selected"), "true");
+  }
   await button.focus();
   await button.press("Enter");
   assert.equal(await button.getAttribute("aria-expanded"), "true");
@@ -290,7 +311,17 @@ try {
     staticPage = await disabled.newPage();
   await staticPage.goto(base);
   assert.equal(await staticPage.locator(".metric-card").count(), 9);
-  assert.equal(await staticPage.locator("table").count(), 9);
+  assert.equal(await staticPage.locator("table").count(), 9 + (data.correlations ? 3 : 0));
+  if (data.correlations) {
+    const actual = await staticPage.locator(".correlation-matrix tbody tr").evaluateAll((rows) =>
+      rows.map((row) => [...row.querySelectorAll("td")].map((cell) => cell.textContent.trim())),
+    );
+    const tickers = data.correlations[90].map((row) => row.Ticker);
+    const expected = [30, 90, 365].flatMap((period) => data.correlations[period].map((row, i) => tickers.map((ticker, j) =>
+      j > i ? "" : row[ticker].trim() ? Number(row[ticker]).toFixed(2) : "—",
+    )));
+    assert.deepEqual(actual, expected, "Every matrix cell renders from the verified release without JavaScript");
+  }
   assert.equal(
     await staticPage.evaluate(() => document.documentElement.scrollWidth),
     390,

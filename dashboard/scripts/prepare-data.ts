@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 import {
   createDashboard,
-  inputFiles,
+  releaseInputFiles,
   parseCSV,
   type ReleaseManifest,
   type Tables,
@@ -31,7 +31,7 @@ export function loadVerified(directory: string): {
   if (release.schema_version !== 1 || !release.generated_at || !release.files)
     throw new Error("Invalid release manifest");
   const tables: Tables = {};
-  for (const name of inputFiles) {
+  for (const name of releaseInputFiles(release)) {
     const decoded =
       name === "bitcoin_candles.csv.gz" ? "bitcoin_candles.csv" : name;
     // Candles are read from the verified gzip archive itself.
@@ -100,7 +100,7 @@ export function prepareData(
     report_date: data.reportDate,
     release_generated_at: release.generated_at,
     inputs: Object.fromEntries(
-      inputFiles.map((name) => [name, release.files[name]]),
+      releaseInputFiles(release).map((name) => [name, release.files[name]]),
     ),
     charts: Object.fromEntries(chartFiles.map((f) => [f.path, hash(f.text)])),
     renderer: rendererHashes,

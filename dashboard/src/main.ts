@@ -50,6 +50,28 @@ document
     });
   });
 const links = document.querySelectorAll<HTMLAnchorElement>(".section-nav a");
+const correlationTabs = [...document.querySelectorAll<HTMLButtonElement>("[data-correlation-period]")];
+function selectCorrelationPeriod(button: HTMLButtonElement) {
+  for (const tab of correlationTabs) {
+    const selected = tab === button;
+    tab.setAttribute("aria-selected", String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+    document.getElementById(tab.getAttribute("aria-controls")!)!.hidden = !selected;
+  }
+  document.getElementById("correlation-matrix-title")!.textContent = `${button.dataset.correlationPeriod}-Day Correlation Matrix`;
+}
+for (const [index, tab] of correlationTabs.entries()) {
+  tab.addEventListener("click", () => selectCorrelationPeriod(tab));
+  tab.addEventListener("keydown", (event) => {
+    const next = event.key === "ArrowRight" ? (index + 1) % correlationTabs.length
+      : event.key === "ArrowLeft" ? (index + correlationTabs.length - 1) % correlationTabs.length
+      : event.key === "Home" ? 0 : event.key === "End" ? correlationTabs.length - 1 : null;
+    if (next === null) return;
+    event.preventDefault();
+    selectCorrelationPeriod(correlationTabs[next]);
+    correlationTabs[next].focus();
+  });
+}
 const sections = new IntersectionObserver(
   (entries) => {
     for (const entry of entries)

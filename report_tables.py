@@ -17,6 +17,7 @@ import numpy as np
 from pandas.tseries.offsets import MonthEnd
 import calendar
 from data_validation import OHLC_COLUMNS, assert_ohlc_usable
+from metrics import create_correlation_matrix_data
 from data_definitions import (
     ELECTRICITY_BASE_TARIFF_USD_PER_KWH,
     NUPL_SENTIMENT_WINDOW_DAYS,
@@ -471,7 +472,7 @@ PERFORMANCE_GROUPS = {
     "Equity Market Indexes": [
         ("S&P 500 Index ETF - [SPY]", "SPY"),
         ("Nasdaq-100 ETF - [QQQ]", "QQQ"),
-        ("US Total Stock Market ETF - [VTI]", "VTI"),
+        ("Russell 2000 Small-Cap ETF - [IWM]", "IWM"),
         ("International Stock ETF - [VXUS]", "VXUS"),
     ],
     "Sectors": [
@@ -493,6 +494,32 @@ PERFORMANCE_GROUPS = {
         ("Bitcoin Miners ETF - [WGMI]", "WGMI"),
     ],
 }
+
+
+CORRELATION_ASSETS = [
+    (category, asset, "BTC" if ticker == "price_close" else ticker,
+     "price_close" if ticker == "price_close" else f"{ticker}_close")
+    for category, assets in PERFORMANCE_GROUPS.items()
+    for asset, ticker in assets
+]
+CORRELATION_MATRIX_PERIODS = (30, 90, 365)
+
+
+def create_correlation_matrix_table(correlations_data, report_date):
+    """30/90/365-day matrices for Bitcoin and 16 assets, in window and group order."""
+    columns = [column for _, _, _, column in CORRELATION_ASSETS]
+    tickers = [ticker for _, _, ticker, _ in CORRELATION_ASSETS]
+    tables = []
+    for period in CORRELATION_MATRIX_PERIODS:
+        matrix = create_correlation_matrix_data(report_date, columns, correlations_data, period)
+        matrix.columns = tickers
+        metadata = pd.DataFrame([
+            {"Report Date": str(pd.Timestamp(report_date).date()), "Window Days": period,
+             "Category": category, "Asset": asset, "Ticker": ticker}
+            for category, asset, ticker, _ in CORRELATION_ASSETS
+        ])
+        tables.append(pd.concat([metadata, matrix.reset_index(drop=True)], axis=1))
+    return pd.concat(tables, ignore_index=True)
 
 
 def _build_performance_table(

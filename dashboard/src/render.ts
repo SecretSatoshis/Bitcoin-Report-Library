@@ -1,4 +1,4 @@
-import { HIDDEN_SEASONAL_YEARS, num, type DashboardData, type Row, type Metric } from "./data";
+import { HIDDEN_SEASONAL_YEARS, correlationGroups, correlationLabel, correlationName, correlationPeriods, num, type DashboardData, type Row, type Metric } from "./data";
 export const escape = (v: unknown) =>
   String(v ?? "").replace(
     /[&<>"']/g,
@@ -88,6 +88,9 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 // colours comparable across years.
 function heatColor(n: number, yearly: boolean): { background: string; text: string } {
   const bound = yearly ? (n < 0 ? 80 : 150) : 40;
+  return divergingColor(n, bound);
+}
+function divergingColor(n: number, bound: number): { background: string; text: string } {
   const weight = Math.min(1, Math.abs(n) / bound);
   const neutral = [170, 172, 182],
     target = n < 0 ? [214, 72, 66] : [26, 142, 78];
@@ -99,6 +102,33 @@ function heatColor(n: number, yearly: boolean): { background: string; text: stri
     })
     .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
   return { background: `rgb(${rgb.join(",")})`, text: luminance > 0.3 ? "#08080c" : "#ffffff" };
+}
+export function correlationMatrix(rows: Row[] | null, period = 90): string {
+  if (!rows) return '<p class="methodology">The 90-day correlation matrix is unavailable in this data release.</p>';
+  const tickers = correlationGroups.flatMap((g) => g.tickers);
+  const starts = new Set(correlationGroups.map((g) => g.tickers[0]));
+  const groups = correlationGroups.map((group, index) => {
+    const body = group.tickers.map((ticker, i) => {
+      const row = rows.find((r) => r.Ticker === ticker)!;
+      return `<tr>${i === 0 ? `<th id="corr-${period}-group-${index}" scope="rowgroup" rowspan="${group.tickers.length}" class="correlation-group">${escape(group.title)}</th>` : ""}<th id="corr-${period}-row-${escape(ticker)}" scope="row" class="correlation-ticker" title="${escape(row.Asset)}"><span class="correlation-row-label"><span class="correlation-name">${escape(correlationName(row))}</span><span class="correlation-symbol">[${escape(correlationLabel(ticker))}]</span></span></th>${tickers.map((other) => {
+        if (tickers.indexOf(other) > tickers.indexOf(ticker))
+          return '<td class="correlation-unused" aria-hidden="true"></td>';
+        const n = num(row[other]);
+        const classes = [starts.has(other) ? "correlation-boundary" : "", ticker === other ? "correlation-diagonal" : ""].filter(Boolean).join(" ");
+        const headers = `corr-${period}-group-${index} corr-${period}-row-${escape(ticker)} corr-${period}-col-${escape(other)}`;
+        const title = `${correlationLabel(ticker)} / ${correlationLabel(other)}: ${n === null ? "Unavailable" : n.toFixed(2)}`;
+        if (n === null) return `<td class="empty ${classes}" headers="${headers}" title="${escape(title)}">—</td>`;
+        const { background, text } = divergingColor(n, 1);
+        return `<td class="${classes}" headers="${headers}" title="${escape(title)}" style="background:${background};color:${text}">${n.toFixed(2)}</td>`;
+      }).join("")}</tr>`;
+    }).join("");
+    return `<tbody>${body}</tbody>`;
+  }).join("");
+  return `<div class="table-scroll correlation-scroll" role="region" aria-label="${period}-day asset correlation matrix" tabindex="0"><table class="heatmap correlation-matrix"><caption class="sr-only">${period}-day Pearson return correlations for Bitcoin and 16 assets, grouped on both axes. Each pair appears once in the lower triangle.</caption><colgroup><col class="correlation-group-column"><col class="correlation-ticker-column"></colgroup>${correlationGroups.map((g) => `<colgroup span="${g.tickers.length}"></colgroup>`).join("")}<thead><tr><th rowspan="2" scope="col" class="correlation-group">Asset group</th><th rowspan="2" scope="col" class="correlation-ticker">Asset</th>${correlationGroups.map((g) => `<th colspan="${g.tickers.length}" scope="colgroup" class="correlation-boundary">${escape(g.title)}</th>`).join("")}</tr><tr>${tickers.map((t) => `<th id="corr-${period}-col-${escape(t)}" scope="col" class="${starts.has(t) ? "correlation-boundary" : ""}" title="${escape(rows.find((r) => r.Ticker === t)!.Asset)}">${escape(correlationLabel(t))}</th>`).join("")}</tr></thead>${groups}</table></div><div class="correlation-legend" aria-label="Correlation color scale"><span class="correlation-scale" aria-hidden="true"></span><span>−1 <span class="muted">Opposite</span></span><span>0 <span class="muted">Uncorrelated</span></span><span>+1 <span class="muted">Together</span></span></div><p class="methodology">Pearson return correlations over ${period} calendar days, using shared observation dates. Each pair appears once; — indicates insufficient data. DXY = DX-Y.NYB · GSCI = ^SPGSCI.</p>`;
+}
+function correlationSection(d: DashboardData): string {
+  if (!d.correlations) return correlationMatrix(null);
+  return `<div class="correlation-tools"><h3 id="correlation-matrix-title">90-Day Correlation Matrix</h3><div class="correlation-periods" role="tablist" aria-label="Correlation time frame">${correlationPeriods.map((period) => `<button type="button" role="tab" id="correlation-tab-${period}" data-correlation-period="${period}" aria-controls="correlation-panel-${period}" aria-selected="${period === 90}" tabindex="${period === 90 ? 0 : -1}">${period} days</button>`).join("")}</div></div>${correlationPeriods.map((period) => `<div role="tabpanel" id="correlation-panel-${period}" aria-labelledby="correlation-tab-${period}" ${period === 90 ? "" : "hidden"}>${correlationMatrix(d.correlations![period], period)}</div>`).join("")}`;
 }
 function heatmap(rows: Row[], d: DashboardData, reference = false): string {
   const body = rows.map((r) => {
@@ -134,8 +164,9 @@ const NAV_LINKS = [
 ];
 const SECTIONS = [
   ["bitcoin-snapshot", "Snapshot"],
-  ["performance", "Performance"],
   ["bitcoin-price", "Price"],
+  ["performance", "Performance"],
+  ["correlation", "Correlation"],
   ["monthly-bitcoin-price-return-heatmap", "Returns"],
   ["seasonal-returns", "Seasonality"],
   ["relative-valuation", "Valuation"],
@@ -221,8 +252,9 @@ export function renderDashboard(d: DashboardData): string {
 <nav class="section-nav" aria-label="Dashboard sections"><div>${SECTIONS.map(([id, label]) => `<a href="#${id}">${label}</a>`).join("")}</div></nav>
 <main>
 <section id="bitcoin-snapshot" class="dashboard-section">${sectionHeading("Bitcoin Snapshot", "Headline metrics — market, on-chain, and sentiment.")}<div class="visual-block" data-newsletter-visual="bitcoin-snapshot-market-data"><h3 id="market-data">Market Data</h3><div class="metric-grid">${d.metrics.slice(0, 3).map(card).join("")}</div></div><h3 id="on-chain-data">On-chain Data</h3><div class="metric-grid">${d.metrics.slice(3).map(card).join("")}</div><h3 id="investor-sentiment">Investor Sentiment</h3><div class="metric-grid sentiment-grid">${sentiment}</div></section>
-<section id="performance" class="dashboard-section">${sectionHeading("Performance", "Compare Bitcoin and other assets’ returns across the same periods.")}${performanceSection(d)}</section>
 <section id="bitcoin-price" class="dashboard-section" data-newsletter-visual="bitcoin-price">${sectionHeading("Bitcoin Price", "Price vs on-chain valuation models and moving averages.")}<h3 id="price-outlook">Secret Satoshis ${d.year} Price Outlook</h3><div class="case-grid">${cases}</div>${chart(d.charts[0].id, d.charts[0].title)}<p class="methodology">Simple moving averages · 3-month = 90 daily closes · 1-year = 364 daily closes · 200-week = 1,400 daily closes. Annual cases are maintained outlook levels.</p></section>
+<section id="performance" class="dashboard-section">${sectionHeading("Performance", "Compare Bitcoin and other assets’ returns across the same periods.")}${performanceSection(d)}</section>
+<section id="correlation" class="dashboard-section">${sectionHeading("Correlation", "Return correlations across Bitcoin and major markets.")}${correlationSection(d)}</section>
 <section id="monthly-bitcoin-price-return-heatmap" class="dashboard-section" data-newsletter-visual="monthly-return-heatmap">${sectionHeading("Monthly Bitcoin Price Return Heatmap", "Monthly returns by year, measured from the previous period’s close.")}<h3 id="statistical-reference">Statistical Reference</h3>${heatmap(d.heatmap.reference, d, true)}<h3 id="historical-returns-by-year">Historical Returns by Year</h3>${heatmap(d.heatmap.years, d)}<p class="methodology">Statistics omit incomplete periods. The four-year average uses the four most recent completed observations for each column.</p></section>
 <section id="seasonal-returns" class="dashboard-section">${sectionHeading("Seasonal Returns", "Compare this month’s and this year’s price paths with historical years.")}${d.charts
     .slice(1)

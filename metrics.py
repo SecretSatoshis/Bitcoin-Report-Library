@@ -599,7 +599,7 @@ def observed_market_values(data: pd.DataFrame, columns: list) -> pd.DataFrame:
 
 
 def _paired_return_correlation(btc, asset, as_of, period):
-    """Correlation of BTC and asset returns, both measured between the asset's observations.
+    """Pearson return correlation, measured between the two series' shared observations.
 
     A Friday-to-Monday equity return is paired with BTC's Friday-to-Monday return. NaN
     unless the data covers the whole window and the asset traded recently.
@@ -618,9 +618,30 @@ def _paired_return_correlation(btc, asset, as_of, period):
         .loc[lambda frame: frame.index > window_start]
         .dropna()
     )
-    if len(returns) < MIN_CORRELATION_RETURNS:
+    if len(returns) < MIN_CORRELATION_RETURNS or returns.nunique().lt(2).any():
         return np.nan
     return returns.iloc[:, 0].corr(returns.iloc[:, 1])
+
+
+def create_correlation_matrix_data(report_date, columns, correlations_data, period=90):
+    """Symmetric return matrix over a calendar-day window ending on the report date.
+
+    Input must contain real observations only (``observed_market_values``). Each pair
+    uses its shared observation dates, including a prior close at the window boundary.
+    Missing, stale, short or constant histories produce NaN, including on the diagonal.
+    """
+    if period <= 0 or len(columns) != len(set(columns)):
+        raise ValueError("Correlation window must be positive and columns unique")
+    as_of = pd.to_datetime(report_date).normalize()
+    prices = correlations_data.reindex(columns=columns).apply(
+        pd.to_numeric, errors="coerce"
+    ).sort_index()
+    matrix = pd.DataFrame(np.nan, index=columns, columns=columns)
+    for i, left in enumerate(columns):
+        for right in columns[i:]:
+            value = _paired_return_correlation(prices[left], prices[right], as_of, period)
+            matrix.loc[left, right] = matrix.loc[right, left] = value
+    return matrix
 
 
 def create_btc_correlation_data(

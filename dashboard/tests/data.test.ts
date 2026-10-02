@@ -19,6 +19,7 @@ import {
   iso,
   validateTables,
   type Row,
+  CORRELATION_FILE,
 } from "../src/data";
 import { renderDashboard, format, escape } from "../src/render";
 
@@ -45,6 +46,23 @@ const reference = JSON.parse(
 );
 const data = () =>
   createDashboard(structuredClone(tables), release, colors, events);
+
+test("the new matrix is loaded only from its release manifest and hash checked", () => {
+  const copy = mkdtempSync(resolve(tmpdir(), "ss-correlation-release-"));
+  try {
+    cpSync(directory, copy, { recursive: true });
+    const csv = "Ticker,BTC\nBTC,1\n";
+    const manifest = structuredClone(release);
+    manifest.files[CORRELATION_FILE] = { sha256: hash(csv), size_bytes: Buffer.byteLength(csv) };
+    writeFileSync(resolve(copy, CORRELATION_FILE), csv);
+    writeFileSync(resolve(copy, "release_manifest.json"), JSON.stringify(manifest));
+    assert.equal(loadVerified(copy).tables[CORRELATION_FILE][0].Ticker, "BTC");
+    writeFileSync(resolve(copy, CORRELATION_FILE), "Ticker,BTC\nBTC,0\n");
+    assert.throws(() => loadVerified(copy), /manifest hash\/size mismatch/);
+  } finally {
+    rmSync(copy, { recursive: true, force: true });
+  }
+});
 
 test("frozen release: all seven price series, ranges, events and candle payloads agree with the reference", () => {
   const p = data().charts[0];

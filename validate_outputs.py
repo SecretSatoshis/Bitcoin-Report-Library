@@ -19,6 +19,8 @@ from data_definitions import FUNDAMENTALS_TEMPLATE
 from data_definitions import REPORT_DATE as CLOCK_REPORT_DATE
 from data_validation import validate_calendar, validate_candles
 from report_tables import (
+    CORRELATION_ASSETS,
+    CORRELATION_MATRIX_PERIODS,
     PERFORMANCE_GROUPS,
     _nupl_sentiment,
     _power_law_valuation,
@@ -36,6 +38,7 @@ class RowBounds:
 # Row-count bounds: loose for growing histories, tight for fixed-shape tables. They catch
 # truncated, header-only, duplicated and runaway files.
 OUTPUT_RULES = {
+    "correlation_matrix.csv": RowBounds(51, 51),
     ANNUAL_REFERENCE_FILE: RowBounds(50, 10_000),
     "cycle_low_data.csv": RowBounds(1, 100_000),
     "drawdown_data.csv": RowBounds(1, 100_000),
@@ -70,6 +73,8 @@ ETF_RULES = {
 
 
 REQUIRED_COLUMNS = {
+    "correlation_matrix.csv": {"Report Date", "Window Days", "Category", "Asset", "Ticker"}
+        | {ticker for _, _, ticker, _ in CORRELATION_ASSETS},
     "etf_daily.csv": {"fund", "date", "btc_held", "btc_source", "flow_btc", "flow_usd", "market_share_pct"},
     "etf_totals_daily.csv": {"date", "total_btc", "total_flow_btc", "cumulative_flow_usd", "flow_weighted_entry_price"},
     "etf_quarterly.csv": {"fund", "quarter_end", "btc", "cost_usd", "cost_per_btc"},
@@ -123,6 +128,7 @@ SUMMARY_HISTORY_METRICS = {
 
 
 RETAINED_OUTPUTS = {
+    "correlation_matrix.csv",
     "etf_daily.csv",
     "etf_totals_daily.csv",
     ANNUAL_REFERENCE_FILE,
@@ -800,6 +806,7 @@ def validate_outputs(
     _validate_report_agreement(retained_frames, expected_report_date, errors)
     _validate_review_contracts(retained_frames, output_dir, expected_report_date, errors)
     _validate_performance_rows(retained_frames, errors)
+    _validate_correlation_matrix(retained_frames, expected_report_date, errors)
     _validate_annual_reference(retained_frames, errors)
     _validate_etf(retained_frames, errors)
     if any((output_dir / name).exists() for name in CANDLE_FILES):
@@ -810,6 +817,53 @@ def validate_outputs(
             errors.append(f"Chart candle exports: {exc}")
     _validate_release_manifest(output_dir, expected_report_date, errors, require_release_manifest)
     return errors
+
+
+def _validate_correlation_matrix(frames, report_date, errors):
+    name = "correlation_matrix.csv"
+    table = frames.get(name)
+    if table is None or not REQUIRED_COLUMNS[name].issubset(table.columns):
+        return
+    periods = pd.to_numeric(table["Window Days"], errors="coerce")
+    if len(table) != 51 or not periods.isin(CORRELATION_MATRIX_PERIODS).all() or set(periods) != set(CORRELATION_MATRIX_PERIODS):
+        errors.append(f"{name}: expected 17 assets for each 30/90/365-day window")
+        return
+    for period in CORRELATION_MATRIX_PERIODS:
+        _validate_correlation_window(table.loc[periods.eq(period)], frames, report_date, period, errors)
+
+
+def _validate_correlation_window(table, frames, report_date, period, errors):
+    name = f"correlation_matrix.csv ({period} days)"
+    tickers = [ticker for _, _, ticker, _ in CORRELATION_ASSETS]
+    if list(table["Ticker"]) != tickers or set(table.columns) != REQUIRED_COLUMNS["correlation_matrix.csv"]:
+        errors.append(f"{name}: expected one row per asset in group order")
+        return
+    if not table["Report Date"].eq(str(pd.Timestamp(report_date).date())).all() or not pd.to_numeric(
+        table["Window Days"], errors="coerce"
+    ).eq(period).all():
+        errors.append(f"{name}: expected report-date {period}-day window")
+    if list(table["Category"]) != [category for category, _, _, _ in CORRELATION_ASSETS]:
+        errors.append(f"{name}: invalid asset groups")
+    if list(table["Asset"]) != [asset for _, asset, _, _ in CORRELATION_ASSETS]:
+        errors.append(f"{name}: invalid asset labels")
+    original = table[tickers]
+    numeric = original.apply(pd.to_numeric, errors="coerce")
+    values = numeric.to_numpy(dtype=float)
+    if (original.notna() & numeric.isna()).any().any() or np.isinf(values).any():
+        errors.append(f"{name}: invalid correlation number")
+    if np.any(np.abs(values) > 1):
+        errors.append(f"{name}: correlation outside [-1, 1]")
+    if not np.allclose(values, values.T, rtol=0, atol=1e-8, equal_nan=True):
+        errors.append(f"{name}: matrix must be symmetric")
+    diagonal = np.diag(values)
+    if np.any(~np.isnan(diagonal) & (np.abs(diagonal - 1) > 1e-8)):
+        errors.append(f"{name}: invalid diagonal")
+    performance = frames.get("performance_table.csv")
+    if period == 90 and performance is not None and "90 Day BTC Correlation" in performance:
+        for i, (_, asset, _, _) in enumerate(CORRELATION_ASSETS):
+            row = performance.loc[performance["Asset"].eq(asset), "90 Day BTC Correlation"]
+            if len(row) == 1 and not np.isclose(values[i, 0], row.iloc[0], rtol=0, atol=1e-6, equal_nan=True):
+                errors.append(f"{name}: {asset} Bitcoin correlation differs from performance table")
 
 
 def _validate_annual_reference(frames, errors):

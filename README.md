@@ -10,12 +10,12 @@ open CSV files.
 
 ## What it produces
 
-A daily release of 28 files in `csv/`, listed with checksums in `release_manifest.json`:
+A daily release of 29 files in `csv/`, listed with checksums in `release_manifest.json`:
 
 | Group | Files |
 |-------|-------|
 | **Master data** | `master_metrics_data.csv.gz`: every metric, every day since 2010, plus weekly and monthly snapshots |
-| **Report tables** | Summary, fundamentals, performance, relative value, ROI, monthly returns, MTD/YTD comparisons |
+| **Report tables** | Summary, fundamentals, performance, 30/90/365-day correlation matrices, relative value, ROI, monthly returns, MTD/YTD comparisons |
 | **Chart series** | Price models, price paths, drawdowns, cycle lows, halving eras and Bitcoin candles |
 | **Outlook** | The annual Bear / Base / Bull price cases |
 | **US spot bitcoin ETFs** | `etf_daily.csv` (each fund's bitcoin held, shares, NAV and flows by trading day), `etf_totals_daily.csv` (all funds, with cumulative flows and the flow-weighted entry price), `etf_quarterly.csv` (holdings and reported cost from each fund's SEC filings) |

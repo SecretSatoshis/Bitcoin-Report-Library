@@ -38,7 +38,7 @@ TICKERS = {
         "BITQ",
         "XLK",
         "QQQ",
-        "VTI",
+        "IWM",
         "TLT",
         "GLD",
         "XLF",
@@ -288,7 +288,7 @@ CHANGE_COLUMNS = [
     # Equity ETFs
     "SPY_close",
     "QQQ_close",
-    "VTI_close",
+    "IWM_close",
     "VXUS_close",
     # Sector ETFs
     "XLK_close",
@@ -333,7 +333,7 @@ CORRELATION_COLUMNS = [
     "BITQ_close",
     "XLK_close",
     "QQQ_close",
-    "VTI_close",
+    "IWM_close",
     "TLT_close",
     "GLD_close",
     "XLF_close",

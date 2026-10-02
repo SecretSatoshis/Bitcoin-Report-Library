@@ -510,6 +510,98 @@ td:has(> .delta),
   color: var(--mute);
 }
 
+/* Pairwise matrix uses the monthly heatmap palette on a fixed −1 to +1 scale. */
+.correlation-matrix {
+  min-width: 1120px;
+  font-variant-numeric: tabular-nums;
+}
+.correlation-matrix .correlation-group-column { width: 100px; }
+.correlation-matrix .correlation-ticker-column { width: 220px; }
+.correlation-matrix th,
+.correlation-matrix td { padding: 7px 4px; text-align: center; }
+.correlation-matrix thead th { font-size: 10px; }
+.correlation-matrix .correlation-group,
+.correlation-matrix .correlation-ticker {
+  position: sticky;
+  background: var(--bg);
+  z-index: 1;
+  text-align: left;
+}
+.correlation-matrix .correlation-group {
+  left: 0;
+  width: 100px;
+  white-space: normal;
+  color: var(--dim);
+  font-size: 10px;
+  padding-right: 14px;
+  line-height: 1.6;
+}
+.correlation-matrix .correlation-ticker {
+  left: 100px;
+  width: 220px;
+  color: var(--white);
+  font-weight: 600;
+}
+.correlation-row-label { display: flex; align-items: baseline; gap: 8px; font-size: 10px; }
+.correlation-name { white-space: normal; }
+.correlation-symbol { color: var(--dim); font-weight: 400; white-space: nowrap; }
+.correlation-tools { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 28px 0 14px; }
+.correlation-tools h3 { margin: 0; }
+.correlation-periods { display: flex; gap: 4px; }
+.correlation-periods button {
+  padding: 7px 10px;
+  border: 1px solid var(--border-hi);
+  border-radius: 4px;
+  background: var(--bg-alt);
+  color: var(--dim);
+  font: 11px var(--mono);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.correlation-periods button[aria-selected="true"] { color: var(--accent); border-color: var(--accent); }
+@media (max-width: 600px) {
+  .correlation-tools { align-items: flex-start; flex-direction: column; }
+  .correlation-matrix .correlation-group-column,
+  .correlation-matrix .correlation-group { width: 80px; }
+  .correlation-matrix .correlation-ticker-column,
+  .correlation-matrix .correlation-ticker { width: 150px; }
+  .correlation-matrix .correlation-ticker { left: 80px; }
+  .correlation-row-label { flex-direction: column; gap: 0; }
+}
+.correlation-matrix .correlation-boundary { border-left: 3px solid var(--bg); }
+.correlation-matrix tbody + tbody tr:first-child > * { border-top: 3px solid var(--bg); }
+.correlation-matrix .correlation-diagonal { font-weight: 700; }
+.correlation-matrix td.correlation-unused {
+  background: transparent;
+  border-color: transparent;
+}
+.correlation-legend {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  align-items: center;
+  width: min(100%, 380px);
+  gap: 6px;
+  margin: 16px 0 0 auto;
+  font-size: 10px;
+}
+.correlation-legend > span:nth-child(3) { text-align: center; }
+.correlation-legend > span:nth-child(4) { text-align: right; }
+.correlation-scale {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 8px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgb(214,72,66), rgb(170,172,182), rgb(26,142,78));
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* Price outlook */
 .case-grid {
   display: grid;

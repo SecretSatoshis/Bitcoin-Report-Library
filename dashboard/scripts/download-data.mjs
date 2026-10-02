@@ -25,7 +25,7 @@ import { pipeline } from "node:stream/promises";
 import https from "node:https";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { inputFiles } from "../src/data.ts";
+import { releaseInputFiles } from "../src/data.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOCAL_MODE = process.argv.includes("--local");
@@ -42,8 +42,6 @@ const RELEASE_MANIFEST = "release_manifest.json";
 // remote sync waits until Pages serves at least this checkout's release.
 const RELEASE_WAIT_MS = 12 * 60 * 1000;
 const RELEASE_POLL_MS = 15 * 1000;
-
-const CSV_FILES = inputFiles;
 
 const REQUEST_TIMEOUT_MS = 20000;
 const MAX_ATTEMPTS = 3;
@@ -108,7 +106,7 @@ function loadManifest(payload) {
   ) {
     throw new Error("invalid Report Library release manifest");
   }
-  for (const file of CSV_FILES) {
+  for (const file of releaseInputFiles(payload)) {
     const record = payload.files[file];
     if (!record || typeof record.sha256 !== "string") {
       throw new Error(`release manifest is missing ${file}`);
@@ -138,10 +136,10 @@ function verifyHash(file, filePath, manifest) {
   }
 }
 
-function validateLocalInputs() {
+function validateLocalInputs(files) {
   const failures = [];
 
-  for (const file of CSV_FILES) {
+  for (const file of files) {
     const src = path.join(LOCAL_CSV_DIR, file);
     try {
       const stats = statSync(src);
@@ -164,15 +162,16 @@ function validateLocalInputs() {
 
 function stageLocal() {
   console.log(`\nSyncing from local Report Library: ${LOCAL_CSV_DIR}\n`);
-  const failures = validateLocalInputs();
+  const manifest = readLocalManifest();
+  const files = releaseInputFiles(manifest);
+  const failures = validateLocalInputs(files);
   if (failures.length) {
     throw new Error(
-      `${failures.length} of ${CSV_FILES.length} local source files are invalid:\n` +
+      `${failures.length} of ${files.length} local source files are invalid:\n` +
         failures.map((f) => `  - ${f}`).join("\n"),
     );
   }
-  const manifest = readLocalManifest();
-  for (const file of CSV_FILES) {
+  for (const file of files) {
     const staged = path.join(STAGING_DIR, file);
     copyFileSync(path.join(LOCAL_CSV_DIR, file), staged);
     verifyHash(file, staged, manifest);
@@ -280,9 +279,10 @@ async function downloadRemote(file, manifest) {
 async function stageRemote() {
   console.log(`\nDownloading from GitHub Pages: ${REMOTE_BASE_URL}\n`);
   const manifest = await waitForRemoteRelease(checkoutRelease());
+  const files = releaseInputFiles(manifest);
   console.log(`  ✓ release ${manifest.release_id}`);
   const failures = [];
-  for (const file of CSV_FILES) {
+  for (const file of files) {
     try {
       await downloadRemote(file, manifest);
     } catch (err) {
@@ -292,7 +292,7 @@ async function stageRemote() {
   }
   if (failures.length) {
     throw new Error(
-      `${failures.length} of ${CSV_FILES.length} files could not be downloaded:\n` +
+      `${failures.length} of ${files.length} files could not be downloaded:\n` +
         failures.map((f) => `  - ${f}`).join("\n"),
     );
   }
@@ -300,7 +300,7 @@ async function stageRemote() {
 }
 
 // Swap the whole input folder at once, so preparation never sees mixed releases and
-// files dropped from CSV_FILES disappear.
+// Files no longer consumed by the dashboard disappear.
 function publishStaged(manifest) {
   writeFileSync(
     path.join(STAGING_DIR, RELEASE_MANIFEST),

@@ -116,6 +116,9 @@ tables = {
     "performance_table.csv": report_tables.create_full_performance_table(
         report_data, REPORT_DATE, correlation_results
     ),
+    "correlation_matrix.csv": report_tables.create_correlation_matrix_table(
+        correlation_input, REPORT_DATE
+    ),
     "relative_value_comparison.csv": report_tables.create_asset_valuation_table(
         report_data, REPORT_DATE
     ),

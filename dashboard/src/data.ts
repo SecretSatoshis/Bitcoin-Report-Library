@@ -92,6 +92,7 @@ export interface DashboardData {
     valuation: string;
   };
   performance: { id: string; title: string; rows: Row[] }[];
+  correlations: CorrelationMatrices | null;
   heatmap: { reference: Row[]; years: Row[] };
   relative: (Row & { btcShare: string })[];
   fundamentals: Row[];
@@ -114,6 +115,70 @@ export const inputFiles = [
   "price_outlook.csv",
   "bitcoin_candles.csv.gz",
 ];
+export const CORRELATION_FILE = "correlation_matrix.csv";
+export const correlationPeriods = [30, 90, 365];
+export type CorrelationMatrices = Record<number, Row[]>;
+// Older releases remain readable; new pipeline runs always export the matrix.
+export function releaseInputFiles(release: ReleaseManifest): string[] {
+  return [...inputFiles, ...(release.files[CORRELATION_FILE] ? [CORRELATION_FILE] : [])];
+}
+export const correlationGroups = [
+  { category: "Bitcoin", title: "Bitcoin", tickers: ["BTC"] },
+  { category: "Equity Market Indexes", title: "Broad equity markets", tickers: ["SPY", "QQQ", "IWM", "VXUS"] },
+  { category: "Sectors", title: "Sectors", tickers: ["XLK", "XLF", "XLE", "XLRE"] },
+  { category: "Macro Asset Classes", title: "Macro", tickers: ["DX-Y.NYB", "GLD", "AGG", "^SPGSCI"] },
+  { category: "Bitcoin Industry Performance", title: "Bitcoin industry", tickers: ["MSTR", "XYZ", "COIN", "WGMI"] },
+];
+export const correlationLabel = (ticker: string) =>
+  ({ "DX-Y.NYB": "DXY", "^SPGSCI": "GSCI" }[ticker] ?? ticker);
+export const correlationName = (row: Row) =>
+  ({ "SPY": "S&P 500", "IWM": "Russell 2000", "VXUS": "International Stocks", "^SPGSCI": "S&P Commodity Index" }[row.Ticker]
+    ?? row.Asset.replace(/ - \[[^\]]+\]$/, "").replace(/ Sector ETF$/, "").replace(/ ETF$/, ""));
+
+export function readCorrelationMatrix(t: Tables, date: string): CorrelationMatrices | null {
+  const rows = t[CORRELATION_FILE];
+  if (!rows) return null;
+  if (rows.length !== 51 || rows.some((r) => !correlationPeriods.includes(Number(r["Window Days"]))))
+    throw new Error(`${CORRELATION_FILE}: expected 17 assets for each 30/90/365-day window`);
+  return Object.fromEntries(correlationPeriods.map((period) => [period,
+    readCorrelationWindow(rows.filter((r) => Number(r["Window Days"]) === period), date, period, t["performance_table.csv"]),
+  ]));
+}
+function readCorrelationWindow(rows: Row[], date: string, period: number, performanceRows?: Row[]): Row[] {
+  const tickers = correlationGroups.flatMap((group) => group.tickers);
+  const fields = ["Report Date", "Window Days", "Category", "Asset", "Ticker", ...tickers];
+  const invalid = (reason: string): never => { throw new Error(`${CORRELATION_FILE}: ${reason}`); };
+  if (rows.length !== tickers.length || new Set(rows.map((r) => r.Ticker)).size !== tickers.length)
+    invalid("expected one row per asset");
+  for (const row of rows) {
+    if (Object.keys(row).length !== fields.length || fields.some((key) => !(key in row)))
+      invalid("invalid matrix columns");
+    const group = correlationGroups.find((g) => g.tickers.includes(row.Ticker));
+    if (!group || group.category !== row.Category || !row.Asset?.trim()) invalid("invalid asset group");
+    if (row["Report Date"] !== date || num(row["Window Days"]) !== period) invalid(`expected report-date ${period}-day window`);
+    for (const ticker of tickers) {
+      const value = num(row[ticker]);
+      if (row[ticker].trim() && value === null) invalid("invalid correlation number");
+      if (value !== null && Math.abs(value) > 1) invalid("correlation outside [-1, 1]");
+      if (ticker === row.Ticker && value !== null && Math.abs(value - 1) > 1e-8) invalid("invalid diagonal");
+    }
+  }
+  const ordered = tickers.map((ticker) => rows.find((r) => r.Ticker === ticker)!);
+  for (const row of ordered) {
+    for (const other of ordered) {
+      const a = num(row[other.Ticker]), b = num(other[row.Ticker]);
+      if ((a === null) !== (b === null) || (a !== null && b !== null && Math.abs(a - b) > 1e-8))
+        invalid("matrix must be symmetric");
+    }
+    const performance = performanceRows?.find((r) => r.Asset === row.Asset);
+    if (period === 90 && performance && "90 Day BTC Correlation" in performance) {
+      const a = num(row.BTC), b = num(performance["90 Day BTC Correlation"]);
+      if ((a === null) !== (b === null) || (a !== null && b !== null && Math.abs(a - b) > 1e-6))
+        invalid("Bitcoin correlation differs from performance table");
+    }
+  }
+  return ordered;
+}
 export const num = (value: unknown): number | null => {
   if (value == null || String(value).trim() === "") return null;
   const n = Number(value);
@@ -755,6 +820,7 @@ export function createDashboard(
       valuation: summary("Bitcoin Valuation")?.Label || "Unavailable",
     },
     performance,
+    correlations: readCorrelationMatrix(t, date),
     heatmap: {
       reference: ["Average", "Median", "4-Year Average"]
         .map((y) => heat.find((r) => r.Year === y)!)
