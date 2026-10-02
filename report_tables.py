@@ -503,15 +503,24 @@ CORRELATION_ASSETS = [
     for asset, ticker in assets
 ]
 CORRELATION_MATRIX_PERIODS = (30, 90, 365)
+# The market series whose real observations feed the correlations.
+CORRELATION_COLUMNS = [column for _, _, _, column in CORRELATION_ASSETS]
 
 
-def create_correlation_matrix_table(correlations_data, report_date):
-    """30/90/365-day matrices for Bitcoin and the performance-table assets, in window and group order."""
-    columns = [column for _, _, _, column in CORRELATION_ASSETS]
+def create_correlation_matrices(correlations_data, report_date) -> dict:
+    """{period: matrix} for each CORRELATION_MATRIX_PERIODS window, indexed by price column."""
+    return {
+        period: create_correlation_matrix_data(report_date, CORRELATION_COLUMNS, correlations_data, period)
+        for period in CORRELATION_MATRIX_PERIODS
+    }
+
+
+def create_correlation_matrix_table(matrices, report_date):
+    """The matrices from create_correlation_matrices as one table, in window and group order."""
     tickers = [ticker for _, _, ticker, _ in CORRELATION_ASSETS]
     tables = []
     for period in CORRELATION_MATRIX_PERIODS:
-        matrix = create_correlation_matrix_data(report_date, columns, correlations_data, period)
+        matrix = matrices[period].copy()
         matrix.columns = tickers
         metadata = pd.DataFrame([
             {"Report Date": str(pd.Timestamp(report_date).date()), "Window Days": period,
@@ -525,11 +534,14 @@ def create_correlation_matrix_table(correlations_data, report_date):
 def _build_performance_table(
     report_data: pd.DataFrame,
     report_date,
-    correlation_results: dict,
+    btc_correlations: pd.Series,
     asset_groups: dict,
 ) -> pd.DataFrame:
     """One row per asset, in group order: price, 7-day/MTD/YTD/90-day returns, 52-week
-    range and 90-day correlation with Bitcoin. Ticker "price_close" is Bitcoin."""
+    range and 90-day correlation with Bitcoin. Ticker "price_close" is Bitcoin.
+
+    `btc_correlations` is the 90-day matrix's Bitcoin row, indexed by price column.
+    """
     # Every value and the 52-week window use the same latest row on or before the cutoff.
     report_date = pd.to_datetime(report_date).normalize()
     report_data = report_data.sort_index()
@@ -558,16 +570,15 @@ def _build_performance_table(
                 "90 Day Return (%)": latest[f"{price_col}_90d_change"],
                 "52 Week High": window.max() if len(window) else None,
                 "52 Week Low": window.min() if len(window) else None,
-                "90 Day BTC Correlation": 1 if ticker == "price_close" else
-                    correlation_results["price_close_90_days"].loc["price_close", price_col],
+                "90 Day BTC Correlation": btc_correlations.get(price_col, np.nan),
             })
     return pd.DataFrame(rows)
 
 
-def create_full_performance_table(report_data, report_date, correlation_results):
+def create_full_performance_table(report_data, report_date, btc_correlations):
     """Performance rows for Bitcoin and every asset in PERFORMANCE_GROUPS."""
     return _build_performance_table(
-        report_data, report_date, correlation_results, PERFORMANCE_GROUPS
+        report_data, report_date, btc_correlations, PERFORMANCE_GROUPS
     )
 
 

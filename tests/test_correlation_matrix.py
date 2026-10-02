@@ -50,7 +50,8 @@ class CorrelationMatrixTests(unittest.TestCase):
         columns = [c for _, _, _, c in report_tables.CORRELATION_ASSETS]
         prices = pd.DataFrame({c: np.linspace(100 + i, 180 + i * 2, len(dates))
                                for i, c in enumerate(columns)}, index=dates)
-        table = report_tables.create_correlation_matrix_table(prices, dates[-1])
+        matrices = report_tables.create_correlation_matrices(prices, dates[-1])
+        table = report_tables.create_correlation_matrix_table(matrices, dates[-1])
         self.assertEqual(table.shape, (51, 22))
         self.assertEqual(set(table["Window Days"]), {30, 90, 365})
         window = table.loc[table["Window Days"].eq(90)]

@@ -28,7 +28,6 @@ from release_manifest import write_release_manifest
 from data_definitions import (
     CAGR_COLUMNS,
     CHANGE_COLUMNS,
-    CORRELATION_COLUMNS,
     FIAT_MONEY_SUPPLY,
     FUNDAMENTALS_TEMPLATE,
     GOLD_SILVER_SUPPLY,
@@ -56,7 +55,7 @@ etf_files = etf.get_etf_files(REPORT_DATE)
 
 freshness.warn_on_stale_market_data(data, REPORT_DATE)
 # Correlations need each asset's real trading days, so capture them before the fill.
-correlation_input = metrics.observed_market_values(data, CORRELATION_COLUMNS)
+correlation_input = metrics.observed_market_values(data, report_tables.CORRELATION_COLUMNS)
 # Market data is filled within a bounded budget; on-chain data is never filled, so a
 # missing or malformed BRK response fails the checks below.
 data = freshness.forward_fill_market_data(data)
@@ -92,9 +91,9 @@ report_data = report_data.merge(
     right_index=True,
     how="left",
 )
-correlation_results = metrics.create_btc_correlation_data(
-    REPORT_DATE, TICKERS, correlation_input
-)
+# One set of 30/90/365-day matrices feeds both the matrix file and the performance
+# table's 90-day Bitcoin correlation column.
+correlation_matrices = report_tables.create_correlation_matrices(correlation_input, REPORT_DATE)
 
 # Sources include the partial current UTC day. Cut it here so no export includes it.
 report_data = report_data.loc[:REPORT_DATE]
@@ -114,10 +113,10 @@ tables = {
         report_data, FUNDAMENTALS_TEMPLATE, REPORT_DATE
     ),
     "performance_table.csv": report_tables.create_full_performance_table(
-        report_data, REPORT_DATE, correlation_results
+        report_data, REPORT_DATE, correlation_matrices[90].loc["price_close"]
     ),
     "correlation_matrix.csv": report_tables.create_correlation_matrix_table(
-        correlation_input, REPORT_DATE
+        correlation_matrices, REPORT_DATE
     ),
     "relative_value_comparison.csv": report_tables.create_asset_valuation_table(
         report_data, REPORT_DATE

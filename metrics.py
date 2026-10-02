@@ -573,9 +573,6 @@ def calculate_time_changes(data, periods):
     return changes
 
 
-CORRELATION_PERIODS = [7, 30, 90, 365]
-
-
 # Fewest paired returns a window may hold and still publish a correlation.
 MIN_CORRELATION_RETURNS = 3
 
@@ -643,49 +640,3 @@ def create_correlation_matrix_data(report_date, columns, correlations_data, peri
             matrix.loc[left, right] = matrix.loc[right, left] = value
     return matrix
 
-
-def create_btc_correlation_data(
-    report_date, tickers, correlations_data, periods=CORRELATION_PERIODS
-):
-    """Bitcoin's return correlation with every ticker over calendar-day windows.
-
-    `correlations_data` must hold only real observations (``observed_market_values``).
-    Windows end at the report date, or the latest earlier row. Returns
-    {"price_close_{period}_days": one-row frame indexed "price_close", one column per
-    `{ticker}_close`}; NaN where a window lacks coverage.
-    """
-    report_date = pd.to_datetime(report_date)
-    all_tickers = [ticker for ticker_list in tickers.values() for ticker in ticker_list]
-    ticker_list_with_suffix = ["price_close"] + [
-        f"{ticker}_close" for ticker in all_tickers
-    ]
-    ticker_list_with_suffix = list(dict.fromkeys(ticker_list_with_suffix))
-
-    filtered_data = correlations_data.reindex(columns=ticker_list_with_suffix).dropna(
-        subset=["price_close"]
-    )
-    filtered_data = filtered_data.apply(pd.to_numeric, errors="coerce").sort_index()
-
-    btc_correlations = {
-        f"price_close_{p}_days": pd.DataFrame(
-            index=["price_close"], columns=ticker_list_with_suffix, dtype=float
-        )
-        for p in periods
-    }
-    available = filtered_data.index[filtered_data.index <= report_date]
-    if len(available) == 0:
-        return btc_correlations
-    as_of = available.max()
-
-    btc = filtered_data["price_close"]
-    for period in periods:
-        result = btc_correlations[f"price_close_{period}_days"]
-        for column in ticker_list_with_suffix:
-            if column == "price_close":
-                result.loc["price_close", column] = 1.0
-                continue
-            result.loc["price_close", column] = _paired_return_correlation(
-                btc, filtered_data[column], as_of, period
-            )
-
-    return btc_correlations

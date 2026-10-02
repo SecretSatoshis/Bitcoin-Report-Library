@@ -141,16 +141,13 @@ class CorrelationTests(unittest.TestCase):
         observed = metrics.observed_market_values(raw, ["price_close", "SPY_close"])
         self.assertTrue(observed.loc[index.dayofweek >= 5, "SPY_close"].isna().all())
 
-        result = metrics.create_btc_correlation_data(
-            index[-1], {"etfs": ["SPY"]}, observed, periods=[30]
-        )["price_close_30_days"]
+        columns = ["price_close", "SPY_close"]
+        result = metrics.create_correlation_matrix_data(index[-1], columns, observed, period=30)
         self.assertAlmostEqual(result.loc["price_close", "SPY_close"], 1.0)
-        self.assertEqual(result.loc["price_close", "price_close"], 1.0)
+        self.assertAlmostEqual(result.loc["price_close", "price_close"], 1.0)
 
         # The forward-filled frame would have scored well below 1.
-        padded = metrics.create_btc_correlation_data(
-            index[-1], {"etfs": ["SPY"]}, raw[["price_close", "SPY_close"]], periods=[30]
-        )["price_close_30_days"]
+        padded = metrics.create_correlation_matrix_data(index[-1], columns, raw[columns], period=30)
         self.assertLess(padded.loc["price_close", "SPY_close"], 0.95)
 
     def test_correlations_are_nan_for_stale_or_short_histories(self):
@@ -166,9 +163,9 @@ class CorrelationTests(unittest.TestCase):
         prices.loc[index[-10:], "OLD_close"] = np.nan  # stopped trading 10 days ago
         prices.loc[index[:25], "NEW_close"] = np.nan  # only 15 days of history
 
-        result = metrics.create_btc_correlation_data(
-            index[-1], {"stocks": ["OLD", "NEW"]}, prices, periods=[30]
-        )["price_close_30_days"]
+        result = metrics.create_correlation_matrix_data(
+            index[-1], ["price_close", "OLD_close", "NEW_close"], prices, period=30
+        )
         self.assertTrue(pd.isna(result.loc["price_close", "OLD_close"]))
         self.assertTrue(pd.isna(result.loc["price_close", "NEW_close"]))
 
@@ -279,9 +276,8 @@ class ElectricityAndChangeTests(unittest.TestCase):
 class CorrelationSchemaTests(unittest.TestCase):
     def test_absent_asset_keeps_correlation_schema(self):
         frame = pd.DataFrame({'price_close': np.arange(1,41)**2}, index=pd.date_range('2024-01-01', periods=40))
-        result = metrics.create_btc_correlation_data(frame.index[-1], {'stocks':['MISSING']}, frame)
-        for item in result.values():
-            self.assertTrue(pd.isna(item.loc['price_close','MISSING_close']))
+        result = metrics.create_correlation_matrix_data(frame.index[-1], ['price_close', 'MISSING_close'], frame)
+        self.assertTrue(pd.isna(result.loc['price_close', 'MISSING_close']))
 
 
 class CagrTests(unittest.TestCase):

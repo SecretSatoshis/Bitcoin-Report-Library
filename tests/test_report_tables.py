@@ -26,7 +26,7 @@ class PerformanceTableTests(unittest.TestCase):
         result = report_tables._build_performance_table(
             report_data=report_data,
             report_date="2024-01-10",
-            correlation_results={},
+            btc_correlations=pd.Series(dtype=float),
             asset_groups={"Bitcoin": [("Bitcoin - [BTC]", "price_close")]},
         ).iloc[0]
 
@@ -50,8 +50,7 @@ class PerformanceTableTests(unittest.TestCase):
             for suffix in ("7d", "mtd", "ytd", "90d"):
                 columns[f"{price}_{suffix}_change"] = [1.0]
         report_data = pd.DataFrame(columns, index=pd.to_datetime(["2024-01-05"]))
-        correlations = {"price_close_90_days": pd.DataFrame(
-            0.5, index=["price_close"], columns=[f"{t}_close" for t in tickers[1:]])}
+        correlations = pd.Series(0.5, index=[f"{t}_close" for t in tickers[1:]])
 
         result = report_tables.create_full_performance_table(
             report_data, "2024-01-05", correlations)
