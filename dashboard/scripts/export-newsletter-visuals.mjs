@@ -394,10 +394,9 @@ async function main() {
         });
         if (chartDate !== args.reportDate)
           throw new Error("Chart iframe cutoff mismatch");
-        // Present the complete seven-series legend in newsletter captures.
+        // Preserve normal chart dimensions and the scrollable legend in captures.
         await embedded.addStyleTag({
-          content:
-            ".toolbar{display:none!important}#legend{max-height:none!important}.plot-wrap{height:660px;min-height:660px}",
+          content: ".toolbar{display:none!important}",
         });
         await embedded.evaluate(
           () =>
