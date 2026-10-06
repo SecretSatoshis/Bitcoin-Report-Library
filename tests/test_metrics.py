@@ -57,6 +57,20 @@ class CustomOnchainContractTests(unittest.TestCase):
         self.assertEqual(result["realized_price"].iloc[0], 7.0)
         self.assertEqual(result["realized_price"].iloc[2], 2.0)
 
+    def test_volatility_is_annualized_in_percentage_points(self):
+        frame = self.source_frame()
+        # Alternating +2% and -2% days: about 38% annualized volatility.
+        moves = np.where(np.arange(len(frame)) % 2 == 0, 1.02, 0.98)
+        frame["price_close"] = 10.0 * np.cumprod(moves)
+        result = metrics.calculate_custom_on_chain_metrics(frame)
+        returns = frame["price_close"].pct_change(fill_method=None)
+        for window in (30, 180):
+            expected = returns.rolling(window).std().iloc[-1] * np.sqrt(365) * 100
+            self.assertAlmostEqual(
+                result[f"volatility_{window}d"].iloc[-1], expected, places=9
+            )
+            self.assertGreater(result[f"volatility_{window}d"].iloc[-1], 30)
+
 
 class AverageCapNetworkAgeTests(unittest.TestCase):
     """Average Cap divides by the network's age, not a row counter."""

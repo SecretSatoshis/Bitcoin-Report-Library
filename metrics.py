@@ -162,8 +162,10 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
         "reserve_risk_calc": price_close / hodl_bank,
         "average_cap_price": average_cap / supply,
         "delta_cap_price": delta_cap / supply,
-        "volatility_30d": daily_returns.rolling(30).std() * np.sqrt(365),
-        "volatility_180d": daily_returns.rolling(180).std() * np.sqrt(365),
+        # Annualized volatility in percentage points (37.0 means 37%), like the
+        # release's other percent columns.
+        "volatility_30d": daily_returns.rolling(30).std() * np.sqrt(365) * 100,
+        "volatility_180d": daily_returns.rolling(180).std() * np.sqrt(365) * 100,
         "supply_in_profit_pct": (data["supply_in_profit"] / supply) * 100,
         "supply_in_loss_pct": (data["supply_in_loss"] / supply) * 100,
     }
