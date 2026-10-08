@@ -74,15 +74,13 @@ def build_candle_tables(daily, master, report_date):
     return tables
 
 
-def write_candle_tables(daily, master, report_date, output_dir='csv'):
-    """Build the candle tables and write them, gzipped, to output_dir."""
-    tables = build_candle_tables(daily, master, report_date)
+def write_candle_tables(tables, output_dir='csv'):
+    """Write the tables from build_candle_tables, gzipped, to output_dir."""
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     for filename, frame in tables.items():
         frame.to_csv(output / filename, index=filename != CANDLE_FILES[0], compression='gzip',
                      date_format='%Y-%m-%d', float_format=format_float)
-    return tables
 
 
 def validate_candle_exports(output_dir, master, report_date):

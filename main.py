@@ -22,7 +22,7 @@ import freshness
 import metrics
 import report_tables
 import sources
-from candle_data import write_candle_tables
+from candle_data import build_candle_tables, write_candle_tables
 from publication import format_float, round_for_publication
 from release_manifest import write_release_manifest
 from data_definitions import (
@@ -146,6 +146,8 @@ indexed_tables = {
         report_data, REPORT_DATE
     ),
 }
+# Daily, weekly and monthly candles, checked against the master prices.
+candle_tables = build_candle_tables(daily_ohlc, report_data, REPORT_DATE)
 
 
 # --- Write the release ---
@@ -158,12 +160,12 @@ for filename, table in indexed_tables.items():
 report_data.to_csv(
     "csv/master_metrics_data.csv.gz", compression="gzip", float_format=format_float
 )
-candle_files = write_candle_tables(daily_ohlc, report_data, REPORT_DATE)
+write_candle_tables(candle_tables)
 
 # Consumers verify files against the manifest before using them.
 write_release_manifest(
     "csv",
     REPORT_DATE,
-    [*tables, *indexed_tables, "master_metrics_data.csv.gz", *candle_files],
+    [*tables, *indexed_tables, "master_metrics_data.csv.gz", *candle_tables],
     model_parameters,
 )
