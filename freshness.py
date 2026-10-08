@@ -18,6 +18,7 @@ from data_definitions import (
 )
 from data_validation import validate_calendar
 from sources import (
+    BRK_DERIVED_SERIES,
     MARKET_DATA_MAX_FFILL_DAYS,
     MINER_EFFICIENCY_COLUMNS,
     MINER_EFFICIENCY_SOURCE_DATE_COLUMN,
@@ -47,6 +48,9 @@ REQUIRED_ONCHAIN_METRICS = [
     "addrs_over_10m_sats_addr_count",
     # Investor sentiment (NUPL comes from market_cap and realized_cap)
     "supply_in_profit",
+    # Daily flows in the summary table; like every on-chain series, they are never filled
+    "coinbase_sum_24h_usd",
+    "transfer_volume_sum_24h_usd",
 ]
 
 # Miner revenue feeds the all-time total behind thermocap, so a hole in it shifts every later
@@ -57,8 +61,10 @@ GAP_CHECKED_ONCHAIN_INPUTS = CUMULATIVE_ONCHAIN_INPUTS + ["supply"]
 
 
 def _ordinary_market_columns(data: pd.DataFrame) -> list:
-    """Market columns under the ordinary fill budget: not on-chain, miner or marker columns."""
+    """Market columns under the ordinary fill budget: not on-chain (BRK series and the daily
+    flows derived from them), miner or marker columns."""
     onchain_columns = {metric for metric in BRK_METRICS if metric != "timestamp"}
+    onchain_columns.update(BRK_DERIVED_SERIES)
     excluded = onchain_columns | set(MINER_EFFICIENCY_COLUMNS)
     return [
         column

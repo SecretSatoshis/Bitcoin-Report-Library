@@ -796,6 +796,11 @@ def get_brk_onchain(
     return frame.rename_axis("date").reset_index()
 
 
+# Every column _add_daily_flows adds. They are on-chain series, so the market-data fill
+# never touches them.
+BRK_DERIVED_SERIES = (*BRK_DAILY_FLOWS, "net_realized_pnl_sum_24h", "nvt", "hash_price_ths")
+
+
 def _add_daily_flows(frame: pd.DataFrame) -> pd.DataFrame:
     """Daily flows from running totals, and the BRK ratios built on daily flows.
 

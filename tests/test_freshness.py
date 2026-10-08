@@ -48,6 +48,17 @@ class CumulativeOnchainGapTests(unittest.TestCase):
         frame.iloc[25, 0] = np.nan
         freshness.assert_no_internal_onchain_gaps(frame, "2024-01-20")
 
+    def test_market_fill_leaves_derived_flows_for_the_gap_check(self):
+        frame = self.frame()
+        frame["nvt"] = 50.0
+        frame["SPY_close"] = 500.0
+        frame.iloc[10:12, [0, 2, 3]] = np.nan
+        filled = freshness.forward_fill_market_data(frame)
+        self.assertEqual(filled["SPY_close"].iloc[11], 500.0)
+        self.assertTrue(filled[["coinbase_sum_24h_usd", "nvt"]].iloc[10:12].isna().all().all())
+        with self.assertRaisesRegex(RuntimeError, "coinbase_sum_24h_usd has an internal gap"):
+            freshness.assert_no_internal_onchain_gaps(filled, "2024-01-30")
+
     def test_absent_column_raises(self):
         with self.assertRaises(RuntimeError):
             freshness.assert_no_internal_onchain_gaps(

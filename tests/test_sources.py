@@ -406,6 +406,8 @@ class DailyFlowTests(unittest.TestCase):
         self.assertEqual(result["net_realized_pnl_sum_24h"].iloc[1:].tolist(), [6.0, 14.0])
         self.assertEqual(result["nvt"].iloc[2], 1_000.0 / 15.0)
         self.assertEqual(result["hash_price_ths"].iloc[2], 15.0 / 5.0)
+        # The fill treats exactly these columns as on-chain.
+        self.assertEqual(set(result.columns) - set(frame.columns), set(sources.BRK_DERIVED_SERIES))
 
 
 class PrePricePlaceholderTests(unittest.TestCase):
