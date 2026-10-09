@@ -157,8 +157,8 @@ function sectionHeading(title: string, subtitle: string): string {
 }
 const NAV_LINKS = [
   ["https://newsletter.secretsatoshis.com/p/start-here", "Start Here"],
+  ["https://agent21.secretsatoshis.com/", "Agent 21"],
   ["https://newsletter.secretsatoshis.com/", "Newsletter"],
-  ["https://chatgpt.com/g/g-BZXtVdU6M-agent-21", "Agent 21"],
   ["https://charts.secretsatoshis.com/", "Charts"],
   ["https://dashboard.secretsatoshis.com/", "Dashboard"],
 ];
