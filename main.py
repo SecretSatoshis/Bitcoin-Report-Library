@@ -15,6 +15,7 @@ if __name__ != "__main__":
 
 import pandas as pd
 
+import agent21_examples
 import annual_data
 import cycles
 import etf
@@ -22,7 +23,7 @@ import freshness
 import metrics
 import report_tables
 import sources
-from candle_data import build_candle_tables, write_candle_tables
+from candle_data import CANDLE_FILES, build_candle_tables, write_candle_tables
 from publication import format_float, round_for_publication
 from release_manifest import write_release_manifest
 from data_definitions import (
@@ -148,6 +149,10 @@ indexed_tables = {
 }
 # Daily, weekly and monthly candles, checked against the master prices.
 candle_tables = build_candle_tables(daily_ohlc, report_data, REPORT_DATE)
+# Figures for the example answers on the Agent 21 landing page.
+examples = agent21_examples.build_agent21_examples(
+    report_data, candle_tables[CANDLE_FILES[0]], PRICE_OUTLOOK_LEVELS, PRICE_OUTLOOK_YEAR, REPORT_DATE
+)
 
 
 # --- Write the release ---
@@ -161,6 +166,8 @@ report_data.to_csv(
     "csv/master_metrics_data.csv.gz", compression="gzip", float_format=format_float
 )
 write_candle_tables(candle_tables)
+# Beside the release, not in its manifest: a view of released values for one page.
+agent21_examples.write_agent21_examples(examples)
 
 # Consumers verify files against the manifest before using them.
 write_release_manifest(
