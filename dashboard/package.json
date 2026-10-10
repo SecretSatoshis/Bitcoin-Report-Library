@@ -20,12 +20,12 @@
     "export:newsletter": "node scripts/export-newsletter-visuals.mjs"
   },
   "devDependencies": {
-    "vite": "8.3.1",
+    "vite": "8.3.3",
     "typescript": "7.0.2",
     "tsx": "4.23.15",
     "papaparse": "5.7.0",
     "@types/papaparse": "5.5.2",
-    "@types/node": "24.19.0",
+    "@types/node": "24.19.1",
     "playwright-core": "1.63.0"
   },
   "allowScripts": {
