@@ -127,6 +127,71 @@
     }
   }
 
+  // Draws a group of fund series as stacked bars or areas, from the same prepared
+  // series the legend and export read. Positive and negative values stack separately.
+  class FundStack {
+    constructor(definitions,payload,state,kind){
+      Object.assign(this,{definitions,payload,state,kind});
+      this.views=[{zOrder:()=> 'bottom',renderer:()=>({draw:target=>this.draw(target)})}];
+    }
+    attached({chart,series,requestUpdate}){Object.assign(this,{chart,series,requestUpdate});}
+    detached(){this.chart=null;this.requestUpdate=null;}
+    paneViews(){return this.views;}
+    visible(){return this.definitions.filter(s=>this.state.visible.has(s.id));}
+    extent(first=0,last=this.payload.x.length-1){
+      const selected=this.visible();if(!selected.length)return null;
+      let min=0,max=0;
+      for(let i=Math.max(0,Math.floor(first));i<=Math.min(last,this.payload.x.length-1);i++){
+        let positive=0,negative=0;
+        for(const s of selected){const v=s.values[i-s.start];if(!Number.isFinite(v))continue;if(v>=0)positive+=v;else negative+=v;}
+        min=Math.min(min,negative);max=Math.max(max,positive);
+      }
+      return {minValue:min,maxValue:max===min?min+1:max};
+    }
+    refresh(){this.series?.applyOptions({});this.requestUpdate?.();}
+    draw(target){
+      if(!this.chart)return;
+      const selected=this.visible(),range=this.chart.timeScale().getVisibleLogicalRange();
+      if(!selected.length||!range)return;
+      target.useMediaCoordinateSpace(({context:ctx,mediaSize:{width,height}})=>{
+        ctx.save();ctx.beginPath();ctx.rect(0,0,width,height);ctx.clip();
+        const first=Math.max(0,Math.floor(range.from)-1),last=Math.min(this.payload.x.length-1,Math.ceil(range.to)+1);
+        const spacing=Math.abs(this.chart.timeScale().logicalToCoordinate(1)-this.chart.timeScale().logicalToCoordinate(0));
+        if(this.kind==='stackedBar'){
+          const barWidth=Math.max(.6,spacing*.78);
+          for(let i=first;i<=last;i++){
+            const x=this.chart.timeScale().logicalToCoordinate(i);let positive=0,negative=0;
+            for(const s of selected){
+              const v=s.values[i-s.start];if(!Number.isFinite(v)||v===0)continue;
+              const lower=v>=0?positive:negative,upper=lower+v;
+              if(v>=0)positive=upper;else negative=upper;
+              const a=this.series.priceToCoordinate(lower),b=this.series.priceToCoordinate(upper);
+              if(a===null||b===null)continue;
+              ctx.fillStyle=s.color;ctx.globalAlpha=.88;ctx.fillRect(x-barWidth/2,Math.min(a,b),barWidth,Math.max(.6,Math.abs(a-b)));
+            }
+          }
+        }else{
+          const base=Array.from({length:last-first+1},()=>0);
+          for(const s of selected){
+            const layer=[];
+            for(let i=first;i<=last;i++){
+              const v=s.values[i-s.start],j=i-first,lower=base[j],upper=lower+(Number.isFinite(v)?v:0);
+              base[j]=upper;
+              const x=this.chart.timeScale().logicalToCoordinate(i),a=this.series.priceToCoordinate(lower),b=this.series.priceToCoordinate(upper);
+              if(a!==null&&b!==null)layer.push({x,lower:a,upper:b});
+            }
+            if(layer.length<2)continue;
+            ctx.fillStyle=s.color;ctx.globalAlpha=.68;ctx.beginPath();ctx.moveTo(layer[0].x,layer[0].upper);
+            for(const point of layer.slice(1))ctx.lineTo(point.x,point.upper);
+            for(const point of [...layer].reverse())ctx.lineTo(point.x,point.lower);
+            ctx.closePath();ctx.fill();
+          }
+        }
+        ctx.restore();
+      });
+    }
+  }
+
   const lwc=window.LightweightCharts;
   const decimal=(value,digits=2)=>new Intl.NumberFormat('en-US',{maximumFractionDigits:digits,minimumFractionDigits:digits}).format(value);
   const compact=value=>new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:1}).format(value);
@@ -139,7 +204,7 @@
     if(unit==='percent')return `${decimal(value,2)}%`;
     if(unit==='ratio')return decimal(value,Math.abs(value)<0.01?6:2);
     const n=axis&&Math.abs(value)>=1000?compact(value):decimal(value,unit==='count'?0:Math.abs(value)>0&&Math.abs(value)<0.01?8:2);
-    if(unit.startsWith('USD'))return '$'+n+(axis||unit==='USD'?'':' /TH/s/day');
+    if(unit.startsWith('USD'))return (value<0?'-$':'$')+n.replace(/^-/,'')+(axis||unit==='USD'?'':' /TH/s/day');
     return n+(axis||unit==='count'?'':` ${unit}`);
   }
   const dateString=t=>typeof t==='string'?t:typeof t==='number'?new Date(t*1000).toISOString().slice(0,10):`${t.year}-${String(t.month).padStart(2,'0')}-${String(t.day).padStart(2,'0')}`;
@@ -153,6 +218,7 @@
     const result=[];let run=[];
     for(let i=0;i<series.values.length;i++){
       const value=series.values[i];
+      if(series.breakOnYear&&i>0&&String(payload.x[series.start+i]).slice(0,4)!==String(payload.x[series.start+i-1]).slice(0,4)&&run.length){result.push(run);run=[];}
       if(Number.isFinite(value)&&(mode!=='log'||value>0))run.push({time:payload.x[series.start+i],value});
       else if(run.length){result.push(run);run=[];}
     }
@@ -162,7 +228,7 @@
   function createView(host,payload,state,stacked=false,onHover=()=>{},onRange=()=>{}) {
     const axes=Object.keys(payload.axes), panels=payload.panels;
     const configs=panels?panels.map(panel=>[panel.axis]):stacked&&axes.length>1?[['right'],['left']]:[axes];
-    const charts=[],nodes=[],events=[],bands=[],entries=payload.series.map(definition=>({definition,parts:[]}));
+    const charts=[],nodes=[],events=[],bands=[],stacks=[],entries=payload.series.map(definition=>({definition,parts:[]}));
     let syncing=false,rangeRevision=0;
     const pendingRanges=new Map();
     const sameRange=(a,b)=>a&&b&&Math.abs(a.from-b.from)<1e-6&&Math.abs(a.to-b.to)<1e-6;
@@ -198,6 +264,38 @@
       const chart=(payload.axisKind==='days'?lwc.createOptionsChart:lwc.createChart)(div,options);charts.push(chart);
       // A whitespace calendar preserves actual elapsed spacing even across all-series gaps.
       const calendar=chart.addSeries(lwc.LineSeries,{visible:false,priceScaleId:'__calendar'});calendar.setData(payload.x.map(time=>({time})));
+      const groups=new Map();
+      for(const s of payload.series){
+        if(!visibleAxes.includes(s.axis)||!['stackedBar','stackedArea'].includes(s.render))continue;
+        const key=s.axis+':'+s.stackGroup;
+        if(!groups.has(key))groups.set(key,[]);groups.get(key).push(s);
+      }
+      for(const definitions of groups.values()){
+        const s=definitions[0],scale=panels||configs.length>1?'right':s.axis;
+        const overlay=new FundStack(definitions,payload,state,s.render);
+        const anchor=chart.addSeries(lwc.LineSeries,{priceScaleId:scale,color:'transparent',lineVisible:false,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:false,
+          priceFormat:{type:'custom',formatter:v=>format(v,payload.axes[s.axis].unit,true),minMove:0.00000001},
+          autoscaleInfoProvider:()=>{const range=chart.timeScale().getVisibleLogicalRange();const extent=overlay.extent(range?.from,range?.to);return extent?{priceRange:extent}:null;}});
+        anchor.setData(payload.x.map(time=>({time,value:0})));anchor.attachPrimitive(overlay);stacks.push(overlay);
+        // Stacked holdings never go below zero, so the scale needs no room under it.
+        if(s.render==='stackedArea')chart.priceScale(scale).applyOptions({scaleMargins:{top:0.15,bottom:0}});
+      }
+      // Two signed axes in one plot share the same zero coordinate. Extend
+      // each range by the same negative/positive ratio without changing units.
+      function zeroAlignedRange(axis){
+        const range=chart.timeScale().getVisibleLogicalRange(),bounds={};
+        for(const id of visibleAxes){
+          let min=0,max=0;
+          for(const s of payload.series.filter(s=>s.axis===id&&state.visible.has(s.id))){
+            const first=Math.max(0,Math.floor(range?.from??0)-s.start),last=Math.min(s.values.length-1,Math.ceil(range?.to??payload.x.length-1)-s.start);
+            for(let i=first;i<=last;i++){const v=s.values[i];if(Number.isFinite(v)){min=Math.min(min,v);max=Math.max(max,v);}}
+          }
+          bounds[id]={min,max};
+        }
+        const ratio=Math.max(0,...Object.values(bounds).map(b=>-b.min/(b.max||Math.abs(b.min)||1)));
+        const b=bounds[axis],max=b.max||Math.abs(b.min)||1;
+        return {minValue:-max*ratio,maxValue:max};
+      }
       for(const entry of entries){
         const s=entry.definition;if(!visibleAxes.includes(s.axis))continue;
         const scale=panels||configs.length>1?'right':s.axis,unit=payload.axes[s.axis].unit;
@@ -209,12 +307,17 @@
           entry.parts.push({api,chart});continue;
         }
         for(const data of runs(s,payload,state.modes[s.axis])){
-          const api=chart.addSeries(lwc.LineSeries,{color:rgba(s.color,s.opacity),lineWidth:s.lineWidth,
+          const stackedSeries=['stackedBar','stackedArea'].includes(s.render);
+          const type=s.render==='bar'?lwc.HistogramSeries:s.render==='area'?lwc.BaselineSeries:lwc.LineSeries;
+          const api=chart.addSeries(type,{color:rgba(s.color,s.opacity),lineWidth:s.lineWidth,
+            ...(s.render==='area'?{baseValue:{type:'price',price:0},topLineColor:s.color,bottomLineColor:s.color,topFillColor1:rgba(s.color,.36),topFillColor2:rgba(s.color,.06),bottomFillColor1:rgba(s.color,.06),bottomFillColor2:rgba(s.color,.36)}:{}),
+            ...(stackedSeries?{lineVisible:false,crosshairMarkerVisible:false,autoscaleInfoProvider:()=>null}:{}),
+            ...(payload.alignZero&&configs.length===1&&visibleAxes.length>1?{autoscaleInfoProvider:()=>({priceRange:zeroAlignedRange(s.axis)})}:{}),
             lineStyle:s.lineStyle==='dashed'?lwc.LineStyle.Dashed:lwc.LineStyle.Solid,
             priceScaleId:scale,visible:state.visible.has(s.id),priceLineVisible:false,lastValueVisible:false,
-            pointMarkersVisible:data.length===1,pointMarkersRadius:2,crosshairMarkerRadius:3,
+            pointMarkersVisible:!stackedSeries&&(s.pointMarkers||data.length===1),pointMarkersRadius:2,crosshairMarkerRadius:3,
             priceFormat:{type:'custom',formatter:v=>format(v,unit,true),minMove:unit==='ratio'?0.000001:0.00000001}});
-          api.setData(data);entry.parts.push({api,chart});
+          api.setData(s.render==='bar'?data.map(p=>({...p,color:p.value>=0?(s.positiveColor||THEME.candleUp):(s.negativeColor||THEME.candleDown)})):data);entry.parts.push({api,chart});
         }
       }
       for(const id of visibleAxes){
@@ -276,14 +379,14 @@
     }
     const alignmentObserver=panels?new ResizeObserver(alignScales):null;
     alignmentObserver?.observe(host);alignScales();
-    return {charts,nodes,entries,events,get rangeRevision(){return rangeRevision;},range(){return charts[0].timeScale().getVisibleRange();},
+    return {charts,nodes,entries,events,stacks,get rangeRevision(){return rangeRevision;},range(){return charts[0].timeScale().getVisibleRange();},
       setRange(range){
         rangeRevision++;
         const scale=charts[0].timeScale(),logical={from:scale.timeToIndex(range.from,true),to:scale.timeToIndex(range.to,true)};
         syncing=true;for(const chart of charts){applyRange(chart,logical);chart.applyOptions({});}syncing=false;onRange(range);
       },
       fit(){charts[0].timeScale().fitContent();},
-      visibility(id,visible){for(const e of entries)if(e.definition.id===id)for(const {api} of e.parts)api.applyOptions({visible});for(const overlay of bands)overlay.requestUpdate?.();alignScales();},
+      visibility(id,visible){for(const e of entries)if(e.definition.id===id)for(const {api} of e.parts)api.applyOptions({visible});for(const overlay of bands)overlay.requestUpdate?.();for(const stack of stacks)stack.refresh();if(payload.alignZero)for(const entry of entries)for(const part of entry.parts)part.api.applyOptions({});alignScales();},
       destroy(){alignmentObserver?.disconnect();cancelAnimationFrame(alignmentFrame);for(const chart of charts)chart.remove();host.replaceChildren();}};
   }
   function valueAt(series,time,payload){
@@ -313,7 +416,7 @@
     if(payload.schemaVersion!==2)throw new Error('Unsupported chart schema');
     await Promise.all([document.fonts.load('400 12px "JetBrains Mono"'),document.fonts.load('600 12px "JetBrains Mono"'),document.fonts.load('700 32px Syne')]);
     const defaultHidden=new Set(source.defaultHiddenSeries||[]);
-    const state={modes:Object.fromEntries(Object.entries(payload.axes).map(([id,a])=>[id,a.mode])),visible:new Set(payload.series.filter(s=>!defaultHidden.has(s.id)).map(s=>s.id)),events:true,presentation:'line',interval:'daily',requestedRange:null};
+    const state={modes:Object.fromEntries(Object.entries(payload.axes).map(([id,a])=>[id,a.mode])),visible:new Set(payload.series.filter(s=>!defaultHidden.has(s.id)).map(s=>s.id)),events:true,presentation:'line',interval:'daily',flowInterval:source.defaultFlowInterval||null,requestedRange:null};
     const numeric=payload.axisKind==='days';let reading=payload.readingPoint,view,exporting=false;
     const mobile=matchMedia('(max-width:760px)'),embedded=document.body.classList.contains('embedded')||new URL(location.href).searchParams.get('embed')==='1';
     document.body.classList.toggle('embedded',embedded);
@@ -339,7 +442,7 @@
     function readingAt(time){
       reading=time===null?payload.readingPoint:time;
       $('reading-date').textContent=xLabel(reading,payload);
-      $('reading-mode').textContent=time===null?(payload.family==='seasonal'?'REPORT DAY':numeric?'CURRENT CYCLE DAY':'REPORT DATE'):(numeric?'CURSOR DAY':'CURSOR DATE');
+      $('reading-mode').textContent=time===null?(payload.family==='seasonal'?'REPORT DAY':numeric?'CURRENT CYCLE DAY':payload.dataDate?'LATEST DATA':'REPORT DATE'):(numeric?'CURSOR DAY':'CURSOR DATE');
       for(const s of payload.series)$('value-'+s.id).textContent=format(valueAt(s,reading,payload),payload.axes[s.axis].unit);
       const sorted=orderedSeries(payload,reading),order=sorted.map(s=>s.id).join('|');
       if(order!==legendOrder){
@@ -371,24 +474,50 @@
       return {from,to:to<from?from:to};
     }
     function rebuild(requested){const range=requested||view?.range();view?.destroy();view=createView($('chart'),payload,state,mobile.matches,readingAt,onRange);document.querySelector('.plot-wrap').classList.toggle('dual-mobile',mobile.matches&&Object.keys(payload.axes).length>1);if(range){const target=view,bounded=calendarRange(range);target.setRange(bounded);const revision=target.rangeRevision;requestAnimationFrame(()=>{if(view===target&&target.rangeRevision===revision)target.setRange(bounded);});}reportHeight();}
+    // The payload is the default flow frequency; flowViews holds the others.
+    const flowPayload=interval=>interval===source.defaultFlowInterval?source:{...source,...source.flowViews[interval]};
+    function setFlowInterval(interval){
+      if(!source.flowIntervals?.includes(interval))throw new Error('Flow frequency unavailable');
+      const range=state.requestedRange||view.range();
+      const activeRange=$('ranges').querySelector('button[aria-pressed="true"]')?.dataset.range;
+      state.flowInterval=interval;payload=flowPayload(interval);
+      $('observation-note').textContent=payload.note;
+      document.querySelector('.plot-label').textContent=Object.entries(payload.axes).map(([id,a])=>`${id.toUpperCase()}: ${a.label}`).join(' · ');
+      for(const s of payload.series){
+        const name=$('series-'+s.id).querySelector('.name');name.firstChild.textContent=s.name;
+        $('series-'+s.id).setAttribute('aria-label',`${state.visible.has(s.id)?'Hide':'Show'} ${s.name}`);
+        legendRows.get(s.id).querySelector('.solo').setAttribute('aria-label',`Show only ${s.name}`);
+      }
+      for(const [id,a] of Object.entries(payload.axes))$('scale-'+id).setAttribute('aria-label',a.label+' scale');
+      $('flow-intervals').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.interval===interval)));
+      legendOrder='';rebuild(range);if(activeRange)selectRange(activeRange);readingAt(null);
+    }
+    const flowControls=$('flow-intervals');
+    if(flowControls&&source.flowIntervals){
+      flowControls.hidden=false;
+      for(const interval of source.flowIntervals){
+        const b=document.createElement('button');b.dataset.interval=interval;b.textContent=interval[0].toUpperCase()+interval.slice(1);
+        b.setAttribute('aria-pressed',String(interval===state.flowInterval));b.onclick=()=>setFlowInterval(interval);flowControls.append(b);
+      }
+    }
     function setPresentation(kind,interval=state.interval){
       if(!['line','candles'].includes(kind)||kind==='candles'&&!source.candleViews?.[interval])throw new Error('Candle presentation unavailable');
       const range=state.requestedRange||view.range();state.requestedRange=range;
-      state.presentation=kind;state.interval=interval;payload=kind==='line'?source:{...source,...source.candleViews[interval]};
+      state.presentation=kind;state.interval=interval;payload=kind==='line'?(source.flowIntervals?flowPayload(state.flowInterval):source):{...source,...source.candleViews[interval]};
       if(kind==='candles'&&interval==='daily'){
         const prepared=source.candleViews.daily;
         payload.series=source.series.map(s=>({...s,start:0,values:Array.from({length:prepared.x.length},(_,i)=>s.values[prepared.offset+i-s.start]??null)}));
         payload.candles=prepared.ohlc.map(([open,high,low,close],i)=>({time:prepared.x[i],periodEnd:prepared.x[i],observationDate:prepared.x[i],complete:true,open,high,low,close}));
       }
       $('bitcoin-style').value=kind;$('candle-interval').value=interval;$('interval-control').hidden=kind!=='candles';
-      $('observation-note').textContent=kind==='line'?source.note:interval==='daily'?'Daily candles.':`${interval==='weekly'?'Weekly':'Monthly'} candles and period-end observations. ${payload.candles.at(-1).complete?'Through':'Latest unfinished period through'} ${source.reportDate}.`;
+      $('observation-note').textContent=kind==='line'?payload.note:interval==='daily'?'Daily candles.':`${interval==='weekly'?'Weekly':'Monthly'} candles and period-end observations. ${payload.candles.at(-1).complete?'Through':'Latest unfinished period through'} ${source.reportDate}.`;
       rebuild(range);readingAt(null);
     }
     $('bitcoin-controls').hidden=!source.candleViews||!Object.keys(source.candleViews).length;
     for(const option of $('candle-interval').options)option.disabled=!source.candleViews?.[option.value];
     $('bitcoin-style').onchange=()=>setPresentation($('bitcoin-style').value);
     $('candle-interval').onchange=()=>setPresentation('candles',$('candle-interval').value);
-    function setVisible(s,visible){if(visible)state.visible.add(s.id);else state.visible.delete(s.id);view.visibility(s.id,visible);const b=$('series-'+s.id);b.setAttribute('aria-pressed',String(visible));b.querySelector('.eye').textContent=visible?'●':'○';b.setAttribute('aria-label',`${visible?'Hide':'Show'} ${s.name}`);}
+    function setVisible(s,visible){s=payload.series.find(item=>item.id===s.id)||s;if(visible)state.visible.add(s.id);else state.visible.delete(s.id);view.visibility(s.id,visible);const b=$('series-'+s.id);b.setAttribute('aria-pressed',String(visible));b.querySelector('.eye').textContent=visible?'●':'○';b.setAttribute('aria-label',`${visible?'Hide':'Show'} ${s.name}`);}
     const legendGroups=new Map(),legendRows=new Map();let legendOrder='';
     if(payload.panels)for(const panel of payload.panels){
       const section=document.createElement('section');section.className='legend-group';
@@ -409,14 +538,15 @@
     rebuild();for(const s of payload.series)setVisible(s,!defaultHidden.has(s.id));readingAt(null);
     mobile.addEventListener('change',()=>rebuild());
     $('chart').addEventListener('mouseleave',()=>readingAt(null));
-    const ranges=payload.family==='seasonal'?['ALL']:numeric?['365D','730D','CURRENT','ALL']:payload.defaultRange==='MTD'?['MTD']:payload.defaultRange==='YTD'?['YTD']:['YTD','1Y','4Y','10Y','ALL'];
+    const ranges=payload.ranges|| (payload.family==='seasonal'?['ALL']:numeric?['365D','730D','CURRENT','ALL']:payload.defaultRange==='MTD'?['MTD']:payload.defaultRange==='YTD'?['YTD']:['YTD','1Y','4Y','10Y','ALL']);
     function selectRange(label){
       let range;
       if(label==='ALL')range={from:payload.x[0],to:payload.x.at(-1)};
       else if(numeric)range={from:0,to:Math.min(payload.x.at(-1),label==='CURRENT'?payload.readingPoint:parseInt(label))};
-      else{const start=new Date(payload.reportDate+'T00:00:00Z');
+      else{const start=new Date((payload.rangeEndDate||payload.reportDate)+'T00:00:00Z');
         if(label==='MTD')start.setUTCDate(1);else if(label==='YTD')start.setUTCMonth(0,1);
-        else{const month=start.getUTCMonth();start.setUTCFullYear(start.getUTCFullYear()-(label==='1Y'?1:label==='10Y'?10:4));if(start.getUTCMonth()!==month)start.setUTCDate(0);}
+        else if(/^\d+M$/.test(label)){const day=start.getUTCDate();start.setUTCMonth(start.getUTCMonth()-parseInt(label));if(start.getUTCDate()!==day)start.setUTCDate(0);}
+        else{const month=start.getUTCMonth();start.setUTCFullYear(start.getUTCFullYear()-(/^\d+Y$/.test(label)?parseInt(label):4));if(start.getUTCMonth()!==month)start.setUTCDate(0);}
         range={from:[payload.x[0],start.toISOString().slice(0,10)].sort().at(-1),to:payload.rangeEndDate||payload.reportDate};}
       state.requestedRange=range;view.setRange(calendarRange(range));$('ranges').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.range===label)));
     }
@@ -425,7 +555,7 @@
     $('scales').replaceChildren();for(const [id,axis] of Object.entries(payload.axes)){
       const label=document.createElement('label');label.className='axis-control';label.textContent=(payload.panels?.find(p=>p.axis===id)?.control_label||(id==='right'?'Right':'Left'))+' ';
       const select=document.createElement('select');select.id='scale-'+id;select.setAttribute('aria-label',axis.label+' scale');
-      for(const value of ['linear','log']){const option=document.createElement('option');option.value=value;option.textContent=value==='log'?'Log':'Linear';select.append(option);}select.value=axis.mode;
+      for(const value of (axis.modes||['linear','log'])){const option=document.createElement('option');option.value=value;option.textContent=value==='log'?'Log':'Linear';select.append(option);}select.value=axis.mode;
       select.onchange=()=>setScale(id,select.value);label.append(select);$('scales').append(label);
     }
     if(!payload.events.length){$('events').hidden=true;document.querySelector('.events-list').hidden=true;}
@@ -435,7 +565,7 @@
     const retainedSeries=payload.series.find(s=>s.id==='price_close') || payload.series.find(s=>s.id.startsWith('price_close')) || payload.series.find(s=>s.role==='highlight') || payload.series[0];
     $('remove-all').title=`Keep only ${retainedSeries.name}`;
     $('remove-all').onclick=()=>{for(const s of payload.series)setVisible(s,s.id===retainedSeries.id);$('status').textContent='';};
-    $('reset').onclick=()=>{state.events=true;state.modes=Object.fromEntries(Object.entries(source.axes).map(([k,a])=>[k,a.mode]));setPresentation(source.defaultPresentation||'line',source.defaultInterval||'daily');for(const s of payload.series)setVisible(s,!defaultHidden.has(s.id));for(const [id,a] of Object.entries(payload.axes))$('scale-'+id).value=a.mode;$('events').setAttribute('aria-pressed','true');selectRange(payload.defaultRange);readingAt(null);};
+    $('reset').onclick=()=>{state.events=true;state.modes=Object.fromEntries(Object.entries(source.axes).map(([k,a])=>[k,a.mode]));setPresentation(source.defaultPresentation||'line',source.defaultInterval||'daily');if(source.flowIntervals)setFlowInterval(source.defaultFlowInterval);for(const s of payload.series)setVisible(s,!defaultHidden.has(s.id));for(const [id,a] of Object.entries(payload.axes))$('scale-'+id).value=a.mode;$('events').setAttribute('aria-pressed','true');selectRange(payload.defaultRange);readingAt(null);};
     const clearPreset=()=>{state.requestedRange=null;$('ranges').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed','false'));};
     $('chart').addEventListener('wheel',clearPreset,{passive:true});$('chart').addEventListener('pointerdown',clearPreset);
     async function exportImage(download=true){
@@ -454,8 +584,8 @@
         function rule(y,color=THEME.border){ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(64,y);ctx.lineTo(2336,y);ctx.stroke();}
         ctx.fillStyle=THEME.accent;ctx.fillRect(64,51,10,20);text('SECRET SATOSHIS',94,70,22,THEME.text,'JetBrains Mono',600);text(payload.category.toUpperCase(),1790,70,16,THEME.dim);rule(103);
         text(payload.title,64,178,50,THEME.text,'Syne',700,2240);const range=view.range();
-        text(`${xLabel(range.from,payload)} — ${xLabel(rangeEnd(range),payload)}${payload.candles?'  /  '+state.interval.toUpperCase()+' CANDLES':''}  /  ${Object.entries(state.modes).map(([k,v])=>`${payload.panels?.find(p=>p.axis===k)?.control_label||k}: ${v}`).join(' · ')}`,64,223,18,THEME.dim);
-        text(`Data through ${payload.reportDate}`,1870,223,18,THEME.dim);
+        text(`${xLabel(range.from,payload)} — ${xLabel(rangeEnd(range),payload)}${payload.candles?'  /  '+state.interval.toUpperCase()+' CANDLES':''}${payload.flowInterval?'  /  '+payload.flowInterval.toUpperCase()+' FLOWS':''}  /  ${Object.entries(state.modes).map(([k,v])=>`${payload.panels?.find(p=>p.axis===k)?.control_label||k}: ${v}`).join(' · ')}`,64,223,18,THEME.dim);
+        text(`Data through ${payload.dataDate||payload.reportDate}`,1870,223,18,THEME.dim);
         if(scenarios.length){
           const width=2272/scenarios.length;
           scenarios.forEach((scenario,i)=>{const x=64+i*width;
@@ -476,7 +606,7 @@
             text(label,82,top+25,16,THEME.dim,'JetBrains Mono',600);
           }
         }
-        text(numeric?`AT DAY ${payload.readingPoint}`:'AT REPORT DATE',1800,plotTop,15,THEME.dim);
+        text(numeric?`AT DAY ${payload.readingPoint}`:payload.dataDate?'AT LATEST DATA':'AT REPORT DATE',1800,plotTop,15,THEME.dim);
         const selected=orderedSeries(payload).filter(s=>state.visible.has(s.id)),step=Math.min(100,(plotHeight-40)/selected.length),dense=selected.length>12;
         function legendEntry(s,y){ctx.fillStyle=s.color;ctx.fillRect(1800,y-7,18,3);
           text(s.name,1830,y,dense?13:16,THEME.dim,'JetBrains Mono',400,dense?245:485);
@@ -505,7 +635,7 @@
     if(source.defaultPresentation==='candles')setPresentation('candles',source.defaultInterval||'daily');
     $('loading').hidden=true;
     if(payload.unavailable.length)$('status').textContent=`Unavailable: ${payload.unavailable.join(', ')}`;
-    const api={ready,get payload(){return payload;},exportImage,selectRange,setScale,setPresentation,get readingPoint(){return reading;},get view(){return view;},get state(){return state;}};
+    const api={ready,get payload(){return payload;},exportImage,selectRange,setScale,setPresentation,setFlowInterval,get readingPoint(){return reading;},get view(){return view;},get state(){return state;}};
     window.SecretSatoshisChart=api;new ResizeObserver(reportHeight).observe(document.body);reportHeight();await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));resolveReady(api);
   }
   initialize().catch(error=>{$('loading').textContent=`Unable to load chart: ${error.message}`;$('status').textContent='Chart could not be rendered.';console.error(error);rejectReady(error);});

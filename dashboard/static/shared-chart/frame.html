@@ -15,6 +15,7 @@
     <section class="chart-card" aria-label="Bitcoin Price Outlook">
       <div class="toolbar">
         <div class="button-group" id="ranges" aria-label="Visible date range"></div>
+        <div class="button-group" id="flow-intervals" aria-label="Flow frequency" hidden></div>
         <div class="chart-actions"><div id="bitcoin-controls" class="button-group" hidden><label class="axis-control">Bitcoin <select id="bitcoin-style" aria-label="Bitcoin display"><option value="line">Line</option><option value="candles">Candles</option></select></label><label id="interval-control" class="axis-control" hidden>Interval <select id="candle-interval" aria-label="Candle interval"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label></div><div class="button-group" id="scales" aria-label="Axis scales"></div><button id="events" aria-pressed="true">Events</button><button id="reset">Reset</button><button id="export" class="export">Export PNG <span aria-hidden="true">↗</span></button></div>
       </div>
       <div class="chart-layout">

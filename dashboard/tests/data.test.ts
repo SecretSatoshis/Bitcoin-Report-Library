@@ -74,6 +74,7 @@ test("frozen release: all seven price series, ranges, events and candle payloads
     "defaultInterval",
     "defaultPresentation",
     "defaultRange",
+    "ranges",
     "readingPoint",
     "rangeEndDate",
   ] as const)

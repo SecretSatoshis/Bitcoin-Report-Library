@@ -238,8 +238,8 @@ PRICE_OUTLOOK_LEVELS = pd.DataFrame(
             "color": "#9ca3af",
         },
         {
-            "label": "Support $60,132 - 2026 Low",
-            "price": 60132,
+            "label": "Support $57,740 - 2026 Low",
+            "price": 57740,
             "type": "support",
             "color": "#9ca3af",
         },

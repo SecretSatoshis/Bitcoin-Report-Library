@@ -44,6 +44,7 @@ export interface ChartPayload {
   axisKind: "time" | "days";
   axes: Record<string, { unit: string; label: string; mode: string }>;
   defaultRange: string;
+  ranges?: string[];
   x: (string | number)[];
   series: Series[];
   events: { date: string; name: string; originalDate?: string }[];
@@ -476,7 +477,9 @@ export function pricePayload(
   p.x = [...x, ...futureCalendar(date, end)];
   p.rangeEndDate = end;
   p.coverage = `${x[0]}/${date}`;
-  p.defaultRange = "4Y";
+  // Opens on the last two years; the full set of ranges stays one click away.
+  p.defaultRange = "2Y";
+  p.ranges = ["YTD", "1Y", "2Y", "4Y", "10Y", "ALL"];
   p.defaultPresentation = "candles";
   p.defaultInterval = "weekly";
   p.referenceLines = t["price_outlook.csv"]

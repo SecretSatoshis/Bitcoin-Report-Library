@@ -192,7 +192,7 @@ try {
       interval,
     );
   }
-  for (const range of ["YTD", "1Y", "10Y", "ALL", "4Y"]) {
+  for (const range of ["YTD", "1Y", "4Y", "10Y", "ALL", "2Y"]) {
     await price.locator(`[data-range="${range}"]`).click();
     assert.equal(
       await price
