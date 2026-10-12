@@ -33,7 +33,7 @@ const REPOSITORY_ROOT = resolve(DASHBOARD_ROOT, "..");
 const DEFAULT_BUILD_DIR = join(DASHBOARD_ROOT, "build");
 const MANIFEST_NAME = "visual-manifest.json";
 const VIEWPORT = { width: 1440, height: 1000 };
-const DEVICE_SCALE_FACTOR = 2;
+const DEVICE_SCALE_FACTOR = 3;
 
 const VISUALS = [
   {
