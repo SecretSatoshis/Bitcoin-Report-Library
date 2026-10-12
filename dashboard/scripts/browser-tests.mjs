@@ -85,12 +85,12 @@ try {
       .evaluateAll((tables) =>
         tables.map((t) =>
           [...t.querySelectorAll("tbody tr")].map((r) =>
-            [...r.querySelectorAll("th,td")].map((c) => c.innerText.trim()),
+            [...r.querySelectorAll("th,td")].filter((c) => !c.classList.contains("rank-change")).map((c) => c.innerText.trim()),
           ),
         ),
       );
     const originals = reference.tables.map((t) =>
-      t.map((r) => r.map(normalized)),
+      t.map((r) => r.map((cell) => normalized(cell === "Berkshire Hathaway Class B" ? "Berkshire Hathaway" : cell))),
     );
     const actual = tables.map((t) => t.map((r) => r.map(normalized)));
     // Fundamentals show each category once, as a row group, so compare the metric cells.
@@ -236,6 +236,61 @@ try {
       0,
     );
   }
+  const relative = page.locator("#relative-value-table");
+  assert.deepEqual(await relative.locator('tbody th[scope="row"]').allTextContents(),
+    data.relative.map((row) => row.Asset === "Berkshire Hathaway Class B" ? "Berkshire Hathaway" : row.Asset));
+  const latestValues = await relative.locator("tbody tr").evaluateAll((rows) => rows.map((row) =>
+    [...row.querySelectorAll("th,td")].slice(1).map((cell) => cell.textContent.trim()),
+  ));
+  await relative.locator("tbody tr").first().evaluate((row) => { window.relativeFirstRow = row; });
+  assert.equal(await page.locator('[data-rank-toggle="ytd"]').getAttribute("aria-pressed"), "true");
+  assert.equal(await page.locator("[data-rank-toggle]").count(), 3);
+  assert.equal(await page.locator('[data-rank-toggle="daily"]').count(), 0);
+  assert.equal(await page.locator('[data-rank-period="daily"]').count(), 0);
+  const requestsBeforeToggle = [];
+  const recordRankRequest = (request) => requestsBeforeToggle.push(request.url());
+  page.on("request", recordRankRequest);
+  for (const period of ["wtd", "qtd", "ytd"]) {
+    await page.locator(`[data-rank-toggle="${period}"]`).click();
+    assert.equal(await page.locator(`[data-rank-toggle="${period}"]`).getAttribute("aria-pressed"), "true");
+    assert.equal(await page.locator(`[data-rank-comparison="${period}"]`).isVisible(), true);
+    assert.equal(await relative.locator(`[data-rank-period="${period}"]:visible`).count(), data.relative.length);
+    const chips = await relative.locator(`[data-rank-period="${period}"]`).allTextContents();
+    assert.deepEqual(chips, data.relative.map((row) => {
+      const change = data.relativeRankChanges?.[period][row.Asset].change ?? null;
+      return change === null ? "N/A" : change === 0 ? "—" : `${change > 0 ? "↑" : "↓"} ${Math.abs(change)}`;
+    }));
+    assert.deepEqual(await relative.locator("tbody tr").evaluateAll((rows) => rows.map((row) =>
+      [...row.querySelectorAll("th,td")].slice(1).map((cell) => cell.textContent.trim()),
+    )), latestValues, "Toggles preserve current values and row order");
+    assert.equal(await relative.locator("tbody tr").first().evaluate((row) => row === window.relativeFirstRow), true, "Table rows are not rebuilt");
+  }
+  page.off("request", recordRankRequest);
+  assert.deepEqual(requestsBeforeToggle, [], "Timeframe switching must not fetch data");
+  assert.equal(await relative.locator('tbody th[scope="row"]').count(), data.relative.length);
+  const flatChip = relative.locator('.rank-chip.flat:not([hidden])').first();
+  if (await flatChip.count()) assert.equal(await flatChip.evaluate((el) => getComputedStyle(el).backgroundColor), "rgba(0, 0, 0, 0)");
+  const rankToggle = page.locator('[data-rank-toggle="ytd"]');
+  await rankToggle.press("End");
+  assert.equal(await page.locator('[data-rank-toggle="ytd"]').getAttribute("aria-pressed"), "true");
+  await page.locator('[data-rank-toggle="ytd"]').press("Home");
+  await page.locator('[data-rank-toggle="wtd"]').press("ArrowLeft");
+  assert.equal(await page.locator('[data-rank-toggle="ytd"]').getAttribute("aria-pressed"), "true");
+  await page.locator('[data-rank-toggle="ytd"]').press("ArrowRight");
+  await page.locator('[data-rank-toggle="wtd"]').press("ArrowRight");
+  assert.equal(await page.locator('[data-rank-toggle="qtd"]').getAttribute("aria-pressed"), "true");
+  await page.locator('[data-rank-toggle="qtd"]').press("ArrowRight");
+  const chip = relative.locator('[data-rank-period="ytd"]').first();
+  await chip.focus();
+  assert.equal(await page.locator("#relative-rank-tooltip").isVisible(), true);
+  assert.equal(await page.locator("#relative-rank-tooltip").textContent(), await chip.getAttribute("data-rank-description"));
+  await chip.press("Escape");
+  assert.equal(await page.locator("#relative-rank-tooltip").isVisible(), false);
+  await rankToggle.focus();
+  await chip.hover();
+  assert.equal(await page.locator("#relative-rank-tooltip").isVisible(), true);
+  await page.mouse.move(0, 0);
+  assert.equal(await page.locator("#relative-rank-tooltip").isVisible(), false);
   const button = page.locator(".help-button").first();
   if (data.correlations) {
     for (const period of [30, 365, 90]) {
@@ -283,7 +338,27 @@ try {
     await page.screenshot({
       path: resolve(artifacts, `dashboard-${width}.png`),
     });
+    await page.locator("#relative-valuation").scrollIntoViewIfNeeded();
+    if (width === 1440) {
+      assert.equal(await relative.evaluate((table) => table.parentElement.scrollWidth <= table.parentElement.clientWidth), true, "Desktop valuation table fits without horizontal scrolling");
+      assert.equal(await relative.locator("thead th").evaluateAll((headers) => headers.every((header) => {
+        const range = document.createRange();
+        range.selectNodeContents(header);
+        return range.getClientRects().length === 1;
+      })), true, "Desktop valuation headers each occupy one line");
+    }
+    await page.locator("#relative-valuation").screenshot({ path: resolve(artifacts, `relative-valuation-${width}.png`) });
     if (width === 390) {
+      await page.locator('[data-rank-toggle="ytd"]').click();
+      const mobileChip = relative.locator('[data-rank-period="ytd"]').first();
+      await mobileChip.click();
+      const tip = page.locator("#relative-rank-tooltip");
+      assert.equal(await tip.isVisible(), true);
+      const bounds = await tip.boundingBox();
+      assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width, "Tooltip stays within mobile viewport");
+      await page.locator('[data-rank-toggle="wtd"]').click();
+      assert.equal(await tip.isVisible(), false);
+      await page.evaluate(() => scrollTo(0, 0));
       await page.locator("#nav-toggle").click();
       assert.equal(
         await page.locator("#nav-toggle").getAttribute("aria-expanded"),
@@ -312,6 +387,9 @@ try {
   await staticPage.goto(base);
   assert.equal(await staticPage.locator(".metric-card").count(), 9);
   assert.equal(await staticPage.locator("table").count(), 9 + (data.correlations ? 3 : 0));
+  assert.equal(await staticPage.locator('[data-rank-period="ytd"]:visible').count(), data.relative.length);
+  assert.equal(await staticPage.locator('[data-rank-period="wtd"]:visible').count(), 0);
+  assert.equal(await staticPage.locator('[data-rank-period="daily"]:visible').count(), 0);
   if (data.correlations) {
     const actual = await staticPage.locator(".correlation-matrix tbody tr").evaluateAll((rows) =>
       rows.map((row) => [...row.querySelectorAll("td")].map((cell) => cell.textContent.trim())),

@@ -20,6 +20,7 @@ import {
   validateTables,
   type Row,
   CORRELATION_FILE,
+  RELATIVE_RANK_FILE,
 } from "../src/data";
 import { renderDashboard, format, escape } from "../src/render";
 
@@ -46,6 +47,24 @@ const reference = JSON.parse(
 );
 const data = () =>
   createDashboard(structuredClone(tables), release, colors, events);
+
+test("rank comparison inputs are optional and manifest hash checked", () => {
+  assert.equal(data().relativeRankChanges, null);
+  const copy = mkdtempSync(resolve(tmpdir(), "ss-rank-release-"));
+  try {
+    cpSync(directory, copy, { recursive: true });
+    const csv = "Asset,Timeframe,Current Date,Baseline Date,Current Rank,Previous Rank,Change,Status\nBitcoin,wtd,2026-09-29,2026-09-27,11,12,1,available\n";
+    const manifest = structuredClone(release);
+    manifest.files[RELATIVE_RANK_FILE] = { sha256: hash(csv), size_bytes: Buffer.byteLength(csv) };
+    writeFileSync(resolve(copy, RELATIVE_RANK_FILE), csv);
+    writeFileSync(resolve(copy, "release_manifest.json"), JSON.stringify(manifest));
+    assert.equal(loadVerified(copy).tables[RELATIVE_RANK_FILE][0].Asset, "Bitcoin");
+    writeFileSync(resolve(copy, RELATIVE_RANK_FILE), csv.replace(",12,1,", ",13,2,"));
+    assert.throws(() => loadVerified(copy), /manifest hash\/size mismatch/);
+  } finally {
+    rmSync(copy, { recursive: true, force: true });
+  }
+});
 
 test("the new matrix is loaded only from its release manifest and hash checked", () => {
   const copy = mkdtempSync(resolve(tmpdir(), "ss-correlation-release-"));

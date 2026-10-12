@@ -139,6 +139,12 @@
     <priority>0.5</priority>
   </url>
   <url>
+    <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/relative_value_rank_changes.csv</loc>
+    <lastmod>2026-10-11</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/report_ohlc_summary.csv</loc>
     <lastmod>2026-10-11</lastmod>
     <changefreq>daily</changefreq>

@@ -53,16 +53,16 @@
       "size_bytes": 121956
     },
     "master_metrics_data.csv.gz": {
-      "sha256": "7611c6e01a95432f98bb3d9cdff03783eb9d0948a2fd0277e2145ca542819d76",
-      "size_bytes": 8278032
+      "sha256": "8e6959b2a0e59acea42e5f7990110f29dca69df3bb71ecfd1fd1e9075b9f2b94",
+      "size_bytes": 8212250
     },
     "monthly_heatmap_data.csv": {
       "sha256": "ff2b8bd0747af3188914916eae088662686c256c277cb5057c39a6d03b4a55fe",
       "size_bytes": 3016
     },
     "monthly_metrics_data.csv.gz": {
-      "sha256": "fc0ae4d47ecb7565d52fa6fff3001a8459cf0f3267a9542a83510a5311789cb4",
-      "size_bytes": 311338
+      "sha256": "8c4f74922b06d64ab0cae245c992e402641473b136d94a202533d82e0bba0d24",
+      "size_bytes": 308507
     },
     "mtd_price_paths.csv": {
       "sha256": "2bd1d86d9a23dd7ae7ed4c8b8d23fb661f6a6f156a6d9626e5fdc1eb0ea669a1",
@@ -85,8 +85,12 @@
       "size_bytes": 527
     },
     "relative_value_comparison.csv": {
-      "sha256": "7eaa245a81586ebc2d1b25e6f6a853795a66e880edb334e92499e7c0d59590f3",
-      "size_bytes": 1061
+      "sha256": "c0b9a92a7c51fce5c7823c3a7b84f69a1a5e62c29dbe9a65f917bdea3f7baa0d",
+      "size_bytes": 1014
+    },
+    "relative_value_rank_changes.csv": {
+      "sha256": "feeb24504a5eef8501b1302270471245643a2aa4b8619b0817ad333dd2a68278",
+      "size_bytes": 4414
     },
     "report_ohlc_summary.csv": {
       "sha256": "2fe8b2a619e38cde63416e7e4fe5018fd2e08e9f1fbd2d74a7b45b61263e4ed2",
@@ -105,8 +109,8 @@
       "size_bytes": 480
     },
     "weekly_metrics_data.csv.gz": {
-      "sha256": "abf2c4bb38255a9fe910e0a49dbe2adeffdc1eb9895fffe74ea1a1226800b109",
-      "size_bytes": 1315997
+      "sha256": "92e7d520ac2201e0fd4fbaf7f585a0a21d6cfa48841a337701c166596268b301",
+      "size_bytes": 1304102
     },
     "ytd_price_paths.csv": {
       "sha256": "2a1a47b62747dcaf144b0dffd5a7b025c403ad8e244d66869a4088b02274832b",
@@ -117,7 +121,7 @@
       "size_bytes": 178
     }
   },
-  "generated_at": "2026-10-12T06:21:13+00:00",
+  "generated_at": "2026-10-12T20:34:43+00:00",
   "model_parameters": {
     "metcalfe_scale": 0.0002842688162591144,
     "power_law_exponent": 5.62210641148364,

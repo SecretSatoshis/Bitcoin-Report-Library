@@ -447,7 +447,7 @@ tbody tr:hover {
 /* Return chips sit centred in their columns. */
 td:has(> .delta),
 .performance thead th:nth-child(n + 3),
-.relative thead th:nth-child(4),
+.relative thead th:nth-child(5),
 .fundamentals thead th:nth-child(5),
 .roi thead th:nth-child(2) {
   text-align: center;
@@ -637,8 +637,52 @@ td:has(> .delta),
 }
 
 /* Relative valuation */
+.relative-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.relative-comparison { margin: 0; color: var(--dim); font-size: 11px; }
+.relative-periods { display: flex; gap: 4px; }
+.relative-periods button {
+  padding: 7px 10px;
+  border: 1px solid var(--border-hi);
+  border-radius: 4px;
+  background: var(--bg-alt);
+  color: var(--dim);
+  font: 11px var(--mono);
+  cursor: pointer;
+}
+.relative-periods button[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+.relative .rank-change,
+.relative thead th:first-child { text-align: center; }
+.relative .relative-asset,
+.relative thead th:nth-child(2) { text-align: left; }
+.relative thead th { white-space: normal; }
+.rank-chip { font-family: inherit; cursor: help; min-width: 48px; white-space: nowrap; }
+.rank-chip.flat { background: transparent; }
+.rank-chip.unavailable { background: transparent; color: var(--dim); border-color: transparent; }
+.rank-chip[hidden],
+.rank-tooltip[hidden] { display: none; }
+.rank-tooltip {
+  position: fixed;
+  z-index: 100;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 10px 12px;
+  border: 1px solid var(--border-hi);
+  border-radius: 6px;
+  background: var(--bg-alt);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.6;
+  pointer-events: none;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+}
+.relative-methodology { margin-top: 12px; font-size: 10px; line-height: 1.7; color: var(--dim); }
 .relative td:last-child {
   width: 22%;
+}
+@media (min-width: 1200px) {
+  .relative th,
+  .relative td { padding-left: 6px; padding-right: 6px; }
+  .relative thead th { white-space: nowrap; font-size: 11px; }
+  .relative td:last-child { width: auto; }
 }
 .share {
   position: relative;

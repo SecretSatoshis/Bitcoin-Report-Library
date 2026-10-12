@@ -122,6 +122,9 @@ tables = {
     "relative_value_comparison.csv": report_tables.create_asset_valuation_table(
         report_data, REPORT_DATE
     ),
+    report_tables.RELATIVE_RANK_FILE: report_tables.create_relative_value_rank_changes(
+        report_data, REPORT_DATE
+    ),
     "roi_table.csv": report_tables.calculate_roi_table(report_data, REPORT_DATE),
     "mtd_return_comparison.csv": report_tables.create_period_returns_table(
         report_data, REPORT_DATE, "mtd"

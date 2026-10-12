@@ -50,6 +50,62 @@ document
     });
   });
 const links = document.querySelectorAll<HTMLAnchorElement>(".section-nav a");
+const rankToggles = [...document.querySelectorAll<HTMLButtonElement>("[data-rank-toggle]")];
+const rankTooltip = document.querySelector<HTMLElement>("#relative-rank-tooltip");
+let activeRankChip: HTMLButtonElement | null = null;
+function hideRankTooltip() {
+  if (rankTooltip) rankTooltip.hidden = true;
+  activeRankChip?.removeAttribute("aria-describedby");
+  activeRankChip = null;
+}
+function showRankTooltip(chip: HTMLButtonElement) {
+  if (!rankTooltip) return;
+  hideRankTooltip();
+  activeRankChip = chip;
+  rankTooltip.textContent = chip.dataset.rankDescription!;
+  rankTooltip.hidden = false;
+  chip.setAttribute("aria-describedby", rankTooltip.id);
+  const rect = chip.getBoundingClientRect();
+  rankTooltip.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - rankTooltip.offsetWidth - 8))}px`;
+  rankTooltip.style.top = `${Math.max(8, rect.bottom + rankTooltip.offsetHeight + 8 <= innerHeight
+    ? rect.bottom + 8 : rect.top - rankTooltip.offsetHeight - 8)}px`;
+}
+function selectRankPeriod(button: HTMLButtonElement) {
+  hideRankTooltip();
+  const period = button.dataset.rankToggle;
+  for (const toggle of rankToggles) {
+    toggle.setAttribute("aria-pressed", String(toggle === button));
+    toggle.tabIndex = toggle === button ? 0 : -1;
+  }
+  document.querySelectorAll<HTMLButtonElement>("[data-rank-period]").forEach((chip) => {
+    chip.hidden = chip.dataset.rankPeriod !== period;
+  });
+  document.querySelectorAll<HTMLElement>("[data-rank-comparison]").forEach((label) => {
+    label.hidden = label.dataset.rankComparison !== period;
+  });
+}
+for (const [index, button] of rankToggles.entries()) {
+  button.addEventListener("click", () => selectRankPeriod(button));
+  button.addEventListener("keydown", (event) => {
+    const next = event.key === "ArrowRight" ? (index + 1) % rankToggles.length
+      : event.key === "ArrowLeft" ? (index + rankToggles.length - 1) % rankToggles.length
+      : event.key === "Home" ? 0 : event.key === "End" ? rankToggles.length - 1 : null;
+    if (next === null) return;
+    event.preventDefault();
+    selectRankPeriod(rankToggles[next]);
+    rankToggles[next].focus();
+  });
+}
+document.querySelectorAll<HTMLButtonElement>("[data-rank-period]").forEach((chip) => {
+  chip.addEventListener("mouseenter", () => showRankTooltip(chip));
+  chip.addEventListener("focus", () => showRankTooltip(chip));
+  chip.addEventListener("click", () => showRankTooltip(chip));
+  chip.addEventListener("mouseleave", () => { if (document.activeElement !== chip) hideRankTooltip(); });
+  chip.addEventListener("blur", hideRankTooltip);
+});
+document.addEventListener("keydown", (event) => { if (event.key === "Escape") hideRankTooltip(); });
+document.addEventListener("scroll", hideRankTooltip, true);
+window.addEventListener("resize", hideRankTooltip);
 const correlationTabs = [...document.querySelectorAll<HTMLButtonElement>("[data-correlation-period]")];
 function selectCorrelationPeriod(button: HTMLButtonElement) {
   for (const tab of correlationTabs) {

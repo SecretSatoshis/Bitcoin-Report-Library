@@ -96,6 +96,7 @@ export interface DashboardData {
   correlations: CorrelationMatrices | null;
   heatmap: { reference: Row[]; years: Row[] };
   relative: (Row & { btcShare: string })[];
+  relativeRankChanges: RelativeRankChanges | null;
   fundamentals: Row[];
   roi: Row[];
   cases: Row[];
@@ -119,9 +120,72 @@ export const inputFiles = [
 export const CORRELATION_FILE = "correlation_matrix.csv";
 export const correlationPeriods = [30, 90, 365];
 export type CorrelationMatrices = Record<number, Row[]>;
+export const RELATIVE_RANK_FILE = "relative_value_rank_changes.csv";
+export const relativeRankPeriods = ["daily", "wtd", "qtd", "ytd"] as const;
+export type RelativeRankPeriod = typeof relativeRankPeriods[number];
+export interface RelativeRankChange {
+  currentDate: string;
+  baselineDate: string;
+  currentRank: number | null;
+  previousRank: number | null;
+  change: number | null;
+  status: "available" | "missing_current" | "missing_baseline" | "missing_both";
+}
+export type RelativeRankChanges = Record<RelativeRankPeriod, Record<string, RelativeRankChange>>;
+
+export function relativeRankBaselines(date: string): Record<RelativeRankPeriod, string> {
+  const current = new Date(iso(date) + "T00:00:00Z");
+  const label = (d: Date) => d.toISOString().slice(0, 10);
+  const before = (d: Date, days = 1) => {
+    d.setUTCDate(d.getUTCDate() - days);
+    return label(d);
+  };
+  return {
+    daily: before(new Date(current)),
+    wtd: before(new Date(current), ((current.getUTCDay() + 6) % 7) + 1),
+    qtd: before(new Date(Date.UTC(current.getUTCFullYear(), Math.floor(current.getUTCMonth() / 3) * 3, 1))),
+    ytd: before(new Date(Date.UTC(current.getUTCFullYear(), 0, 1))),
+  };
+}
+
+export function readRelativeRankChanges(t: Tables, date: string): RelativeRankChanges | null {
+  const rows = t[RELATIVE_RANK_FILE];
+  if (!rows) return null;
+  const assets = t["relative_value_comparison.csv"];
+  const fields = ["Asset", "Timeframe", "Current Date", "Baseline Date", "Current Rank", "Previous Rank", "Change", "Status"];
+  const baselines = relativeRankBaselines(date);
+  const invalid = (reason: string): never => { throw new Error(`${RELATIVE_RANK_FILE}: ${reason}`); };
+  if (rows.length !== assets.length * relativeRankPeriods.length) invalid("expected four comparisons per asset");
+  const result = Object.fromEntries(relativeRankPeriods.map((period) => [period, Object.create(null)])) as RelativeRankChanges;
+  for (const row of rows) {
+    if (Object.keys(row).length !== fields.length || fields.some((field) => !(field in row))) invalid("invalid columns");
+    const period = row.Timeframe as RelativeRankPeriod;
+    const asset = assets.find((r) => r.Asset === row.Asset);
+    if (!asset) return invalid("unknown asset");
+    if (!relativeRankPeriods.includes(period) || Object.hasOwn(result[period], row.Asset)) invalid("invalid or duplicate asset/timeframe");
+    if (row["Current Date"] !== date || row["Baseline Date"] !== baselines[period]) invalid("comparison dates do not match the report");
+    const rank = (field: string) => {
+      const value = num(row[field]);
+      if (row[field].trim() && value === null) invalid(`invalid ${field}`);
+      if (value !== null && (!Number.isInteger(value) || value < 1 || value > assets.length)) invalid(`invalid ${field}`);
+      return value;
+    };
+    const currentRank = rank("Current Rank"), previousRank = rank("Previous Rank");
+    const cap = num(asset["Market Cap (USD)"]);
+    const expectedRank = cap === null || cap <= 0 ? null : 1 + assets.filter((r) => (num(r["Market Cap (USD)"]) ?? -Infinity) > cap).length;
+    if (currentRank !== expectedRank) invalid("current rank disagrees with valuation table");
+    const status = currentRank === null && previousRank === null ? "missing_both"
+      : currentRank === null ? "missing_current" : previousRank === null ? "missing_baseline" : "available";
+    const change = num(row.Change);
+    if (row.Status !== status || (row.Change.trim() && change === null)
+      || change !== (status === "available" ? previousRank! - currentRank! : null)) invalid("invalid availability or rank change");
+    result[period][row.Asset] = { currentDate: date, baselineDate: baselines[period], currentRank, previousRank, change, status };
+  }
+  return result;
+}
 // Older releases remain readable; new pipeline runs always export the matrix.
 export function releaseInputFiles(release: ReleaseManifest): string[] {
-  return [...inputFiles, ...(release.files[CORRELATION_FILE] ? [CORRELATION_FILE] : [])];
+  return [...inputFiles, ...[CORRELATION_FILE, RELATIVE_RANK_FILE].filter((file) => release.files[file])];
 }
 export const correlationGroups = [
   { category: "Bitcoin", title: "Bitcoin", tickers: ["BTC"] },
@@ -842,6 +906,7 @@ export function createDashboard(
           (num(b["Market Cap (USD)"]) ?? -Infinity) -
           (num(a["Market Cap (USD)"]) ?? -Infinity),
       ),
+    relativeRankChanges: readRelativeRankChanges(t, date),
     fundamentals: t["fundamentals_table.csv"]
       .slice()
       .sort((a, b) => a.Section.localeCompare(b.Section)),

@@ -22,6 +22,10 @@ from report_tables import (
     CORRELATION_ASSETS,
     CORRELATION_MATRIX_PERIODS,
     PERFORMANCE_GROUPS,
+    RELATIVE_RANK_FILE,
+    RELATIVE_RANK_COLUMNS,
+    asset_valuation_definitions,
+    create_relative_value_rank_changes,
     _nupl_sentiment,
     _power_law_valuation,
     create_fundamentals_table,
@@ -53,6 +57,8 @@ OUTPUT_RULES = {
     "performance_table.csv": RowBounds(1, 1_000),
     "price_outlook.csv": RowBounds(1, 1_000),
     "relative_value_comparison.csv": RowBounds(2, 1_000),
+    RELATIVE_RANK_FILE: RowBounds(4 * len(asset_valuation_definitions()),
+                                 4 * len(asset_valuation_definitions())),
     "report_ohlc_summary.csv": RowBounds(1, 1),
     "roi_table.csv": RowBounds(1, 100),
     "summary_history.csv": RowBounds(31, 1_000),
@@ -107,6 +113,7 @@ REQUIRED_COLUMNS = {
     },
     "price_outlook.csv": {"label", "price", "type", "color", "outlook_year"},
     "relative_value_comparison.csv": {"Asset", "Market Cap (USD)", "BTC Price at Market Cap"},
+    RELATIVE_RANK_FILE: set(RELATIVE_RANK_COLUMNS),
     "report_ohlc_summary.csv": {"date", "daily_close"},
     "roi_table.csv": {"Time Frame", "ROI (%)", "Start Date", "Start Price"},
     "summary_history.csv": {"Metric", "date", "Value"},
@@ -129,6 +136,7 @@ SUMMARY_HISTORY_METRICS = {
 
 
 RETAINED_OUTPUTS = {
+    RELATIVE_RANK_FILE,
     "correlation_matrix.csv",
     "etf_daily.csv",
     "etf_totals_daily.csv",
@@ -808,6 +816,7 @@ def validate_outputs(
     _validate_review_contracts(retained_frames, output_dir, expected_report_date, errors)
     _validate_performance_rows(retained_frames, errors)
     _validate_correlation_matrix(retained_frames, expected_report_date, errors)
+    _validate_relative_rank_changes(retained_frames, output_dir, expected_report_date, errors)
     _validate_annual_reference(retained_frames, errors)
     _validate_etf(retained_frames, errors)
     if any((output_dir / name).exists() for name in CANDLE_FILES):
@@ -818,6 +827,33 @@ def validate_outputs(
             errors.append(f"Chart candle exports: {exc}")
     _validate_release_manifest(output_dir, expected_report_date, errors, require_release_manifest)
     return errors
+
+
+def _validate_relative_rank_changes(frames, output_dir, report_date, errors):
+    """Recompute all ranks and availability from the published master series."""
+    table = frames.get(RELATIVE_RANK_FILE)
+    if table is None or not set(RELATIVE_RANK_COLUMNS).issubset(table.columns):
+        return
+    try:
+        columns = {"date"} | {
+            asset["market_cap"] for asset in asset_valuation_definitions()
+            if "market_cap" in asset
+        }
+        master = pd.read_csv(
+            output_dir / "master_metrics_data.csv.gz", usecols=lambda c: c in columns,
+            parse_dates=["date"], low_memory=False,
+        ).set_index("date")
+        expected = create_relative_value_rank_changes(master, report_date)
+        actual = table.copy()
+        for column in ("Current Rank", "Previous Rank", "Change"):
+            actual[column] = pd.to_numeric(actual[column], errors="raise").astype("Int64")
+        keys = ["Timeframe", "Asset"]
+        pd.testing.assert_frame_equal(
+            actual.set_index(keys).sort_index(), expected.set_index(keys).sort_index(),
+            check_dtype=False, check_exact=True,
+        )
+    except (OSError, ValueError, KeyError, TypeError, AssertionError) as exc:
+        errors.append(f"{RELATIVE_RANK_FILE}: rank comparisons do not match their source ({exc})")
 
 
 def _validate_correlation_matrix(frames, report_date, errors):

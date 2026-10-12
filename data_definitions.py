@@ -17,7 +17,6 @@ TICKERS = {
         "NVDA",
         "AVGO",
         "TSLA",
-        "LLY",
         "MU",
         "META",
         "BRK-B",

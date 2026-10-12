@@ -1,4 +1,4 @@
-import { correlationGroups, correlationLabel, correlationName, correlationPeriods, num, type DashboardData, type Row, type Metric } from "./data";
+import { relativeRankBaselines, type RelativeRankPeriod, type RelativeRankChange, correlationGroups, correlationLabel, correlationName, correlationPeriods, num, type DashboardData, type Row, type Metric } from "./data";
 export const escape = (v: unknown) =>
   String(v ?? "").replace(
     /[&<>"']/g,
@@ -205,23 +205,39 @@ function fundamentalsTable(d: DashboardData): string {
     .join("");
   return `<div class="table-scroll" role="region" aria-label="Network fundamentals" tabindex="0"><table class="fundamentals"><thead><tr>${["Category", "Metric", "Current Value", "7 Days Ago", "7d Change", "52W Low", "52W High"].map((h) => `<th scope="col">${h}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
+const rankTogglePeriods: RelativeRankPeriod[] = ["wtd", "qtd", "ytd"];
+const defaultRankPeriod: RelativeRankPeriod = "ytd";
+const relativeAssetLabel = (asset: string) => asset === "Berkshire Hathaway Class B" ? "Berkshire Hathaway" : asset;
+const rankPeriodLabels: Record<RelativeRankPeriod, string> = { daily: "Daily", wtd: "WTD", qtd: "QTD", ytd: "YTD" };
+const rankPeriodDescriptions: Record<RelativeRankPeriod, string> = {
+  daily: "since the previous day's close", wtd: "since the start of this week",
+  qtd: "since the start of this quarter", ytd: "since the start of this year",
+};
+export function rankChip(asset: string, period: RelativeRankPeriod, comparison?: RelativeRankChange): string {
+  const change = comparison?.change ?? null;
+  const direction = change === null ? "unavailable" : change > 0 ? "positive" : change < 0 ? "negative" : "flat";
+  const text = change === null ? "N/A" : change === 0 ? "—" : `${change > 0 ? "↑" : "↓"} ${Math.abs(change)}`;
+  let description = "Rank history is unavailable for this release.";
+  if (comparison) {
+    const dates = `${comparison.baselineDate} → ${comparison.currentDate} (UTC closes)`;
+    description = comparison.status === "available"
+      ? `${change === 0 ? `Unchanged at #${comparison.currentRank}` : `Moved from #${comparison.previousRank} to #${comparison.currentRank}`} ${rankPeriodDescriptions[period]}. ${dates}.`
+      : `${comparison.status === "missing_current" ? "Current market cap is unavailable"
+        : comparison.status === "missing_baseline" ? "Market cap is unavailable at the period's baseline"
+        : "Market cap is unavailable at both dates"}. ${dates}.`;
+  }
+  return `<button type="button" class="rank-chip delta ${direction}" data-rank-period="${period}" data-rank-description="${escape(description)}" aria-label="${escape(relativeAssetLabel(asset) + ': ' + description)}" ${period === defaultRankPeriod ? "" : "hidden"}>${text}</button>`;
+}
 function relativeTable(d: DashboardData): string {
   const shares = d.relative.map((r) => num(r.btcShare)).filter((n): n is number => n !== null);
   const widest = Math.max(100, ...shares);
-  return table(
-    ["Asset", "Market Cap (USD)", "Hypothetical BTC Price (USD)", "Change from Current BTC Price (%)", "BTC / Asset Market Cap (%)"],
-    d.relative.map((r) => [
-      r.Asset === "Bitcoin" ? '<span class="accent">Bitcoin</span>' : escape(r.Asset),
-      format(r["Market Cap (USD)"], "trillion", 2),
-      format(r["BTC Price at Market Cap"], "usd"),
-      delta(r["Move Needed (%)"], 0),
-      r.btcShare
-        ? `<span class="share"><span class="share-bar" style="width:${((num(r.btcShare) ?? 0) / widest) * 100}%"></span><span class="share-value">${format(r.btcShare, "percent", 1)}</span></span>`
-        : "—",
-    ]),
-    "Relative valuation",
-    "relative",
-  );
+  const baselines = relativeRankBaselines(d.reportDate);
+  const headings = ["Position change", "Asset", "Market Cap (USD)", "Hypothetical BTC Price (USD)", "Change from Current BTC Price (%)", "BTC / Asset Market Cap (%)"];
+  const controls = `<div class="relative-tools"><p class="relative-comparison" aria-live="polite" aria-atomic="true">${rankTogglePeriods.map((period) => `<span data-rank-comparison="${period}" ${period === defaultRankPeriod ? "" : "hidden"}>${rankPeriodLabels[period]} position change · ${baselines[period]} → ${d.reportDate}</span>`).join("")}</p><div class="relative-periods" role="group" aria-label="Position change timeframe">${rankTogglePeriods.map((period) => `<button type="button" data-rank-toggle="${period}" aria-pressed="${period === defaultRankPeriod}" aria-controls="relative-value-table" tabindex="${period === defaultRankPeriod ? 0 : -1}" aria-label="${rankPeriodLabels[period]}: ${rankPeriodDescriptions[period]}">${rankPeriodLabels[period]}</button>`).join("")}</div></div>`;
+  const rows = d.relative.map((r) => `<tr><td class="rank-change">${rankTogglePeriods.map((period) => rankChip(r.Asset, period, d.relativeRankChanges?.[period][r.Asset])).join("")}</td><th scope="row" class="relative-asset">${r.Asset === "Bitcoin" ? '<span class="accent">Bitcoin</span>' : escape(relativeAssetLabel(r.Asset))}</th><td>${format(r["Market Cap (USD)"], "trillion", 2)}</td><td>${format(r["BTC Price at Market Cap"], "usd")}</td><td>${delta(r["Move Needed (%)"], 0)}</td><td>${r.btcShare
+    ? `<span class="share"><span class="share-bar" style="width:${((num(r.btcShare) ?? 0) / widest) * 100}%"></span><span class="share-value">${format(r.btcShare, "percent", 1)}</span></span>`
+    : "—"}</td></tr>`).join("");
+  return `${controls}<div class="table-scroll" role="region" aria-label="Relative valuation" tabindex="0"><table class="relative" id="relative-value-table" aria-describedby="relative-rank-methodology"><thead><tr>${headings.map((h) => `<th scope="col">${escape(h)}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div><div id="relative-rank-tooltip" class="rank-tooltip" role="tooltip" hidden></div><p id="relative-rank-methodology" class="relative-methodology">Ranks cover the assets listed here; new entrants can shift other positions. M0 amounts are fixed reference values. Historical metal values use estimated supply. Comparisons use completed UTC-day data.${d.relativeRankChanges ? "" : " Rank history is unavailable for this release."}</p>`;
 }
 export function renderDashboard(d: DashboardData): string {
   const cases = d.cases

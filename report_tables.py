@@ -765,17 +765,19 @@ def create_period_returns_table(report_data, report_date, period):
     return pd.concat([table.loc[[report_date.year]].reset_index(), median_row], ignore_index=True)
 
 
-def create_asset_valuation_table(report_data, report_date=None):
-    """Bitcoin's price if its market cap matched each asset (M0 supplies, gold, silver,
-    large stocks), with the move needed to get there.
+RELATIVE_RANK_FILE = "relative_value_rank_changes.csv"
+RELATIVE_RANK_COLUMNS = [
+    "Asset", "Timeframe", "Current Date", "Baseline Date", "Current Rank",
+    "Previous Rank", "Change", "Status",
+]
 
-    Columns: Asset, Market Cap (USD), BTC Price at Market Cap and Move Needed (%). Sorted
-    by market cap, largest first.
-    """
+
+def asset_valuation_definitions():
+    """One asset roster for current valuations and historical rankings."""
     fiat_m0_usd = dict(zip(
         FIAT_MONEY_SUPPLY["Country"], FIAT_MONEY_SUPPLY["US Dollar Trillion"] * 1e12
     ))
-    assets = [
+    return [
         {"name": "Bitcoin", "data": "price_close", "market_cap": "market_cap"},
         # Fiat money (M0)
         {
@@ -811,7 +813,6 @@ def create_asset_valuation_table(report_data, report_date=None):
         {"name": "NVIDIA", "data": "NVDA_market_cap_btc_price", "market_cap": "NVDA_market_cap"},
         {"name": "Broadcom", "data": "AVGO_market_cap_btc_price", "market_cap": "AVGO_market_cap"},
         {"name": "Tesla", "data": "TSLA_market_cap_btc_price", "market_cap": "TSLA_market_cap"},
-        {"name": "Eli Lilly", "data": "LLY_market_cap_btc_price", "market_cap": "LLY_market_cap"},
         {"name": "Micron", "data": "MU_market_cap_btc_price", "market_cap": "MU_market_cap"},
         {"name": "TSMC", "data": "TSM_market_cap_btc_price", "market_cap": "TSM_market_cap"},
         {"name": "SpaceX", "data": "SPCX_market_cap_btc_price", "market_cap": "SPCX_market_cap"},
@@ -823,6 +824,76 @@ def create_asset_valuation_table(report_data, report_date=None):
         {"name": "Visa", "data": "V_market_cap_btc_price", "market_cap": "V_market_cap"},
     ]
 
+
+def relative_rank_baselines(report_date):
+    """Calendar comparisons use completed UTC-day closes, never intraday values."""
+    date = pd.Timestamp(report_date).normalize()
+    quarter_month = ((date.month - 1) // 3) * 3 + 1
+    return {
+        "daily": date - pd.Timedelta(days=1),
+        "wtd": date - pd.Timedelta(days=date.weekday() + 1),
+        "qtd": pd.Timestamp(date.year, quarter_month, 1) - pd.Timedelta(days=1),
+        "ytd": pd.Timestamp(date.year, 1, 1) - pd.Timedelta(days=1),
+    }
+
+
+def _asset_market_cap(asset, row):
+    return asset.get("market_cap_usd", row.get(asset.get("market_cap"), np.nan))
+
+
+def asset_ranks_on_date(report_data, date, assets=None):
+    """Rank positive, finite caps on the exact day; upstream filling is already bounded.
+
+    Competition ranks give equal caps the same position (1, 1, 3). Missing days do
+    not borrow an older snapshot, even for the fixed M0 reference amounts.
+    """
+    assets = asset_valuation_definitions() if assets is None else assets
+    date = pd.Timestamp(date).normalize()
+    if date not in report_data.index:
+        return pd.Series(dtype="Int64")
+    row = report_data.loc[date]
+    caps = pd.to_numeric(pd.Series({
+        asset["name"]: _asset_market_cap(asset, row) for asset in assets
+    }), errors="coerce")
+    caps = caps.where(np.isfinite(caps) & caps.gt(0)).dropna()
+    return caps.rank(method="min", ascending=False).astype("Int64")
+
+
+def create_relative_value_rank_changes(report_data, report_date):
+    """Four calendar-period rank comparisons over each date's full asset roster."""
+    date = pd.Timestamp(report_date).normalize()
+    assets = asset_valuation_definitions()
+    current = asset_ranks_on_date(report_data, date, assets)
+    rows = []
+    for timeframe, baseline in relative_rank_baselines(date).items():
+        previous = asset_ranks_on_date(report_data, baseline, assets)
+        for asset in assets:
+            name = asset["name"]
+            now, before = current.get(name, pd.NA), previous.get(name, pd.NA)
+            status = (
+                "missing_both" if pd.isna(now) and pd.isna(before)
+                else "missing_current" if pd.isna(now)
+                else "missing_baseline" if pd.isna(before)
+                else "available"
+            )
+            rows.append({
+                "Asset": name, "Timeframe": timeframe,
+                "Current Date": date.strftime("%Y-%m-%d"),
+                "Baseline Date": baseline.strftime("%Y-%m-%d"),
+                "Current Rank": now, "Previous Rank": before,
+                "Change": before - now if status == "available" else pd.NA,
+                "Status": status,
+            })
+    result = pd.DataFrame(rows, columns=RELATIVE_RANK_COLUMNS)
+    for column in ("Current Rank", "Previous Rank", "Change"):
+        result[column] = result[column].astype("Int64")
+    return result
+
+
+def create_asset_valuation_table(report_data, report_date=None):
+    """Bitcoin's price at each reference asset's cap, sorted largest first."""
+    assets = asset_valuation_definitions()
+
     latest_data = (
         _row_asof(report_data, report_date)
         if report_date is not None
@@ -833,9 +904,7 @@ def create_asset_valuation_table(report_data, report_date=None):
     valuation_data = []
     for asset in assets:
         btc_price_at_market_cap = latest_data.get(asset["data"], float("nan"))
-        market_cap_value = asset.get("market_cap_usd")
-        if market_cap_value is None:
-            market_cap_value = latest_data.get(asset["market_cap"], float("nan"))
+        market_cap_value = _asset_market_cap(asset, latest_data)
 
         if (
             pd.notna(bitcoin_price)

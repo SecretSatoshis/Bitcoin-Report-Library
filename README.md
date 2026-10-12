@@ -10,12 +10,12 @@ open CSV files.
 
 ## What it produces
 
-A daily release of 29 files in `csv/`, listed with checksums in `release_manifest.json`:
+A daily release of 30 files in `csv/`, listed with checksums in `release_manifest.json`:
 
 | Group | Files |
 |-------|-------|
 | **Master data** | `master_metrics_data.csv.gz`: every metric, every day since 2010, plus weekly and monthly snapshots |
-| **Report tables** | Summary, fundamentals, performance, 30/90/365-day correlation matrices, relative value, ROI, monthly returns, MTD/YTD comparisons |
+| **Report tables** | Summary, fundamentals, performance, 30/90/365-day correlation matrices, relative value and calendar rank changes, ROI, monthly returns, MTD/YTD comparisons |
 | **Chart series** | Price models, price paths, drawdowns, cycle lows, halving eras and Bitcoin candles |
 | **Outlook** | The annual Bear / Base / Bull price cases |
 | **US spot bitcoin ETFs** | `etf_daily.csv` (each fund's bitcoin held, shares, NAV and flows by trading day), `etf_totals_daily.csv` (all funds, with cumulative flows and the flow-weighted entry price), `etf_quarterly.csv` (holdings and reported cost from each fund's SEC filings) |
@@ -112,6 +112,21 @@ npm run dev
 
 `npm run build` writes the site to `dashboard/build/`. `npm test` and `npm run test:browser`
 check it.
+
+The relative valuation table's first column compares market-cap positions over
+WTD, QTD and YTD periods, defaulting to YTD. Switching periods changes the chips and
+comparison dates while keeping the latest values and order. Equal caps share a rank
+(1, 1, 3); a new entrant can shift existing positions. Tooltips explain movements and
+missing history, using completed UTC-day closes.
+
+`relative_value_rank_changes.csv` publishes one row per asset and period: `Asset`,
+`Timeframe` (`daily`, `wtd`, `qtd`, `ytd`), `Current Date`, `Baseline Date`, `Current Rank`,
+`Previous Rank`, `Change` (previous minus current rank), and `Status` (`available`,
+`missing_current`, `missing_baseline`, `missing_both`). Baselines are the prior day,
+the Sunday before the current Monday, the previous quarter-end, and the previous
+December 31. Missing ranks and changes stay blank. M0 amounts are fixed references;
+historical metal values use the configured supply estimates. The dashboard verifies
+this file against the release manifest; older releases show N/A chips.
 
 ## Data sources
 
