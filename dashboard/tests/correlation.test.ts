@@ -24,7 +24,7 @@ test("matrix preserves group order and renders the lower triangle with 153 value
   assert.ok(html.includes('title="QQQ / SPY: 0.42"'));
   assert.ok(html.includes("rgb(26,142,78)"));
   assert.ok(!html.includes("0.42%"));
-  assert.ok(html.includes("DXY = DX-Y.NYB"));
+  assert.ok(!html.includes('class="methodology"'));
   assert.ok(html.includes('>Bitcoin</span><span class="correlation-symbol">[BTC]</span>'));
   assert.ok(html.includes('>Coinbase</span><span class="correlation-symbol">[COIN]</span>'));
 });
