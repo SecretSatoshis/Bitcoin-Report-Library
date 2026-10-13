@@ -1,5 +1,4 @@
 Metric,date,Value
-Bitcoin Price USD,2026-09-11,76888.74
 Bitcoin Price USD,2026-09-12,77279.34
 Bitcoin Price USD,2026-09-13,76769.03
 Bitcoin Price USD,2026-09-14,78519.3
@@ -30,7 +29,7 @@ Bitcoin Price USD,2026-10-08,81649.5
 Bitcoin Price USD,2026-10-09,82361
 Bitcoin Price USD,2026-10-10,83109.61
 Bitcoin Price USD,2026-10-11,83337.42
-Bitcoin Market Cap,2026-09-11,1544143917686
+Bitcoin Price USD,2026-10-12,81963.83
 Bitcoin Market Cap,2026-09-12,1552026188373
 Bitcoin Market Cap,2026-09-13,1541813691570
 Bitcoin Market Cap,2026-09-14,1577002566607
@@ -61,7 +60,7 @@ Bitcoin Market Cap,2026-10-08,1640765930986
 Bitcoin Market Cap,2026-10-09,1655101268234
 Bitcoin Market Cap,2026-10-10,1670185360184
 Bitcoin Market Cap,2026-10-11,1674804097039
-Sats Per Dollar,2026-09-11,1300.580553
+Bitcoin Market Cap,2026-10-12,1647238453662
 Sats Per Dollar,2026-09-12,1294.006911
 Sats Per Dollar,2026-09-13,1302.608617
 Sats Per Dollar,2026-09-14,1273.57223
@@ -92,7 +91,7 @@ Sats Per Dollar,2026-10-08,1224.747243
 Sats Per Dollar,2026-10-09,1214.166899
 Sats Per Dollar,2026-10-10,1203.230288
 Sats Per Dollar,2026-10-11,1199.941155
-Bitcoin Supply,2026-09-11,20082835.51
+Sats Per Dollar,2026-10-12,1220.050356
 Bitcoin Supply,2026-09-12,20083326.13
 Bitcoin Supply,2026-09-13,20083798.01
 Bitcoin Supply,2026-09-14,20084266.75
@@ -123,7 +122,7 @@ Bitcoin Supply,2026-10-08,20095235.5
 Bitcoin Supply,2026-10-09,20095691.75
 Bitcoin Supply,2026-10-10,20096176.12
 Bitcoin Supply,2026-10-11,20096663.62
-Bitcoin Miner Revenue,2026-09-11,39069164.68
+Bitcoin Supply,2026-10-12,20097138.62
 Bitcoin Miner Revenue,2026-09-12,38064318.29
 Bitcoin Miner Revenue,2026-09-13,36512151.01
 Bitcoin Miner Revenue,2026-09-14,36781070.96
@@ -154,7 +153,7 @@ Bitcoin Miner Revenue,2026-10-08,36026325.99
 Bitcoin Miner Revenue,2026-10-09,37816733.13
 Bitcoin Miner Revenue,2026-10-10,40290565.86
 Bitcoin Miner Revenue,2026-10-11,40774226.83
-Bitcoin Transaction Volume,2026-09-11,65635423206
+Bitcoin Miner Revenue,2026-10-12,39709812.08
 Bitcoin Transaction Volume,2026-09-12,50145653557
 Bitcoin Transaction Volume,2026-09-13,53100265966
 Bitcoin Transaction Volume,2026-09-14,63322168234
@@ -185,3 +184,4 @@ Bitcoin Transaction Volume,2026-10-08,88769545020
 Bitcoin Transaction Volume,2026-10-09,65539444511
 Bitcoin Transaction Volume,2026-10-10,45043102796
 Bitcoin Transaction Volume,2026-10-11,48889659292
+Bitcoin Transaction Volume,2026-10-12,62719429079
