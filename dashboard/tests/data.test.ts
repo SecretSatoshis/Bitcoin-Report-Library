@@ -48,6 +48,23 @@ const reference = JSON.parse(
 const data = () =>
   createDashboard(structuredClone(tables), release, colors, events);
 
+test("the published agent map matches its dashboard release and links to built chart data", () => {
+  const map = readFileSync(resolve(root, "build/llms.txt"), "utf8");
+  const display = JSON.parse(readFileSync(resolve(root, "build/data/dashboard.json"), "utf8"));
+  const manifest = JSON.parse(readFileSync(resolve(root, "build/data/manifest.json"), "utf8"));
+  assert.ok(map.includes(`Data through ${display.reportDate}.`));
+  assert.ok(map.includes(manifest.release_generated_at));
+  assert.equal(display.reportDate, manifest.report_date);
+  for (const metric of display.metrics) assert.ok(map.includes(metric.description));
+  const links = [...map.matchAll(/https:\/\/dashboard\.secretsatoshis\.com\/data\/charts\/([^\s)]+\.json)/g)];
+  assert.equal(links.length, display.charts.length);
+  assert.equal(new Set(links.map((match) => match[1])).size, links.length);
+  for (const [, filename] of links) {
+    const chart = JSON.parse(readFileSync(resolve(root, "build/data/charts", filename), "utf8"));
+    assert.equal(chart.reportDate, manifest.report_date);
+  }
+});
+
 test("rank comparison inputs are optional and manifest hash checked", () => {
   assert.equal(data().relativeRankChanges, null);
   const copy = mkdtempSync(resolve(tmpdir(), "ss-rank-release-"));

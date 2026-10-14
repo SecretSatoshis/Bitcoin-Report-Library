@@ -1,7 +1,5 @@
 import { relativeRankBaselines, type RelativeRankPeriod, type RelativeRankChange, correlationGroups, correlationLabel, correlationName, correlationPeriods, num, type DashboardData, type Row, type Metric } from "./data";
-const PAGE_TITLE = "Bitcoin Market Dashboard | Secret Satoshis";
-const PAGE_DESCRIPTION = "Track Bitcoin’s market performance, on-chain indicators, valuation models, and network activity with daily data from Secret Satoshis.";
-const PAGE_URL = "https://dashboard.secretsatoshis.com/";
+import { PAGE_TITLE, PAGE_DESCRIPTION, PAGE_URL } from "./site";
 const SOCIAL_IMAGE = "https://secretsatoshis.com/assets/images/social-card.jpg";
 const SOCIAL_IMAGE_ALT = "The Secret Satoshis Newsletter: a yearly Bitcoin price outlook and weekly market analysis that tracks it";
 const STRUCTURED_DATA = {

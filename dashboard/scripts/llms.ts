@@ -1,0 +1,45 @@
+import type { DashboardData, ReleaseManifest } from "../src/data";
+import { PAGE_DESCRIPTION, PAGE_URL } from "../src/site";
+
+// Use the same verified release and definitions as the rendered dashboard.
+export function renderLlms(data: DashboardData, release: ReleaseManifest): string {
+  return [
+    "# Bitcoin Market Dashboard",
+    "",
+    `> ${PAGE_DESCRIPTION}`,
+    "",
+    `Data through ${data.reportDate}. Source release generated at ${release.generated_at}.`,
+    "This is a daily data view; individual series can have different observation dates and gaps. Check each payload's dates, units, and source before comparing readings.",
+    "",
+    "## Dashboard and data",
+    "",
+    `- [Dashboard](${PAGE_URL}): market performance, on-chain indicators, valuation, and network activity.`,
+    `- [Dashboard data](${PAGE_URL}data/dashboard.json): displayed metrics, definitions, tables, and an index of chart payloads.`,
+    `- [Dashboard manifest](${PAGE_URL}data/manifest.json): the report date, source release time, input file hashes, and chart payload hashes.`,
+    "- [Source release manifest](https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/release_manifest.json): files, sizes, and SHA-256 hashes for the daily Report Library release.",
+    "- [Source data](https://secretsatoshis.github.io/Bitcoin-Report-Library/): public Report Library data and CSV downloads.",
+    "- [Source code](https://github.com/SecretSatoshis/Bitcoin-Report-Library/tree/main/dashboard): the dashboard's calculations, definitions, and build process.",
+    "",
+    "## Snapshot metric definitions",
+    "",
+    ...data.metrics.map((metric) => `- ${metric.title}: ${metric.description}`),
+    "",
+    "## Chart data",
+    "",
+    "These JSON payloads include dated series, units, sources, and chart configuration.",
+    "",
+    ...data.charts.map((chart) => `- [${chart.title}](${PAGE_URL}data/charts/${chart.id}.json)`),
+    "",
+    "## Related research and tools",
+    "",
+    "- [Secret Satoshis guide](https://secretsatoshis.com/llms.txt): the newsletter, products, public data releases, and code.",
+    "- [Newsletter](https://newsletter.secretsatoshis.com/): the original yearly price outlook and subsequent weekly analysis, quarterly reviews, and year-end reviews.",
+    "- [Chart Library guide](https://charts.secretsatoshis.com/llms.txt): interactive charts and their definitions.",
+    "- [Agent 21 guide](https://agent21.secretsatoshis.com/llms.txt): the Bitcoin-native AI agent and its public capabilities.",
+    "",
+    "## Optional",
+    "",
+    "- [Disclaimer and licensing](https://newsletter.secretsatoshis.com/p/secret-satoshis-newsletter-disclaimer): research disclosures and terms. Code is GPL-3.0; third-party data retains its upstream terms. Nothing published here is investment advice.",
+    "",
+  ].join("\n");
+}

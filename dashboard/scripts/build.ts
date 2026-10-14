@@ -17,6 +17,7 @@ try {
     recursive: true,
   });
   cpSync(resolve(root, ".generated/sitemap.xml"), resolve(stage, "sitemap.xml"));
+  cpSync(resolve(root, ".generated/llms.txt"), resolve(stage, "llms.txt"));
   rmSync(previous, { recursive: true, force: true });
   if (existsSync(output)) renameSync(output, previous);
   try {
