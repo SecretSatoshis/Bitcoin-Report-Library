@@ -315,7 +315,7 @@ export function renderDashboard(d: DashboardData): string {
     "roi",
   )}</section>
 </main>
-<footer class="site-footer"><div class="footer-inner"><div class="footer-top"><div><a class="brand" href="https://secretsatoshis.com/"><span class="accent">//</span> SECRET SATOSHIS</a><p>AI-native Bitcoin market intelligence</p></div>${footerGroup("Platform", NAV_LINKS.slice(0, 3))}${footerGroup("Data", [
+<footer class="site-footer"><div class="footer-inner"><div class="footer-top"><div><a class="brand" href="https://secretsatoshis.com/"><span class="accent">//</span> SECRET SATOSHIS</a><p>Bitcoin market analysis for long-term investors</p></div>${footerGroup("Platform", NAV_LINKS.slice(0, 3))}${footerGroup("Data", [
     ["https://dashboard.secretsatoshis.com/", "Market Dashboard"],
     ["https://charts.secretsatoshis.com/", "Chart Library"],
     ["https://github.com/SecretSatoshis", "GitHub"],
