@@ -444,7 +444,7 @@ function baseChart(id: string, title: string, date: string): ChartPayload {
     id,
     title,
     description: "",
-    category: "Market Intelligence",
+    category: "Market Dashboard",
     source: "Data Source: BRK",
     reportDate: date,
     coverage: date,
