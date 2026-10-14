@@ -48,6 +48,12 @@ const reference = JSON.parse(
 const data = () =>
   createDashboard(structuredClone(tables), release, colors, events);
 
+test("the published dashboard loads one shared Google Analytics tag", () => {
+  const html = readFileSync(resolve(root, "build/index.html"), "utf8");
+  assert.equal(html.split('src="/analytics.js?v=1"').length - 1, 1);
+  assert.ok(readFileSync(resolve(root, "build/analytics.js"), "utf8").includes("https://secretsatoshis.com/js/analytics.js?v=1"));
+});
+
 test("the published agent map matches its dashboard release and links to built chart data", () => {
   const map = readFileSync(resolve(root, "build/llms.txt"), "utf8");
   const display = JSON.parse(readFileSync(resolve(root, "build/data/dashboard.json"), "utf8"));

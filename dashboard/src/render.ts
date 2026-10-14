@@ -1,7 +1,7 @@
 import { relativeRankBaselines, type RelativeRankPeriod, type RelativeRankChange, correlationGroups, correlationLabel, correlationName, correlationPeriods, num, type DashboardData, type Row, type Metric } from "./data";
 import { PAGE_TITLE, PAGE_DESCRIPTION, PAGE_URL } from "./site";
-const SOCIAL_IMAGE = "https://secretsatoshis.com/assets/images/social-card.jpg";
-const SOCIAL_IMAGE_ALT = "The Secret Satoshis Newsletter: a yearly Bitcoin price outlook and weekly market analysis that tracks it";
+const SOCIAL_IMAGE = "https://secretsatoshis.com/assets/images/dashboard-social-card.jpg";
+const SOCIAL_IMAGE_ALT = "The Bitcoin Market Dashboard: Bitcoin's market performance, on-chain conditions, valuation, and network activity, updated daily";
 const STRUCTURED_DATA = {
   "@context": "https://schema.org",
   "@graph": [
@@ -288,6 +288,7 @@ export function renderDashboard(d: DashboardData): string {
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@SecretSatoshis"><meta name="twitter:creator" content="@SecretSatoshis">
 <meta name="twitter:title" content="${escape(PAGE_TITLE)}"><meta name="twitter:description" content="${escape(PAGE_DESCRIPTION)}"><meta name="twitter:image" content="${SOCIAL_IMAGE}"><meta name="twitter:image:alt" content="${escape(SOCIAL_IMAGE_ALT)}">
 <script type="application/ld+json">${JSON.stringify(STRUCTURED_DATA).replace(/</g, "\\u003c")}</script>
+<script defer src="/analytics.js?v=1"></script>
 <link rel="icon" href="/favicon.ico"><link rel="stylesheet" href="../src/styles.css"><script type="module" src="../src/main.ts"></script></head><body>
 <a class="skip-link" href="#bitcoin-snapshot">Skip to dashboard</a><header class="site-nav"><a href="https://secretsatoshis.com/" class="brand"><span class="accent">//</span> SECRET SATOSHIS</a><button id="nav-toggle" type="button" aria-label="Open menu" aria-controls="site-links" aria-expanded="false">≡</button><nav id="site-links" aria-label="Primary navigation">${NAV_LINKS.map(([url, label]) => `<a href="${url}" ${label === "Dashboard" ? 'aria-current="page"' : ""}>${label}</a>`).join("")}</nav></header>
 <section class="hero" data-dashboard-date="${d.reportDate}" aria-labelledby="dashboard-title"><div class="hero-grid"><div><h1 id="dashboard-title">Bitcoin Market Dashboard<span class="accent">.</span></h1><p class="hero-description">Track Bitcoin’s market performance, on-chain conditions, valuation, and network activity, updated daily.</p><p class="hero-source">Explore the data and models behind the dashboard. <a href="https://secretsatoshis.github.io/Bitcoin-Report-Library/">View the source data.</a></p></div><dl class="release-status" aria-label="Dashboard status"><div><dt>Latest data</dt><dd>${d.dateLabel}</dd></div><div><dt>Refresh cadence</dt><dd>Daily</dd></div></dl></div></section>
