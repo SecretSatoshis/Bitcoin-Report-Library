@@ -19,8 +19,8 @@ BASE = "https://secretsatoshis.github.io/Bitcoin-Report-Library"
 SITE = "https://secretsatoshis.com"
 CODE_REPOSITORY = "https://github.com/SecretSatoshis/Bitcoin-Report-Library"
 CODE_LICENSE = "https://www.gnu.org/licenses/gpl-3.0.html"
-SOCIAL_IMAGE = f"{SITE}/assets/images/social-card.jpg"
-SOCIAL_ALT = "Secret Satoshis — AI-Native Bitcoin Market Intelligence"
+SOCIAL_IMAGE = f"{SITE}/assets/images/social-card.jpg?v=4"
+SOCIAL_ALT = "The Secret Satoshis Newsletter: a yearly Bitcoin price outlook and weekly market analysis that tracks it"
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 MANIFEST = CSV_DIR / "release_manifest.json"
 
