@@ -95,6 +95,10 @@ uv run --no-sync python validate_outputs.py
 | `candle_data.py` | Daily, weekly and monthly candles |
 | `data_definitions.py` | Configuration: tickers, series, reference data |
 | `validate_outputs.py` | Release checks run before publishing |
+| `release_manifest.py` | Writes `release_manifest.json`: the report date and each file's hash and size |
+| `publication.py`, `data_validation.py` | Number precision for every published file, and shared date and candle checks |
+| `build_release_page.py`, `templates/` | The release page, its sitemap and structured data |
+| `agent21_examples.py` | The figures behind two example answers on the Agent 21 site |
 | `dashboard/` | The Market Dashboard, a static site built from the release |
 | `tests/` | One test file per module |
 
@@ -110,23 +114,13 @@ npm run sync:local
 npm run dev
 ```
 
-`npm run build` writes the site to `dashboard/build/`. `npm test` and `npm run test:browser`
-check it.
+`npm run build` writes the site, its sitemap and its `llms.txt` guide to `dashboard/build/`.
+`npm test` and `npm run test:browser` check it.
 
-The relative valuation table's first column compares market-cap positions over
-WTD, QTD and YTD periods, defaulting to YTD. Switching periods changes the chips and
-comparison dates while keeping the latest values and order. Equal caps share a rank
-(1, 1, 3); a new entrant can shift existing positions. Tooltips explain movements and
-missing history, using completed UTC-day closes.
-
-`relative_value_rank_changes.csv` publishes one row per asset and period: `Asset`,
-`Timeframe` (`daily`, `wtd`, `qtd`, `ytd`), `Current Date`, `Baseline Date`, `Current Rank`,
-`Previous Rank`, `Change` (previous minus current rank), and `Status` (`available`,
-`missing_current`, `missing_baseline`, `missing_both`). Baselines are the prior day,
-the Sunday before the current Monday, the previous quarter-end, and the previous
-December 31. Missing ranks and changes stay blank. M0 amounts are fixed references;
-historical metal values use the configured supply estimates. The dashboard verifies
-this file against the release manifest; older releases show N/A chips.
+The relative valuation table shows how each asset's market-cap rank has moved since the start
+of the week, quarter or year, from `relative_value_rank_changes.csv`. That file has one row
+per asset and period, with the baseline date, both ranks, the change and whether either rank
+was missing.
 
 ## Data sources
 
