@@ -1,4 +1,28 @@
 import { relativeRankBaselines, type RelativeRankPeriod, type RelativeRankChange, correlationGroups, correlationLabel, correlationName, correlationPeriods, num, type DashboardData, type Row, type Metric } from "./data";
+const PAGE_TITLE = "Bitcoin Market Dashboard | Secret Satoshis";
+const PAGE_DESCRIPTION = "Track Bitcoin’s market performance, on-chain indicators, valuation models, and network activity with daily data from Secret Satoshis.";
+const PAGE_URL = "https://dashboard.secretsatoshis.com/";
+const SOCIAL_IMAGE = "https://secretsatoshis.com/assets/images/social-card.jpg";
+const SOCIAL_IMAGE_ALT = "The Secret Satoshis Newsletter: a yearly Bitcoin price outlook and weekly market analysis that tracks it";
+const STRUCTURED_DATA = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://secretsatoshis.com/#organization",
+      name: "Secret Satoshis",
+      url: "https://secretsatoshis.com/",
+    },
+    {
+      "@type": "WebPage",
+      "@id": `${PAGE_URL}#webpage`,
+      name: PAGE_TITLE,
+      description: PAGE_DESCRIPTION,
+      url: PAGE_URL,
+      publisher: { "@id": "https://secretsatoshis.com/#organization" },
+    },
+  ],
+};
 export const escape = (v: unknown) =>
   String(v ?? "").replace(
     /[&<>"']/g,
@@ -259,8 +283,13 @@ export function renderDashboard(d: DashboardData): string {
   const footerGroup = (title: string, links: string[][]) =>
     `<div><h2>${title}</h2><ul>${links.map(([url, label]) => `<li><a href="${url}">${label}</a></li>`).join("")}</ul></div>`;
   return `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Bitcoin Market Dashboard | Secret Satoshis</title><meta name="description" content="Current Bitcoin market data, valuation models, on-chain conditions and cycle context, updated daily from an open pipeline."><link rel="canonical" href="https://dashboard.secretsatoshis.com/"><meta name="robots" content="index, follow, max-image-preview:large"><meta name="theme-color" content="#08080c">
-<meta property="og:type" content="website"><meta property="og:site_name" content="Secret Satoshis"><meta property="og:title" content="Bitcoin Market Dashboard | Secret Satoshis"><meta property="og:description" content="Daily Bitcoin market intelligence from a verified open data release."><meta property="og:url" content="https://dashboard.secretsatoshis.com/"><meta property="og:image" content="https://secretsatoshis.com/assets/images/social-card.jpg"><meta property="og:image:alt" content="Secret Satoshis — AI-Native Bitcoin Market Intelligence"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@SecretSatoshis"><meta name="twitter:title" content="Bitcoin Market Dashboard | Secret Satoshis"><meta name="twitter:description" content="Daily Bitcoin market intelligence from a verified open data release."><meta name="twitter:image" content="https://secretsatoshis.com/assets/images/social-card.jpg">
+<title>${escape(PAGE_TITLE)}</title><meta name="description" content="${escape(PAGE_DESCRIPTION)}"><link rel="canonical" href="${PAGE_URL}"><meta name="robots" content="index, follow, max-image-preview:large"><meta name="theme-color" content="#08080c">
+<meta property="og:type" content="website"><meta property="og:site_name" content="Secret Satoshis"><meta property="og:locale" content="en_US">
+<meta property="og:title" content="${escape(PAGE_TITLE)}"><meta property="og:description" content="${escape(PAGE_DESCRIPTION)}"><meta property="og:url" content="${PAGE_URL}">
+<meta property="og:image" content="${SOCIAL_IMAGE}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="${escape(SOCIAL_IMAGE_ALT)}">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@SecretSatoshis"><meta name="twitter:creator" content="@SecretSatoshis">
+<meta name="twitter:title" content="${escape(PAGE_TITLE)}"><meta name="twitter:description" content="${escape(PAGE_DESCRIPTION)}"><meta name="twitter:image" content="${SOCIAL_IMAGE}"><meta name="twitter:image:alt" content="${escape(SOCIAL_IMAGE_ALT)}">
+<script type="application/ld+json">${JSON.stringify(STRUCTURED_DATA).replace(/</g, "\\u003c")}</script>
 <link rel="icon" href="/favicon.ico"><link rel="stylesheet" href="../src/styles.css"><script type="module" src="../src/main.ts"></script></head><body>
 <a class="skip-link" href="#bitcoin-snapshot">Skip to dashboard</a><header class="site-nav"><a href="https://secretsatoshis.com/" class="brand"><span class="accent">//</span> SECRET SATOSHIS</a><button id="nav-toggle" type="button" aria-label="Open menu" aria-controls="site-links" aria-expanded="false">≡</button><nav id="site-links" aria-label="Primary navigation">${NAV_LINKS.map(([url, label]) => `<a href="${url}" ${label === "Dashboard" ? 'aria-current="page"' : ""}>${label}</a>`).join("")}</nav></header>
 <section class="hero" data-dashboard-date="${d.reportDate}" aria-labelledby="dashboard-title"><div class="hero-grid"><div><h1 id="dashboard-title">Bitcoin Market Dashboard<span class="accent">.</span></h1><p class="hero-description">Track Bitcoin’s market performance, on-chain conditions, valuation, and network activity, updated daily.</p><p class="hero-source">Explore the data and models behind the dashboard. <a href="https://secretsatoshis.github.io/Bitcoin-Report-Library/">View the source data.</a></p></div><dl class="release-status" aria-label="Dashboard status"><div><dt>Latest data</dt><dd>${d.dateLabel}</dd></div><div><dt>Refresh cadence</dt><dd>Daily</dd></div></dl></div></section>

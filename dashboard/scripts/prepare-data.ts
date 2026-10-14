@@ -17,6 +17,7 @@ import {
   type Tables,
 } from "../src/data";
 import { renderDashboard } from "../src/render";
+import { updateSitemap } from "./sitemap";
 
 export const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 export const hash = (bytes: string | Buffer) =>
@@ -111,6 +112,10 @@ export function prepareData(
   try {
     mkdirSync(resolve(stage, "data/charts"), { recursive: true });
     writeFileSync(resolve(stage, "index.html"), renderDashboard(data));
+    writeFileSync(
+      resolve(stage, "sitemap.xml"),
+      updateSitemap(readFileSync(resolve(root, "static/sitemap.xml"), "utf8"), release.generated_at),
+    );
     for (const file of chartFiles)
       writeFileSync(resolve(stage, "data", file.path), file.text);
     writeFileSync(
