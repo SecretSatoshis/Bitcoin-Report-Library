@@ -51,20 +51,24 @@ BITCOIN_CYCLE_LOW_DATES = [
 ]
 
 
-# (label, ATH date, date the ATH was reclaimed). Cycles are not contiguous: the gaps are
+# (label, ATH date, date the ATH was reclaimed). The ATH dates are the highest daily
+# closes; each also bounds a search, so the series starts at the highest close within
+# PEAK_SEARCH_DAYS of it, as the cycle lows do. Cycles are not contiguous: the gaps are
 # time spent at new highs. The open cycle has no end date.
 BITCOIN_DRAWDOWN_CYCLES = [
-    ("Drawdown Cycle 1", "2011-06-08", "2013-02-28"),
-    ("Drawdown Cycle 2", "2013-11-29", "2017-03-03"),
-    ("Drawdown Cycle 3", "2017-12-17", "2020-12-16"),
-    ("Drawdown Cycle 4", "2021-11-10", "2024-03-04"),
+    ("Drawdown Cycle 1", "2011-06-09", "2013-02-28"),
+    ("Drawdown Cycle 2", "2013-12-04", "2017-03-03"),
+    ("Drawdown Cycle 3", "2017-12-16", "2020-12-16"),
+    ("Drawdown Cycle 4", "2021-11-09", "2024-03-04"),
     ("Drawdown Cycle 5", "2025-10-06", None),
 ]
+PEAK_SEARCH_DAYS = 7
 
 
 def compute_drawdowns(data: pd.DataFrame) -> pd.DataFrame:
     """Long-form drawdown series per cycle: days_since_ath, drawdown_pct (0 at the ATH,
-    negative below it) and Cycle. Day 0 is the cycle's starting ATH."""
+    negative below it) and Cycle. Day 0 is the cycle's starting ATH: the highest close
+    within PEAK_SEARCH_DAYS of its listed date."""
     df = data[["price_close"]].copy()
     if not isinstance(df.index, pd.DatetimeIndex):
         df.index = pd.to_datetime(df.index)
@@ -78,6 +82,12 @@ def compute_drawdowns(data: pd.DataFrame) -> pd.DataFrame:
 
     for cycle_name, start_date, end_date in BITCOIN_DRAWDOWN_CYCLES:
         start_dt = pd.to_datetime(start_date)
+        search = pd.Timedelta(days=PEAK_SEARCH_DAYS)
+        nearby = df["price_close"].loc[start_dt - search : start_dt + search].dropna()
+        nearby = nearby[nearby > 0]
+        # Start at the real high, so a listed date a day off cannot skip the peak.
+        if not nearby.empty:
+            start_dt = nearby.idxmax()
         # The open cycle ends at the latest observation, not today's date.
         end_dt = data_end if end_date is None else pd.to_datetime(end_date)
 

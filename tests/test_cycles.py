@@ -49,7 +49,9 @@ class DrawdownTests(unittest.TestCase):
         prices.loc["2024-01-03"] = 80.0
         prices.loc["2024-01-15":] = [150.0, 120.0, 90.0, 160.0, 150.0, 140.0]
         cycles_config = [("Cycle 1", "2024-01-01", "2024-01-05"), ("Cycle 2", "2024-01-15", None)]
-        with patch.object(cycles, "BITCOIN_DRAWDOWN_CYCLES", cycles_config):
+        with patch.object(cycles, "BITCOIN_DRAWDOWN_CYCLES", cycles_config), patch.object(
+            cycles, "PEAK_SEARCH_DAYS", 0
+        ):
             result = cycles.compute_drawdowns(pd.DataFrame({"price_close": prices, "other": 1.0}))
 
         first = result[result["Cycle"] == "Cycle 1"]
@@ -60,6 +62,21 @@ class DrawdownTests(unittest.TestCase):
         self.assertAlmostEqual(second["drawdown_pct"].iloc[3], 0.0)  # new high on day 3
         self.assertAlmostEqual(second["drawdown_pct"].iloc[-1], (140 / 160 - 1) * 100)
         self.assertEqual(list(result.columns), ["days_since_ath", "drawdown_pct", "Cycle"])
+
+    def test_a_listed_ath_date_a_day_off_still_starts_at_the_highest_close(self):
+        # The 2021 case: the highest close was Nov 9, listed as Nov 10.
+        dates = pd.date_range("2021-11-01", "2021-11-30")
+        prices = pd.Series(60_000.0, index=dates)
+        prices.loc["2021-11-09"] = 67_330.0
+        prices.loc["2021-11-10"] = 64_627.0
+        prices.loc["2021-11-20"] = 50_496.0
+        with patch.object(cycles, "BITCOIN_DRAWDOWN_CYCLES", [("Cycle 4", "2021-11-10", None)]):
+            result = cycles.compute_drawdowns(pd.DataFrame({"price_close": prices}))
+
+        self.assertEqual(result["days_since_ath"].iloc[0], 0)
+        self.assertAlmostEqual(result["drawdown_pct"].iloc[0], 0.0)
+        self.assertAlmostEqual(result["drawdown_pct"].min(), (50_496 / 67_330 - 1) * 100)
+        self.assertEqual(len(result), 22)  # Nov 9 through Nov 30
 
 
 if __name__ == "__main__":
