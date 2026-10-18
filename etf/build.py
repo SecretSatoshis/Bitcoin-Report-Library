@@ -27,11 +27,18 @@ btc_source:
                     (snapshots, and SEC quarter ends where the fund reports its coins)
   rebuilt           fitted to each SEC quarter end before daily collection began
   interpolated      straight line between anchors (launch, SEC quarter ends, collected days)
-  carried forward   after the fund's latest data, while its reader is failing
+  provisional       one of the last days the fund has not yet published: the flow is the
+                    provisional dataset's (funds.PROVISIONAL_FLOWS) and holdings roll forward by
+                    it, until the issuer's own data replaces it on a later run
+  daily flows       the same, for a fund whose own data has been out for more than a couple of
+                    trading days (its reader is failing): kept as the fund's data for those days
+  carried forward   a day without the fund's data that the provisional dataset lacks too
 
 Funds without a published daily history keep the rows the previous release published, which
 carry their history from before daily collection began; each run adds only the new days.
 """
+import warnings
+
 import numpy as np
 import pandas as pd
 
@@ -48,6 +55,24 @@ TRADING_DAY_QUORUM = 4
 SPONSOR_FEE = {"GBTC": 0.015, "BTC": 0.0015}
 # GBTC moved 10% of its bitcoin to the Mini Trust; its first NAV without those coins.
 GBTC_SPINOFF = pd.Timestamp("2024-07-30")
+# Rows without the issuer's own data for that day, recomputed every run.
+UNPUBLISHED = ("carried forward", "provisional")
+# Days of a fund whose reader is failing, filled from the provisional dataset and then kept.
+FILLED = "daily flows"
+# Issuer-based flows are checked against the provisional ones over this many recent trading
+# days; a difference above the tolerance (about one IBIT basket) is reported.
+PROVISIONAL_CHECK_DAYS = 10
+PROVISIONAL_TOLERANCE_USD = 2_000_000
+# A fund without its own data for more trading days than this has a failing reader: its filled
+# days are FILLED rather than provisional, and it is reported as stale.
+STALE_AFTER_DAYS = 2
+
+
+def _trading_days_behind(sources: pd.Series, days: pd.DatetimeIndex) -> tuple[int, pd.Timestamp | None]:
+    """Trading days in `days` after the fund's last day of its own data, and that day."""
+    own = sources.index[~sources.isin(UNPUBLISHED + (FILLED,))]
+    last = own.max() if len(own) else None
+    return (len(days[days > last]) if last is not None else len(days)), last
 
 
 def _interpolate(dates: pd.DatetimeIndex, anchor_dates, anchor_values) -> np.ndarray:
@@ -187,14 +212,75 @@ def _reference_prices(histories: pd.DataFrame) -> dict[str, pd.Series]:
     return prices
 
 
+def _fill_provisional(frame: pd.DataFrame, flows: pd.Series | None, days: pd.DatetimeIndex) -> pd.DataFrame:
+    """One fund's rows with its trailing unpublished days filled from the provisional flows.
+
+    Each such day takes its provisional flow at the fund's 4pm price, and holdings roll forward
+    from the fund's last published day. The days are "provisional" while the fund is at most
+    STALE_AFTER_DAYS behind, else FILLED. Days the provisional data lacks stay carried forward.
+    """
+    frame = frame.sort_values("date").reset_index(drop=True)
+    behind, _ = _trading_days_behind(frame.set_index("date")["btc_source"], days)
+    label = FILLED if behind > STALE_AFTER_DAYS else "provisional"
+    published = ~frame["btc_source"].isin(UNPUBLISHED)
+    if flows is None or flows.empty or not published.any():
+        return frame
+    tail = frame.index[published[published].index[-1] + 1:]
+    if not len(tail):
+        return frame
+    flow_usd = frame.loc[tail, "date"].map(flows)
+    price = frame.loc[tail, "price_usd"]
+    have = flow_usd.notna() & price.gt(0)
+    flow_btc = (flow_usd / price).where(have, 0.0)
+    frame.loc[tail, "btc_held"] = frame.at[tail[0] - 1, "btc_held"] + flow_btc.cumsum()
+    frame.loc[tail, "flow_btc"] = flow_btc
+    frame.loc[tail, "flow_usd"] = flow_usd.where(have, 0.0)
+    frame.loc[tail, "other_change_btc"] = 0.0
+    frame.loc[tail, "btc_source"] = np.where(have, label, "carried forward")
+    per_share = frame.loc[tail, "btc_per_share"]
+    frame.loc[tail, "shares_outstanding"] = (frame.loc[tail, "btc_held"] / per_share).where(
+        per_share > 0, frame.loc[tail, "shares_outstanding"])
+    frame.loc[tail, "net_assets_usd"] = frame.loc[tail, "btc_held"] * price
+    return frame
+
+
+def _report_against_provisional(daily: pd.DataFrame, flows: pd.Series | None, through: pd.Timestamp) -> None:
+    """Warn about funds without recent issuer data, and issuer flows the provisional data contradicts."""
+    days = pd.DatetimeIndex(sorted(daily["date"].unique()))
+    days = days[days <= through]
+    if not len(days):
+        return
+    for fund, rows in daily.groupby("fund"):
+        rows = rows.sort_values("date").set_index("date")
+        behind, last = _trading_days_behind(rows["btc_source"], days)
+        if behind > STALE_AFTER_DAYS:
+            since = last.date() if last is not None else "launch"
+            warnings.warn(f"ETF {fund}: no issuer data since {since} ({behind} trading days)",
+                          RuntimeWarning, stacklevel=2)
+        if flows is None:
+            continue
+        # A flow is the issuer's own only when that day and the one before are both issuer data.
+        issuer = rows["btc_source"].isin(["exact", "issuer history"])
+        checked = rows[issuer & issuer.shift(fill_value=False)].loc[days[-min(len(days), PROVISIONAL_CHECK_DAYS)]:]
+        for day, row in checked.iterrows():
+            other = flows.get((fund, day))
+            if other is not None and abs(row["flow_usd"] - other) > PROVISIONAL_TOLERANCE_USD:
+                warnings.warn(f"ETF {fund} {day.date()}: issuer flow {row['flow_usd'] / 1e6:+.1f}M "
+                              f"but provisional {other / 1e6:+.1f}M", RuntimeWarning, stacklevel=2)
+
+
 def build_tables(inputs: dict[str, pd.DataFrame], through: pd.Timestamp) -> dict[str, pd.DataFrame]:
     """The three published tables from etf.collect's inputs: histories, snapshots, sec,
-    nav_history and previous_daily (the last release's etf_daily.csv, or None)."""
+    nav_history, previous_daily (the last release's etf_daily.csv, or None) and provisional
+    (fund, date, flow_usd from funds.provisional_flows, or None)."""
     histories, sec, nav_history = inputs["histories"], inputs["sec"].copy(), inputs["nav_history"]
     previous = inputs.get("previous_daily")
     previous = None if previous is None or previous.empty else previous.assign(date=pd.to_datetime(previous["date"]))
     snapshots = inputs["snapshots"]
     through = pd.Timestamp(through)
+    provisional = inputs.get("provisional")
+    flows = (None if provisional is None or provisional.empty
+             else provisional.assign(date=pd.to_datetime(provisional["date"])).set_index(["fund", "date"])["flow_usd"])
 
     calendar = _calendar(histories, snapshots, through)
     if previous is not None:
@@ -220,9 +306,16 @@ def build_tables(inputs: dict[str, pd.DataFrame], through: pd.Timestamp) -> dict
 
     with_history = set(history["fund"])
     # Funds without a history this run keep the previous release's rows and continue from them.
-    kept = {fund: rows.set_index("date").sort_index()
-            for fund, rows in (previous.groupby("fund") if previous is not None else [])
-            if fund not in with_history}
+    # Their trailing unpublished days are dropped, to be rebuilt from the snapshots collected
+    # since, else from the provisional flows.
+    kept = {}
+    for fund, rows in (previous.groupby("fund") if previous is not None else []):
+        if fund in with_history:
+            continue
+        rows = rows.set_index("date").sort_index()
+        published = rows.index[~rows["btc_source"].isin(UNPUBLISHED)]
+        if len(published):
+            kept[fund] = rows.loc[:published.max()]
     issuer = {fund: _issuer_fund(fund, history, snapshots, sec, calendar)
               for fund in funds.CURRENT if fund in with_history}
     sec = _recover_estimated_coins(sec, issuer)
@@ -238,10 +331,16 @@ def build_tables(inputs: dict[str, pd.DataFrame], through: pd.Timestamp) -> dict
         else:
             frame = _interpolated_fund(fund, nav_only, snapshots, sec, calendar)
         current_only = fund not in issuer
-        # After the fund's latest data, while its reader fails, the last value is carried forward.
+        # After the fund's latest data (not yet published, or its reader failing) the last value
+        # is carried forward. A settlement-dated fund's last history day has no next day's share
+        # count yet, so its latest trade-date data is the day before.
+        last_history = history.loc[history.fund == fund, "date"].max()
+        if fund in issuer and fund in funds.SETTLEMENT_DATED and pd.notna(last_history):
+            earlier = calendar[calendar < last_history]
+            last_history = earlier[-1] if len(earlier) else pd.NaT
         latest = [snapshots.loc[snapshots.fund == fund, "date"].max(),
                   sec.loc[(sec.fund == fund) & (sec.btc > 0), "trade_date"].max(),
-                  history.loc[history.fund == fund, "date"].max()]
+                  last_history]
         if fund in kept:
             latest.append(kept[fund].index.max())
         latest = max((d for d in latest if pd.notna(d)), default=None)
@@ -280,7 +379,9 @@ def build_tables(inputs: dict[str, pd.DataFrame], through: pd.Timestamp) -> dict
         if fund in kept:
             old = kept[fund].reset_index()
             frame = pd.concat([old, frame[frame["date"] > old["date"].max()]], ignore_index=True)
-        frames.append(frame)
+        has_flows = flows is not None and fund in flows.index.get_level_values("fund")
+        frames.append(_fill_provisional(frame, flows.xs(fund, level="fund") if has_flows else None,
+                                        calendar[calendar <= through]))
 
     daily = pd.concat(frames, ignore_index=True)
     daily = daily[daily["date"] > START].copy()  # flows start with trading on 2024-01-11
@@ -289,6 +390,7 @@ def build_tables(inputs: dict[str, pd.DataFrame], through: pd.Timestamp) -> dict
     daily = daily[["fund", "date", "btc_held", "btc_source", "shares_outstanding", "btc_per_share", "nav",
                    "net_assets_usd", "price_usd", "price_basis", "flow_btc", "flow_usd", "other_change_btc",
                    "market_share_pct"]].sort_values(["date", "fund"]).reset_index(drop=True)
+    _report_against_provisional(daily, flows, through)
 
     totals = daily.groupby("date").agg(
         total_btc=("btc_held", "sum"), total_flow_btc=("flow_btc", "sum"), total_flow_usd=("flow_usd", "sum"),

@@ -121,6 +121,75 @@ class CarriedHistoryTests(unittest.TestCase):
         self.assertEqual(fbtc.tolist(), [10.0, 11.0, 12.0, 13.0])
 
 
+class ProvisionalFlowTests(unittest.TestCase):
+    DAYS = pd.bdate_range("2026-09-28", "2026-10-01")
+
+    def tables(self, provisional, previous=None, snapshots=None, ibit_shares=(100.0, 100.0, 100.0, 100.0)):
+        histories = pd.DataFrame([
+            {"fund": fund, "date": day, "nav": 50.0,
+             "shares_outstanding": ibit_shares[i] if fund == "IBIT" else 100.0,
+             "index_price": 100_000.0 if fund in ("HODL", "ARKB") else float("nan")}
+            for fund in ("IBIT", "GBTC", "HODL", "ARKB") for i, day in enumerate(self.DAYS)])
+        histories["net_assets"] = histories["nav"] * histories["shares_outstanding"]
+        sec = pd.DataFrame(columns=["fund", "quarter_end", "fair_value_usd", "cost_usd", "reported_btc",
+                                    "price_usd", "price_source", "coin_source", "btc", "cost_per_btc"])
+        sec["quarter_end"] = pd.to_datetime(sec["quarter_end"])
+        if snapshots is None:
+            snapshots = pd.DataFrame({"fund": pd.Series(dtype=str), "as_of": pd.Series(dtype=str),
+                                      **{c: pd.Series(dtype=float)
+                                         for c in ("btc_held", "shares_outstanding", "btc_per_share")}})
+        return build.build_tables({"histories": histories, "snapshots": snapshots, "sec": sec,
+                                   "nav_history": pd.DataFrame(columns=["fund", "date", "nav"]),
+                                   "previous_daily": previous, "provisional": provisional},
+                                  self.DAYS[-1])["etf_daily.csv"]
+
+    def test_settlement_dated_last_day_takes_the_provisional_flow(self):
+        """IBIT's last share count is the previous trade day's, so its last day's flow is provisional."""
+        provisional = pd.DataFrame({"fund": ["IBIT"], "date": [self.DAYS[-1]], "flow_usd": [1_000.0]})
+        daily = self.tables(provisional).set_index(["fund", "date"])
+        last, before = ("IBIT", self.DAYS[-1]), ("IBIT", self.DAYS[-2])
+        self.assertEqual(daily.at[last, "btc_source"], "provisional")
+        self.assertEqual(daily.at[last, "flow_usd"], 1_000.0)
+        self.assertAlmostEqual(daily.at[last, "btc_held"], daily.at[before, "btc_held"] + 0.01)
+        # Without a provisional figure the day is carried forward, not passed off as issuer data.
+        self.assertEqual(daily.at[("GBTC", self.DAYS[-1]), "btc_source"], "carried forward")
+        self.assertEqual(daily.at[("ARKB", self.DAYS[-1]), "btc_source"], "issuer history")
+
+    def test_unpublished_days_are_rebuilt_from_later_snapshots_then_provisional(self):
+        previous = pd.DataFrame({"fund": "FBTC", "date": self.DAYS[:3].strftime("%Y-%m-%d"),
+                                 "btc_held": [10.0, 10.0, 10.0],
+                                 "btc_source": ["rebuilt", "carried forward", "carried forward"],
+                                 "flow_btc": 0.0, "price_usd": 100_000.0})
+        snapshots = pd.DataFrame({"fund": ["FBTC"], "as_of": [self.DAYS[2].strftime("%Y-%m-%d")], "btc_held": [12.0],
+                                  "shares_outstanding": [1000.0], "btc_per_share": [0.012]})
+        provisional = pd.DataFrame({"fund": ["FBTC"], "date": [self.DAYS[-1]], "flow_usd": [100_000.0]})
+        fbtc = self.tables(provisional, previous, snapshots).query("fund == 'FBTC'").set_index("date")
+        self.assertEqual(fbtc["btc_held"].tolist(), [10.0, 11.0, 12.0, 13.0])
+        self.assertEqual(fbtc["btc_source"].tolist(), ["rebuilt", "interpolated", "exact", "provisional"])
+
+    def test_a_failing_readers_days_are_filled_as_daily_flows_and_kept(self):
+        """Past STALE_AFTER_DAYS without its own data, a fund's filled days are its data, not provisional."""
+        previous = pd.DataFrame({"fund": "FBTC", "date": self.DAYS[:1].strftime("%Y-%m-%d"), "btc_held": [10.0],
+                                 "btc_source": ["rebuilt"], "flow_btc": 0.0, "price_usd": 100_000.0})
+        provisional = pd.DataFrame({"fund": "FBTC", "date": self.DAYS[1:], "flow_usd": 100_000.0})
+        with self.assertWarnsRegex(RuntimeWarning, r"ETF FBTC: no issuer data since 2026-09-28 \(3 trading days\)"):
+            daily = self.tables(provisional, previous)
+        fbtc = daily.query("fund == 'FBTC'").set_index("date")
+        self.assertEqual(fbtc["btc_held"].tolist(), [10.0, 11.0, 12.0, 13.0])
+        self.assertEqual(fbtc["btc_source"].tolist(), ["rebuilt"] + [build.FILLED] * 3)
+
+        # The next run keeps those days even when the provisional dataset no longer lists them.
+        with self.assertWarns(RuntimeWarning):
+            again = self.tables(provisional.iloc[:0], daily).query("fund == 'FBTC'").set_index("date")
+        self.assertEqual(again["btc_held"].tolist(), [10.0, 11.0, 12.0, 13.0])
+        self.assertEqual(again["btc_source"].tolist(), ["rebuilt"] + [build.FILLED] * 3)
+
+    def test_issuer_flow_the_provisional_data_contradicts_is_reported(self):
+        provisional = pd.DataFrame({"fund": ["IBIT"], "date": [self.DAYS[2]], "flow_usd": [5_000_000.0]})
+        with self.assertWarnsRegex(RuntimeWarning, r"ETF IBIT 2026-09-30: issuer flow \+0\.0M but provisional \+5\.0M"):
+            self.tables(provisional)
+
+
 class ReleaseStepTests(unittest.TestCase):
     def test_a_failed_collection_never_stops_the_release(self):
         previous = {name: pd.DataFrame({"x": [1]}) for name in etf.ETF_FILES}

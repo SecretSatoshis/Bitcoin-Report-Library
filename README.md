@@ -134,16 +134,24 @@ was missing.
 | [Our World in Data](https://ourworldindata.org/grapher/number-of-internet-users) | World internet users, 1990–2004, kept by hand | CC BY 4.0 |
 | [Crypto.com](https://crypto.com/research) | Yearly estimates of bitcoin owners, kept by hand with each report linked | Crypto.com's terms |
 | US spot bitcoin ETF issuers and [SEC EDGAR](https://www.sec.gov/edgar/search/) | Each fund's daily holdings, shares and NAV, collected from 2026-09-30, and its 10-Q and 10-K quarter ends | Each issuer's terms; SEC filings are public |
+| [TFTC — tftc.io/bitcoin-etf-flows](https://www.tftc.io/bitcoin-etf-flows), from [SoSoValue](https://sosovalue.com/assets/etf/us-btc-spot) | Per-fund daily ETF flows for the days a fund has not yet published its own data (`provisional`), or cannot be read (`daily flows`) | CC BY 4.0 |
 
 A fetched annual series that fails to download reuses its rows from the previous release,
 which keep their original `retrieved_date`. A series that changes its format, or falls more
 than three years behind, stops the release.
 
 The ETF files never stop the release. Each run adds that day's positions to
-`etf_snapshots.csv`, carried from release to release. A fund whose site cannot be read that
-day is carried forward and marked `carried forward` in `btc_source`; if collection fails
-entirely, the previous release's ETF files are republished. Flows are dated by trade day, and
-every day before collection began is fitted to the funds' exact SEC quarter-end holdings.
+`etf_snapshots.csv`, carried from release to release. Flows are dated by trade day, and every
+day before collection began is fitted to the funds' exact SEC quarter-end holdings.
+
+Issuers publish a trading day's creations and redemptions late: BlackRock's public share count
+for a trade day appears with the next business day's data. Until a fund publishes a day, its
+flow comes from the per-fund flow dataset above and is marked `provisional` in `btc_source`;
+the next run replaces it with the issuer's own figure, and logs any difference above $2M. A
+fund whose own data has been out for more than two trading days (its reader is failing) is
+filled the same way, marked `daily flows`, and kept. A day neither source has is
+`carried forward`. If collection fails entirely, the previous release's ETF files are
+republished.
 
 ## Reading the data
 

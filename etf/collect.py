@@ -12,7 +12,8 @@ returns the release files:
   etf_filing_counts.csv  the "N bitcoin" counts read from each SEC filing, so each is read once
 
 A reader that fails is logged and skipped; its fund is carried forward until the next good day.
-Funds that publish no daily history keep the rows earlier releases published.
+Funds that publish no daily history keep the rows earlier releases published. Days a fund has
+not yet published take their flow from the provisional dataset (funds.PROVISIONAL_FLOWS).
 """
 import json
 import warnings
@@ -92,9 +93,16 @@ def collect(report_date, previous: dict[str, pd.DataFrame]) -> tuple[dict[str, p
         sec = sec[sec.fund != "ALL"].assign(quarter_end=lambda f: pd.to_datetime(f["quarter_end"]))
     count_frame = pd.DataFrame({"accession": list(cache), "counts": [json.dumps(v) for v in cache.values()]})
 
+    try:
+        provisional = funds.provisional_flows()
+    except Exception as error:
+        failed("provisional", "flows", error)
+        provisional = None
+
     tables = build_tables({"histories": history, "snapshots": snapshot_frame, "sec": sec,
                            "nav_history": nav_frame.assign(date=pd.to_datetime(nav_frame["date"])),
-                           "previous_daily": previous.get("etf_daily.csv")}, report_date)
+                           "previous_daily": previous.get("etf_daily.csv"),
+                           "provisional": provisional}, report_date)
     tables.update({"etf_snapshots.csv": snapshot_frame,
                    "etf_nav_history.csv": nav_frame.assign(date=pd.to_datetime(nav_frame["date"]).dt.strftime("%Y-%m-%d")),
                    "etf_filing_counts.csv": count_frame.sort_values("accession").reset_index(drop=True)})

@@ -28,6 +28,10 @@ from .common import (
 
 HERE = Path(__file__).resolve().parent
 
+# Provisional per-fund daily flows in USD: TFTC's open dataset (CC BY 4.0, attribution "TFTC —
+# tftc.io/bitcoin-etf-flows"), which takes them from SoSoValue. They fill only the days the
+# issuers have not yet published, and are published as "provisional" (see etf.build).
+PROVISIONAL_FLOWS = "https://www.tftc.io/bitcoin-etf-flows/data.json"
 IBIT_HOLDINGS = "https://www.ishares.com/us/products/333011/ishares-bitcoin-trust-etf/latest-holdings.csv"
 IBIT_DOWNLOAD = ("https://www.blackrock.com/varnish-api/blk-one01-product-data/product-data/api/v1/"
                  "get-fund-document?appType=PRODUCT_PAGE&appSubType=ISHARES&targetSite=us-ishares"
@@ -360,6 +364,19 @@ def btcw_history() -> pd.DataFrame:
     })
     frame["net_assets"] = frame["nav"] * frame["shares_outstanding"]
     return frame.sort_values("date").reset_index(drop=True)
+
+
+def provisional_flows() -> pd.DataFrame:
+    """Each fund's flow in USD for every day the provisional dataset lists (fund, date, flow_usd)."""
+    days = get(PROVISIONAL_FLOWS).json()["days"]
+    rows = [{"fund": fund, "date": day["date"], "flow_usd": float(flow)}
+            for day in days for fund, flow in (day.get("perEtfUsd") or {}).items()
+            if fund in CURRENT and flow is not None]
+    if not rows:
+        raise ValueError("the provisional flow dataset lists no fund flows")
+    frame = pd.DataFrame(rows)
+    frame["date"] = pd.to_datetime(frame["date"])
+    return frame
 
 
 def _node() -> str:
