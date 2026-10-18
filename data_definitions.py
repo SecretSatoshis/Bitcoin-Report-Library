@@ -225,6 +225,18 @@ PRICE_OUTLOOK_LEVELS = pd.DataFrame(
             "color": "#9ca3af",
         },
         {
+            "label": "Resistance $93,638 - 2026 High Weekly Close",
+            "price": 93638,
+            "type": "resistance",
+            "color": "#9ca3af",
+        },
+        {
+            "label": "Resistance $86,130 - 2025 Breakout Pivot",
+            "price": 86130,
+            "type": "resistance",
+            "color": "#9ca3af",
+        },
+        {
             "label": "Support $80,600 - Nov 2025 Low",
             "price": 80600,
             "type": "support",
