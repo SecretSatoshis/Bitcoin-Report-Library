@@ -180,16 +180,21 @@ def _chunk_has_infinity(chunk: pd.DataFrame) -> bool:
     return False
 
 
-def _scan_csv(path: Path, retain: bool) -> tuple[int, set[str], bool, pd.DataFrame | None]:
-    """Stream a CSV once: (row count, columns, contains infinity, frame if retained)."""
+def _scan_csv(
+    path: Path, retain: bool
+) -> tuple[int, set[str], set[str], bool, pd.DataFrame | None]:
+    """Stream a CSV once: (row count, columns, columns with no value, contains infinity,
+    frame if retained)."""
     row_count = 0
     columns: set[str] = set()
+    populated: set[str] = set()
     contains_infinity = False
     retained_chunks = []
 
     reader = pd.read_csv(path, chunksize=10_000, low_memory=False)
     for chunk in reader:
         columns = set(chunk.columns)
+        populated.update(chunk.columns[chunk.notna().any()])
         row_count += len(chunk)
         contains_infinity = contains_infinity or _chunk_has_infinity(chunk)
         if retain:
@@ -202,7 +207,7 @@ def _scan_csv(path: Path, retain: bool) -> tuple[int, set[str], bool, pd.DataFra
             if retained_chunks
             else pd.DataFrame(columns=sorted(columns))
         )
-    return row_count, columns, contains_infinity, frame
+    return row_count, columns, columns - populated, contains_infinity, frame
 
 
 def _normalized_dates(
@@ -256,6 +261,11 @@ def _validate_dated_output(
 INDEX_CUTOFF_OUTPUTS = {
     "master_metrics_data.csv.gz": "date",
 }
+
+# Histories in which every column must hold at least one value. A wholly empty column
+# means an upstream series failed outright (e.g. a dropped Yahoo ticker), and the charts
+# built from this release would fail on it.
+NO_EMPTY_COLUMN_OUTPUTS = {"master_metrics_data.csv.gz"}
 
 
 def _validate_index_cutoff(
@@ -779,7 +789,7 @@ def validate_outputs(
             errors.append(f"{filename}: required output is missing")
             continue
         try:
-            row_count, columns, contains_infinity, frame = _scan_csv(
+            row_count, columns, empty_columns, contains_infinity, frame = _scan_csv(
                 path, filename in RETAINED_OUTPUTS
             )
         except (OSError, UnicodeError, pd.errors.ParserError, pd.errors.EmptyDataError) as exc:
@@ -800,6 +810,8 @@ def validate_outputs(
             errors.append(f"{filename}: missing columns {sorted(missing_columns)}")
         if contains_infinity:
             errors.append(f"{filename}: contains positive or negative infinity")
+        if filename in NO_EMPTY_COLUMN_OUTPUTS and empty_columns:
+            errors.append(f"{filename}: columns with no values {sorted(empty_columns)}")
         if frame is not None:
             retained_frames[filename] = frame
 

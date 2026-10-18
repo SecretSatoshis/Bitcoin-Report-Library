@@ -298,6 +298,29 @@ class MasterCutoffValidationTests(unittest.TestCase):
             "master_metrics_data.csv.gz", validator.INDEX_CUTOFF_OUTPUTS
         )
 
+    def test_wholly_empty_master_column_is_rejected(self):
+        # 2026-10-18: a dropped GC=F download published every gold column empty.
+        rules = {"master_metrics_data.csv.gz": RowBounds(1, None)}
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            path = self.write(tmpdir, "master_metrics_data.csv.gz", "2026-10-17")
+            frame = pd.read_csv(path)
+            frame["SI=F_close"] = 30.0
+            frame["GC=F_close"] = np.nan
+            frame.to_csv(path, index=False)
+
+            errors = validate_outputs(tmpdir, "2026-10-17", rules=rules)
+
+            self.assertIn(
+                "master_metrics_data.csv.gz: columns with no values ['GC=F_close']", errors
+            )
+
+            frame.loc[0, "GC=F_close"] = 2_000.0
+            frame.to_csv(path, index=False)
+            errors = validate_outputs(tmpdir, "2026-10-17", rules=rules)
+
+            self.assertFalse([e for e in errors if "columns with no values" in e])
+
 
 class ReleaseSourceAgreementTests(unittest.TestCase):
     def test_release_rejects_an_inconsistent_candle(self):

@@ -217,6 +217,65 @@ class BrkAndYahooFetchTests(unittest.TestCase):
         self.assertEqual(result.loc["2024-01-06", marker], pd.Timestamp("2024-01-01"))
         self.assertTrue(pd.isna(result.loc["2024-01-07", marker]))
 
+    @staticmethod
+    def _yahoo_frame(closes: dict) -> pd.DataFrame:
+        index = pd.to_datetime(["2024-01-01", "2024-01-02"])
+        return pd.DataFrame(
+            {(ticker, "Close"): values for ticker, values in closes.items()}, index=index
+        )
+
+    def test_ticker_dropped_from_batch_is_downloaded_again_alone(self):
+        batch = self._yahoo_frame({"SPY": [100.0, 101.0], "GC=F": [np.nan, np.nan]})
+        alone = self._yahoo_frame({"GC=F": [2_000.0, 2_010.0]})
+
+        with patch.object(
+            sources.yf, "download", side_effect=[batch, alone]
+        ) as download, patch.object(sources.time, "sleep"), warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            result = sources.get_price(
+                {"stocks": ["SPY"], "commodities": ["GC=F"]}, start_date="2024-01-01"
+            ).set_index("date")
+
+        self.assertEqual(result.loc["2024-01-02", "GC=F_close"], 2_010.0)
+        self.assertEqual(result.loc["2024-01-02", "SPY_close"], 101.0)
+        self.assertEqual(download.call_count, 2)
+        self.assertEqual(download.call_args.args[0], "GC=F")
+        self.assertIs(download.call_args.kwargs["threads"], False)
+
+    def test_failed_batch_retries_every_ticker_alone(self):
+        def download(tickers, **kwargs):
+            if isinstance(tickers, list):
+                raise OSError("database is locked")
+            return self._yahoo_frame({tickers: [1.0, 2.0]})
+
+        with patch.object(sources.yf, "download", side_effect=download), patch.object(
+            sources.time, "sleep"
+        ), warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            result = sources.get_price(
+                {"stocks": ["SPY"], "commodities": ["GC=F"]}, start_date="2024-01-01"
+            )
+
+        self.assertIn("SPY_close", result.columns)
+        self.assertIn("GC=F_close", result.columns)
+
+    def test_ticker_empty_after_every_retry_fails_the_run(self):
+        batch = self._yahoo_frame({"SPY": [100.0, 101.0], "GC=F": [np.nan, np.nan]})
+        empty = self._yahoo_frame({"GC=F": [np.nan, np.nan]})
+
+        with patch.object(
+            sources.yf,
+            "download",
+            side_effect=[batch] + [empty] * sources.YAHOO_PRICE_RETRY_ATTEMPTS,
+        ) as download, patch.object(sources.time, "sleep"), warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            with self.assertRaisesRegex(RuntimeError, r"no prices for GC=F"):
+                sources.get_price(
+                    {"stocks": ["SPY"], "commodities": ["GC=F"]}, start_date="2024-01-01"
+                )
+
+        self.assertEqual(download.call_count, 1 + sources.YAHOO_PRICE_RETRY_ATTEMPTS)
+
     def test_market_fill_honors_total_source_age_for_prices_and_market_caps(self):
         index = pd.date_range("2024-01-01", periods=10, freq="D")
         marker = sources._source_observation_column("SPY_close")

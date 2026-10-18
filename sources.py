@@ -79,6 +79,12 @@ YAHOO_DATA_ERRORS = (
     YFException, requests.RequestException, ValueError, KeyError, IndexError, TypeError, OSError,
 )
 
+# A batched download can drop a ticker that Yahoo serves fine on its own: yfinance's
+# download threads share one cache file and can fail with "database is locked". Each
+# dropped ticker is fetched again alone, single-threaded, before the run fails.
+YAHOO_PRICE_RETRY_ATTEMPTS = 3
+YAHOO_PRICE_RETRY_BACKOFF_SECONDS = 2.0
+
 
 def _source_observation_column(value_column: str) -> str:
     return f"{_SOURCE_OBSERVATION_DATE_PREFIX}{value_column}"
@@ -140,8 +146,49 @@ def get_brk_ohlc(start: str = "2009-01-03") -> pd.DataFrame:
         ) from e
 
 
+def _yahoo_download(tickers, start_date: str, end_date: str, **kwargs) -> pd.DataFrame:
+    return yf.download(
+        tickers,
+        start=start_date,
+        end=end_date,
+        auto_adjust=True,
+        progress=False,
+        group_by="ticker",
+        **kwargs,
+    )
+
+
+def _downloaded_close(raw: pd.DataFrame, ticker: str) -> Optional[pd.Series]:
+    """The ticker's closes from a download, or None when it returned none."""
+    try:
+        close_series = raw[ticker]["Close"]
+    except KeyError:
+        return None
+    return None if close_series.isna().all() else close_series
+
+
+def _retry_yahoo_close(ticker: str, start_date: str, end_date: str) -> Optional[pd.Series]:
+    """Download one ticker on its own, with backoff; None if every attempt is empty."""
+    for attempt in range(YAHOO_PRICE_RETRY_ATTEMPTS):
+        time.sleep(YAHOO_PRICE_RETRY_BACKOFF_SECONDS * (attempt + 1))
+        try:
+            raw = _yahoo_download(ticker, start_date, end_date, threads=False)
+        except YAHOO_DATA_ERRORS as e:
+            warnings.warn(
+                f"Yahoo retry {attempt + 1} for {ticker} failed: {e}", RuntimeWarning, stacklevel=2
+            )
+            continue
+        close_series = _downloaded_close(raw, ticker)
+        if close_series is not None:
+            return close_series
+    return None
+
+
 def get_price(tickers: dict, start_date: str) -> pd.DataFrame:
-    """Daily closes for every ticker in `tickers`, in one batched Yahoo download.
+    """Daily closes for every ticker in `tickers`, from one batched Yahoo download.
+
+    A ticker the batch returns without prices is downloaded again on its own. Raises
+    when any ticker still has no prices, so a release never publishes without it.
 
     Returns a frame with a `date` column and one `{ticker}_close` column per ticker,
     each with its observation-date marker.
@@ -159,38 +206,44 @@ def get_price(tickers: dict, start_date: str) -> pd.DataFrame:
     date_range = pd.date_range(start=start_date, end=end_date, freq="D")
 
     try:
-        raw = yf.download(
-            fetch_tickers,
-            start=start_date,
-            end=end_date,
-            auto_adjust=True,
-            progress=False,
-            group_by="ticker",
-        )
+        raw = _yahoo_download(fetch_tickers, start_date, end_date)
     except YAHOO_DATA_ERRORS as e:
-        warnings.warn(f"Yahoo batch price download failed: {e}", RuntimeWarning, stacklevel=2)
-        return pd.DataFrame(columns=["date"])
+        warnings.warn(
+            f"Yahoo batch price download failed: {e}; retrying each ticker on its own",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        raw = pd.DataFrame()
 
     data_frames = []
+    missing = []
     for ticker in fetch_tickers:
-        try:
-            close_series = raw[ticker]["Close"]
-            if close_series.isna().all():
-                warnings.warn(f"Yahoo returned no prices for {ticker}", RuntimeWarning, stacklevel=2)
-                continue
-            value_column = f"{ticker}_close"
-            col = close_series.rename(value_column).to_frame()
-            col[_source_observation_column(value_column)] = pd.Series(
-                col.index, index=col.index
-            ).where(col[value_column].notna())
-            # Put trading days on the daily calendar, bridging weekends and holidays.
-            col = col.reindex(date_range).ffill(limit=MARKET_DATA_MAX_FFILL_DAYS)
-            data_frames.append(col)
-        except KeyError:
-            warnings.warn(f"{ticker} is missing from the Yahoo batch result", RuntimeWarning, stacklevel=2)
+        close_series = _downloaded_close(raw, ticker)
+        if close_series is None:
+            warnings.warn(
+                f"Yahoo batch returned no prices for {ticker}; retrying it on its own",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            close_series = _retry_yahoo_close(ticker, start_date, end_date)
+        if close_series is None:
+            missing.append(ticker)
+            continue
+        value_column = f"{ticker}_close"
+        col = close_series.rename(value_column).to_frame()
+        col[_source_observation_column(value_column)] = pd.Series(
+            col.index, index=col.index
+        ).where(col[value_column].notna())
+        # Put trading days on the daily calendar, bridging weekends and holidays.
+        col = col.reindex(date_range).ffill(limit=MARKET_DATA_MAX_FFILL_DAYS)
+        data_frames.append(col)
 
-    if not data_frames:
-        return pd.DataFrame(columns=["date"])
+    if missing:
+        raise RuntimeError(
+            f"Yahoo returned no prices for {', '.join(missing)} after "
+            f"{YAHOO_PRICE_RETRY_ATTEMPTS} individual retries. Refusing to publish a "
+            "release without them."
+        )
 
     # copy() consolidates the per-ticker blocks; otherwise reset_index raises pandas'
     # fragmentation PerformanceWarning.
