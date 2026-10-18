@@ -225,9 +225,9 @@ PRICE_OUTLOOK_LEVELS = pd.DataFrame(
             "color": "#9ca3af",
         },
         {
-            "label": "Resistance $80,600 - Nov 2025 Low",
+            "label": "Support $80,600 - Nov 2025 Low",
             "price": 80600,
-            "type": "resistance",
+            "type": "support",
             "color": "#9ca3af",
         },
         {
