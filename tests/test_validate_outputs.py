@@ -21,10 +21,28 @@ from validate_outputs import (
 
 
 class OutputValidationTests(unittest.TestCase):
+    def test_price_level_dates_are_required_only_for_technical_lines(self):
+        from data_definitions import PRICE_OUTLOOK_LEVELS, PRICE_OUTLOOK_YEAR
+
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            table = PRICE_OUTLOOK_LEVELS.assign(outlook_year=PRICE_OUTLOOK_YEAR)
+            rules = {"price_outlook.csv": RowBounds(1, 100)}
+            table.to_csv(directory / "price_outlook.csv", index=False)
+            self.assertEqual(validate_outputs(directory, "2026-10-18", rules=rules), [])
+            index = table.index[table.type.eq("support")][0]
+            for value in ["", "2026-02-30", "2026-12-01", "2026-6-30"]:
+                with self.subTest(value=value):
+                    invalid = table.copy()
+                    invalid.loc[index, "start_date"] = value
+                    invalid.to_csv(directory / "price_outlook.csv", index=False)
+                    self.assertTrue(any("start dates" in error for error in
+                        validate_outputs(directory, "2026-10-18", rules=rules)))
+
     def _performance_frame(self):
         rows = [
-            {"Category": category, "Asset": label, "Price": 10.0, "7 Day Return (%)": 1.0,
-             "MTD Return (%)": 1.0, "YTD Return (%)": 1.0, "90 Day Return (%)": 1.0}
+            {"Category": category, "Asset": label, "Price": 10.0,
+             **{column: 1.0 for column in report_tables.PERFORMANCE_RETURN_FIELDS}}
             for category, assets in report_tables.PERFORMANCE_GROUPS.items()
             for label, _ in assets
         ]
@@ -46,6 +64,17 @@ class OutputValidationTests(unittest.TestCase):
         errors = []
         validator._validate_performance_rows({"performance_table.csv": self._performance_frame()}, errors)
         self.assertEqual(errors, [])
+
+        # A 4-year return is unavailable before an asset has 4 years of history.
+        young = self._performance_frame()
+        young.loc[0, "4 Year Return (%)"] = np.nan
+        validator._validate_performance_rows({"performance_table.csv": young}, errors)
+        self.assertEqual(errors, [])
+        young["4 Year Return (%)"] = young["4 Year Return (%)"].astype(object)
+        young.loc[0, "4 Year Return (%)"] = "invalid"
+        validator._validate_performance_rows({"performance_table.csv": young}, errors)
+        self.assertIn("invalid long-horizon returns", errors[-1])
+        errors = []
 
         outage = self._performance_frame()
         outage.loc[outage["Category"] == "Sectors", "Price"] = float("nan")

@@ -54,7 +54,15 @@ export interface ChartPayload {
   defaultPresentation?: string;
   defaultInterval?: string;
   rangeEndDate?: string;
-  referenceLines?: { name: string; price: number; color: string }[];
+  referenceLines?: {
+    name: string;
+    price: number;
+    color: string;
+    type?: string;
+    startDate?: string;
+    lineStyle?: "solid" | "dashed";
+    labelAlign?: "left" | "right";
+  }[];
   candleViews?: Record<
     string,
     {
@@ -299,6 +307,11 @@ const fields: Record<string, { required: string[]; numeric: string[] }> = {
     numeric: [
       "Price",
       "7 Day Return (%)",
+      "30 Day Return (%)",
+      "365 Day Return (%)",
+      "2 Year Return (%)",
+      "4 Year Return (%)",
+      "WTD Return (%)",
       "MTD Return (%)",
       "YTD Return (%)",
       "90 Day Return (%)",
@@ -530,7 +543,7 @@ export function pricePayload(
         ? 1
         : (b.values.at(-1) ?? -Infinity) - (a.values.at(-1) ?? -Infinity),
   );
-  p.seriesOrder = p.series.map((s) => s.id);
+  // The shared renderer sorts the legend at the displayed date, keeping Bitcoin first.
   p.events = [
     ...events.flatMap((e) => e.dates.map((d) => ({ date: d, name: e.name }))),
     { date: date.slice(0, 4) + "-01-01", name: date.slice(0, 4) + " Start" },
@@ -547,11 +560,18 @@ export function pricePayload(
   p.defaultPresentation = "candles";
   p.defaultInterval = "weekly";
   p.referenceLines = t["price_outlook.csv"]
-    .filter((r) => r.type === "case")
+    // Earlier releases have no date column; retain their three annual case lines.
+    .filter((r) => r.type === "case" || r.start_date?.trim())
     .map((r) => ({
-      name: r.label,
-      price: needed(r.price, "case price"),
+      name: r.type === "case" ? r.label : r.label.replace(/^(?:Support|Resistance)\s+\$[\d,.]+\s*[-–—]\s*/i, ""),
+      price: needed(r.price, "outlook level price"),
       color: r.color,
+      ...(r.type === "case" ? {} : {
+        type: r.type,
+        startDate: iso(r.start_date),
+        lineStyle: "solid" as const,
+        labelAlign: "right" as const,
+      }),
     }))
     .sort((a, b) => a.price - b.price);
   p.candleViews = {};
@@ -724,7 +744,7 @@ export function seasonalPayload(
     ),
   );
   p.series.find((s) => s.id === "median")!.lineStyle = "dashed";
-  p.seriesOrder = [year, "median", "mean", ...past.slice().reverse()];
+  // Let the renderer pin the current year/Median/Average, then rank history by value.
   p.readingPoint = position;
   p.xAxisLabel = period === "mtd" ? "Day of Month" : "Day of Year";
   p.axes.right.label =
@@ -750,6 +770,17 @@ export function createDashboard(
     throw new Error("Invalid release manifest");
   if (t["price_outlook.csv"].some((r) => r.outlook_year !== year))
     throw new Error("Outlook year differs from report year");
+  for (const row of t["price_outlook.csv"]) {
+    if (!["case", "support", "resistance"].includes(row.type))
+      throw new Error("Unknown outlook level type");
+    if ("start_date" in row && row.type !== "case") {
+      const start = row.start_date;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(start) ||
+          !Number.isFinite(Date.parse(start)) ||
+          new Date(start).toISOString().slice(0, 10) !== start || start > date)
+        throw new Error(`Invalid outlook start date for ${row.label}`);
+    }
+  }
   const cases = t["price_outlook.csv"]
     .filter((r) => r.type === "case")
     .sort((a, b) => needed(a.price, "price") - needed(b.price, "price"));

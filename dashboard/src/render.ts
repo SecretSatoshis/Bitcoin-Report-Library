@@ -196,17 +196,18 @@ const SECTIONS = [
   ["bitcoin-roi-by-time-frame", "ROI"],
 ];
 function performanceSection(d: DashboardData): string {
+  const returns = ["7 Day", "30 Day", "90 Day", "365 Day", "2 Year", "4 Year", "WTD", "MTD", "YTD"];
   return d.performance
     .map(
       (g) =>
         `<div class="performance-group" data-quarterly-visual="${g.id}"><h3 id="${g.title.toLowerCase().replaceAll(" ", "-")}">${escape(g.title)}</h3>${table(
-          ["Asset", "Price", "7 Day Return", "MTD Return", "YTD Return", "90 Day Return"],
+          ["Asset", "Price", ...returns],
           g.rows.map((r) => [
             r.Asset === "Bitcoin - [BTC]"
               ? `<span class="accent">${escape(r.Asset)}</span>`
               : escape(r.Asset),
             format(r.Price, "usd"),
-            ...["7 Day Return (%)", "MTD Return (%)", "YTD Return (%)", "90 Day Return (%)"].map((k) => delta(r[k])),
+            ...returns.map((period) => delta(r[period + " Return (%)"])),
           ]),
           g.title,
           "performance",

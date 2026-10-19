@@ -490,16 +490,16 @@ def _safe_pct_change(numerator, denominator):
 
 
 def _previous_period_positive_close(data, period):
-    """Each row's last positive value before its month or year began, per column.
+    """Each row's last positive value before its week, month or year began, per column.
 
     A missing or zero value at the boundary falls back to the column's earlier close.
     """
     if not isinstance(data.index, pd.DatetimeIndex):
         raise ValueError("Data index must be a DatetimeIndex.")
-    if period not in {"month", "year"}:
-        raise ValueError("period must be either 'month' or 'year'.")
+    if period not in {"week", "month", "year"}:
+        raise ValueError("period must be 'week', 'month' or 'year'.")
 
-    period_frequency = "M" if period == "month" else "Y"
+    period_frequency = {"week": "W-SUN", "month": "M", "year": "Y"}[period]
     period_starts = pd.DatetimeIndex(
         data.index.to_period(period_frequency).start_time
     )
@@ -573,6 +573,28 @@ def calculate_time_changes(data, periods):
     )
 
     return changes
+
+
+def calculate_performance_changes(data: pd.DataFrame) -> pd.DataFrame:
+    """Additional price returns for the performance table and daily/period exports.
+
+    Day windows use exact calendar days; year windows use calendar anniversaries, with
+    February 29 mapping to February 28. Missing/zero baselines remain unavailable. Market
+    prices have already been filled over weekends/holidays within the source's fill budget.
+    """
+    if not isinstance(data.index, pd.DatetimeIndex):
+        raise ValueError("Data index must be a DatetimeIndex.")
+    changes = []
+    for suffix, offset in (("30d", pd.Timedelta(days=30)),
+                           ("365d", pd.Timedelta(days=365)),
+                           ("2y", pd.DateOffset(years=2)),
+                           ("4y", pd.DateOffset(years=4))):
+        baseline = data.reindex(data.index - offset)
+        baseline.index = data.index
+        changes.append(_safe_pct_change(data, baseline).add_suffix(f"_{suffix}_change"))
+    changes.append(_safe_pct_change(data, _previous_period_positive_close(data, "week"))
+                   .add_suffix("_wtd_change"))
+    return pd.concat(changes, axis=1)
 
 
 # Fewest paired returns a window may hold and still publish a correlation.

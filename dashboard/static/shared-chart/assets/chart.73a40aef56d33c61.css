@@ -80,6 +80,20 @@ main{padding-top:92px}.heading{margin-bottom:21px}.description{font-size:10px}.e
 .compact-legend .indicator .value{font-size:12px;line-height:1.5;margin-top:3px}
 .compact-legend .legend-hint{margin-top:12px}
 
+/* Dashboard desktop only: use the plot's height, then a second column before scrolling.
+   Row flow preserves the sorted DOM order left to right, then down. */
+@media(min-width:761px){
+.dashboard-legend:not(.capture) .indicators{height:520px;min-height:0;min-width:0;display:flex;flex-direction:column}
+.dashboard-legend:not(.capture) #legend{min-height:0;max-height:none;flex:1;overflow:auto}
+.dashboard-legend:not(.capture) .panel-heading,.dashboard-legend:not(.capture) .reading-date,
+.dashboard-legend:not(.capture) .candle-reading,.dashboard-legend:not(.capture) .legend-hint{flex-shrink:0}
+.dashboard-legend.legend-two-columns:not(.capture) .chart-layout{grid-template-columns:minmax(0,1fr) min(360px,40%)}
+.dashboard-legend.legend-two-columns:not(.capture) #legend{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:max-content;column-gap:12px;align-content:start}
+.dashboard-legend.legend-two-columns:not(.capture) .indicator-row{min-width:0}
+.dashboard-legend.legend-two-columns:not(.capture) .indicator .name{overflow-wrap:anywhere}
+.dashboard-legend.legend-two-columns:not(.capture) .solo{font-size:8px}
+}
+
 /* Template-defined panels keep their proportions on every screen. */
 .panel-layout .chart-card{scroll-margin-top:80px}
 .panel-layout .plot-wrap{height:clamp(570px,calc(var(--chart-viewport-height,100svh) - 110px),710px);min-height:0}

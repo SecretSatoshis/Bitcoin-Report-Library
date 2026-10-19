@@ -17,12 +17,35 @@ A daily release of 30 files in `csv/`, listed with checksums in `release_manifes
 | **Master data** | `master_metrics_data.csv.gz`: every metric, every day since 2010, plus weekly and monthly snapshots |
 | **Report tables** | Summary, fundamentals, performance, 30/90/365-day correlation matrices, relative value and calendar rank changes, ROI, monthly returns, MTD/YTD comparisons |
 | **Chart series** | Price models, price paths, drawdowns, cycle lows, halving eras and Bitcoin candles |
-| **Outlook** | The annual Bear / Base / Bull price cases |
+| **Outlook** | The annual Bear / Base / Bull price cases and dated support/resistance levels |
 | **US spot bitcoin ETFs** | `etf_daily.csv` (each fund's bitcoin held, shares, NAV and flows by trading day), `etf_totals_daily.csv` (all funds, with cumulative flows and the flow-weighted entry price), `etf_quarterly.csv` (holdings and reported cost from each fund's SEC filings) |
 | **Annual reference** | `annual_reference_data.csv`: U.S. median household income, world internet use and population, and estimated bitcoin owners, one row per series and year with its source |
 
 The [release page](https://secretsatoshis.github.io/Bitcoin-Report-Library/) lists every
 file with its date range, size and download link.
+
+`price_outlook.csv` includes `start_date` for each support and resistance level, maintained
+in `PRICE_OUTLOOK_LEVELS` in `data_definitions.py`. It marks the named historical event;
+weekly levels use the week's Monday and the $100,000 psychological level uses its first
+crossing. Annual cases leave this field blank and span the chart. The dashboard draws dated
+levels as solid lines with labels above their right end; the annual cases remain dashed.
+The date locates the reference event without changing its editorial price to match a
+different candle source. Older releases without dates retain their annual case lines.
+
+Desktop dashboard legends switch from one to two columns when the series exceed the
+available height beside the plot. Series run left to right across each row, then down, with
+vertical scrolling only when both columns fill up. Bitcoin/current year stays first, followed
+by Median and Average where present, then the remaining series ranked by their displayed value.
+Hovering the chart updates this ranking to the selected date.
+
+Performance tables export 7-, 30-, 90- and 365-calendar-day returns, cumulative 2- and
+4-year returns, and WTD/MTD/YTD returns, in that order. The extra calculations are published
+in the daily master data and weekly/monthly snapshots as well as `performance_table.csv`.
+Year windows use the same calendar date (February 29 maps to February 28 when needed);
+WTD starts from the prior Sunday's close, with MTD/YTD using the previous month/year close.
+Prices carried over market holidays use the existing bounded fill. Missing history remains
+unavailable. The dashboard separates trailing returns from calendar-period returns and
+keeps asset names visible while scrolling the wider tables.
 
 ## How it works
 

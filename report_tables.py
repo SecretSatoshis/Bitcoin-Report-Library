@@ -531,13 +531,20 @@ def create_correlation_matrix_table(matrices, report_date):
     return pd.concat(tables, ignore_index=True)
 
 
+PERFORMANCE_RETURN_FIELDS = {
+    "7 Day Return (%)": "7d", "30 Day Return (%)": "30d", "90 Day Return (%)": "90d",
+    "365 Day Return (%)": "365d", "2 Year Return (%)": "2y", "4 Year Return (%)": "4y",
+    "WTD Return (%)": "wtd", "MTD Return (%)": "mtd", "YTD Return (%)": "ytd",
+}
+
+
 def _build_performance_table(
     report_data: pd.DataFrame,
     report_date,
     btc_correlations: pd.Series,
     asset_groups: dict,
 ) -> pd.DataFrame:
-    """One row per asset, in group order: price, 7-day/MTD/YTD/90-day returns, 52-week
+    """One row per asset, in group order: price, trailing and calendar returns, 52-week
     range and 90-day correlation with Bitcoin. Ticker "price_close" is Bitcoin.
 
     `btc_correlations` is the 90-day matrix's Bitcoin row, indexed by price column.
@@ -564,10 +571,8 @@ def _build_performance_table(
                 "Category": category,
                 "Asset": label,
                 "Price": latest[price_col],
-                "7 Day Return (%)": latest[f"{price_col}_7d_change"],
-                "MTD Return (%)": latest[f"{price_col}_mtd_change"],
-                "YTD Return (%)": latest[f"{price_col}_ytd_change"],
-                "90 Day Return (%)": latest[f"{price_col}_90d_change"],
+                **{label: latest.get(f"{price_col}_{suffix}_change", np.nan)
+                   for label, suffix in PERFORMANCE_RETURN_FIELDS.items()},
                 "52 Week High": window.max() if len(window) else None,
                 "52 Week Low": window.min() if len(window) else None,
                 "90 Day BTC Correlation": btc_correlations.get(price_col, np.nan),

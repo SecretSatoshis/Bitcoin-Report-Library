@@ -200,7 +200,10 @@ EARLY_INTERNET_USERS_URL = "https://ourworldindata.org/grapher/number-of-interne
 PRICE_OUTLOOK_YEAR = 2026
 
 # Price outlook levels for the dashboard and weekly report. The dashboard styles its
-# cards and chart lines from `color`.
+# cards and chart lines from `color`. Technical lines begin on `start_date`, the date
+# of the named event (weekly levels use the week's Monday). Annual cases span the chart.
+# Fixed editorial prices can differ from the candle feed's venue/close conventions;
+# these dates locate their historical reference without recalculating the prices.
 PRICE_OUTLOOK_LEVELS = pd.DataFrame(
     [
         {"label": "Bull Case", "price": 160000, "type": "case", "color": "#00FF88"},
@@ -208,48 +211,56 @@ PRICE_OUTLOOK_LEVELS = pd.DataFrame(
         {"label": "Bear Case", "price": 70000, "type": "case", "color": "#FF3B30"},
         {
             "label": "Resistance $126,219 - 2025 ATH",
+            "start_date": "2025-10-06",
             "price": 126219,
             "type": "resistance",
             "color": "#9ca3af",
         },
         {
             "label": "Resistance $108,287 - 2024 ATH",
+            "start_date": "2024-12-17",
             "price": 108287,
             "type": "resistance",
             "color": "#9ca3af",
         },
         {
             "label": "Resistance $100,000 - Psychological Level",
+            "start_date": "2024-12-05",  # First crossing of $100,000.
             "price": 100000,
             "type": "resistance",
             "color": "#9ca3af",
         },
         {
             "label": "Resistance $93,638 - 2026 High Weekly Close",
+            "start_date": "2026-01-12",  # Editorial anchor confirmed by the publisher.
             "price": 93638,
             "type": "resistance",
             "color": "#9ca3af",
         },
         {
             "label": "Resistance $86,130 - 2025 Breakout Pivot",
+            "start_date": "2025-03-25",  # Editorial anchor confirmed by the publisher.
             "price": 86130,
             "type": "resistance",
             "color": "#9ca3af",
         },
         {
             "label": "Support $80,600 - Nov 2025 Low",
+            "start_date": "2025-11-21",
             "price": 80600,
             "type": "support",
             "color": "#9ca3af",
         },
         {
             "label": "Support $73,757 - 2024 Prior ATH",
+            "start_date": "2024-03-14",
             "price": 73757,
             "type": "support",
             "color": "#9ca3af",
         },
         {
             "label": "Support $57,740 - 2026 Low",
+            "start_date": "2026-06-30",
             "price": 57740,
             "type": "support",
             "color": "#9ca3af",

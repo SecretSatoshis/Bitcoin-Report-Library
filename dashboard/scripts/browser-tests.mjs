@@ -54,6 +54,26 @@ try {
     page = await context.newPage();
   const errors = [],
     external = [];
+  await page.addInitScript(() => {
+    // Record live and export reference labels separately to verify both rendering paths.
+    window.__referenceDraws = {};
+    window.__exportReferenceLabels = [];
+    const p = CanvasRenderingContext2D.prototype;
+    const move = p.moveTo, line = p.lineTo, stroke = p.stroke, fill = p.fillText;
+    p.moveTo = function(x, y) { this._referenceFrom = [x, y]; return move.call(this, x, y); };
+    p.lineTo = function(x, y) { this._referenceTo = [x, y]; return line.call(this, x, y); };
+    p.stroke = function(...args) {
+      this._referenceStroke = { from: this._referenceFrom, to: this._referenceTo, width: this.lineWidth, dash: this.getLineDash() };
+      return stroke.apply(this, args);
+    };
+    p.fillText = function(text, x, y, ...args) {
+      if (this.canvas.closest("#chart") && / · \$/.test(text))
+        window.__referenceDraws[text] = { x, y, align: this.textAlign, ...this._referenceStroke };
+      else if (this.canvas.closest('[aria-hidden="true"]') && / · \$/.test(text))
+        window.__exportReferenceLabels.push(text);
+      return fill.call(this, text, x, y, ...args);
+    };
+  });
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("request", (r) => {
     if (r.url().startsWith("http") && !r.url().startsWith(base))
@@ -79,6 +99,31 @@ try {
     ),
     true,
   );
+  const performancePeriods = ["7 Day", "30 Day", "90 Day", "365 Day", "2 Year", "4 Year", "WTD", "MTD", "YTD"];
+  for (const group of data.performance) {
+    const table = page.locator(`[data-quarterly-visual="${group.id}"] table`);
+    assert.deepEqual(await table.locator("thead th").allTextContents(), ["Asset", "Price", ...performancePeriods]);
+    const rows = await table.locator("tbody tr").all();
+    for (const [i, row] of rows.entries()) {
+      const cells = await row.locator("th,td").allTextContents();
+      assert.equal(cells.length, 11);
+      for (const [j, period] of performancePeriods.entries()) {
+        const source = group.rows[i][period + " Return (%)"], text = cells[j + 2].trim();
+        if (source === undefined || source === "") assert.equal(text, "Unavailable");
+        else assert.ok(Math.abs(Number(text.replace(/[^\d.+-]/g, "")) - Number(source)) <= 0.0051,
+          group.rows[i].Asset + " " + period + " agrees with its exported return");
+      }
+    }
+    for (const boundary of [2, 8]) {
+      const spacing = await table.locator("thead th").nth(boundary).evaluate((cell) => ({
+        line: getComputedStyle(cell).borderLeftWidth,
+        before: getComputedStyle(cell.previousElementSibling).paddingRight,
+        after: getComputedStyle(cell).paddingLeft,
+      }));
+      assert.equal(spacing.line, "1px");
+      assert.equal(spacing.before, spacing.after, "Group dividers have equal space on both sides");
+    }
+  }
   if (data.reportDate === reference.date) {
     const tables = await page
       .locator("table:not(.correlation-matrix)")
@@ -95,7 +140,8 @@ try {
     const actual = tables.map((t) => t.map((r) => r.map(normalized)));
     // Fundamentals show each category once, as a row group, so compare the metric cells.
     const compare = [
-      ...actual.slice(0, 7),
+      ...actual.slice(0, 4).map((table) => table.map((row) => [0, 1, 2, 9, 10, 4].map((i) => row[i]))),
+      ...actual.slice(4, 7),
       actual[7].map((r) => r.slice(r.length - 6)),
       actual[8],
     ];
@@ -183,6 +229,110 @@ try {
     writeFileSync(resolve(artifacts, payload.id + "-export.png"), bytes);
   }
   const price = frames[0];
+  async function desktopLegend(frame) {
+    return frame.evaluate(async () => {
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const legend = document.querySelector("#legend");
+      const rows = [...legend.querySelectorAll(".indicator-row")].map((row) => {
+        const box = row.getBoundingClientRect();
+        return {id: row.querySelector(".indicator").id.slice(7), left: box.left, top: box.top};
+      });
+      const a = SecretSatoshisChart, p = a.payload;
+      const pinned = ["price_close", p.reportDate.slice(0, 4), "median", "mean"]
+        .filter((id) => p.series.some((series) => series.id === id));
+      const values = p.series.filter((series) => !pinned.includes(series.id)).map((series) => ({
+        id: series.id, value: series.values[p.x.indexOf(a.readingPoint) - series.start] ?? -Infinity,
+      }));
+      const expected = [...pinned, ...values.sort((a, b) => b.value - a.value).map((series) => series.id)];
+      return {
+        two: document.body.classList.contains("legend-two-columns"),
+        overflow: legend.scrollHeight > legend.clientHeight + 1,
+        horizontalOverflow: legend.scrollWidth > legend.clientWidth + 1,
+        expected,
+        domOrder: rows.map((row) => row.id),
+        visualOrder: rows.sort((a, b) => a.top - b.top || a.left - b.left).map((row) => row.id),
+        columns: new Set(rows.map((row) => row.left)).size,
+      };
+    });
+  }
+  for (const frame of frames) {
+    const legend = await desktopLegend(frame);
+    assert.equal(legend.two, true, "Long dashboard legends use two columns");
+    assert.equal(legend.columns, 2);
+    assert.equal(legend.overflow, false, "Current dashboard series fit without scrolling");
+    assert.equal(legend.horizontalOverflow, false);
+    assert.deepEqual(legend.domOrder, legend.expected);
+    assert.deepEqual(legend.visualOrder, legend.expected, "Pinned series, then descending values, across each row");
+  }
+  // The ranking follows the displayed candle/day, rather than a saved latest-date order.
+  for (const [index, frame] of frames.entries()) {
+    const element = page.locator("[data-chart-frame]").nth(index);
+    await element.scrollIntoViewIfNeeded();
+    const target = await frame.evaluate(() => {
+      const a = SecretSatoshisChart, p = a.payload;
+      const current = p.x.indexOf(a.readingPoint);
+      const time = p.x[Math.max(1, Math.floor(current * (p.axisKind === "days" ? 0.5 : 0.97)))];
+      return {time, x: a.view.charts[0].timeScale().timeToCoordinate(time), y: 120};
+    });
+    await frame.locator(".chart-pane").hover({position: {x: target.x, y: target.y}});
+    await frame.waitForFunction(() => SecretSatoshisChart.readingPoint !== SecretSatoshisChart.payload.readingPoint, null, {timeout: 5000});
+    const legend = await desktopLegend(frame);
+    assert.deepEqual(legend.domOrder, legend.expected, "Hover ranks the actual displayed values");
+    assert.deepEqual(legend.visualOrder, legend.expected);
+    await page.mouse.move(0, 0);
+    await frame.locator("#reset").click();
+  }
+  // Available vertical room determines the switch, with scrolling retained after two columns.
+  const seasonal = frames[1];
+  await page.locator("[data-chart-frame]").nth(1).scrollIntoViewIfNeeded();
+  for (const [height, two, overflow] of [["1000px", false, false], ["250px", true, true], ["", true, false]]) {
+    await seasonal.evaluate((height) => {
+      document.querySelector(".indicators").style.height = height;
+      dispatchEvent(new Event("resize"));
+    }, height);
+    await seasonal.waitForFunction((two) => document.body.classList.contains("legend-two-columns") === two, two, {timeout: 3000});
+    const legend = await desktopLegend(seasonal);
+    assert.equal(legend.two, two);
+    assert.equal(legend.overflow, overflow);
+    assert.equal(legend.columns, two ? 2 : 1);
+    assert.equal(legend.horizontalOverflow, false);
+    assert.deepEqual(legend.visualOrder, legend.expected);
+  }
+  async function checkReferenceLevels(technicalVisible = true) {
+    const referenceChecks = await price.evaluate(async () => {
+    window.__referenceDraws = {};
+    const a = SecretSatoshisChart, scale = a.view.charts[0].timeScale();
+    a.view.charts[0].applyOptions({});
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return a.payload.referenceLines.map((level) => {
+      const entry = Object.entries(window.__referenceDraws).find(([label]) => label.startsWith(level.name + " · "));
+      let expected = 0;
+      if (level.startDate) {
+        const i = a.payload.x.findIndex((date) => date >= level.startDate);
+        const left = i > 0 ? scale.timeToCoordinate(a.payload.x[i - 1]) : scale.timeToCoordinate(a.payload.x[0]);
+        const right = scale.timeToCoordinate(a.payload.x[i]);
+        const fraction = i > 0 ? (Date.parse(level.startDate) - Date.parse(a.payload.x[i - 1])) /
+          (Date.parse(a.payload.x[i]) - Date.parse(a.payload.x[i - 1])) : 0;
+        expected = Math.max(0, left + (right - left) * fraction);
+      }
+      return { level, draw: entry?.[1], expected };
+    });
+  });
+    for (const {level, draw, expected} of referenceChecks) {
+      if (!technicalVisible && ["support", "resistance"].includes(level.type)) {
+        assert.equal(draw, undefined, level.name + " line and label hidden");
+        continue;
+      }
+      assert.ok(draw, level.name + " label drawn");
+      assert.ok(Math.abs(draw.from[0] - expected) < 0.01, level.name + " starts at its supplied date");
+      assert.equal(draw.width, 1);
+      assert.deepEqual(draw.dash, level.type ? [] : [4, 5]);
+      assert.equal(draw.align, level.type ? "right" : "left");
+      assert.equal(draw.x, level.type ? draw.to[0] - 8 : 8);
+      assert.ok(draw.y < draw.from[1], "label is above the line");
+    }
+  }
+  await checkReferenceLevels();
   assert.equal(await price.locator("#bitcoin-style").inputValue(), "candles");
   assert.equal(await price.locator("#candle-interval").inputValue(), "weekly");
   for (const interval of ["daily", "monthly", "weekly"]) {
@@ -191,7 +341,42 @@ try {
       await price.evaluate(() => SecretSatoshisChart.state.interval),
       interval,
     );
+    await checkReferenceLevels();
   }
+  await price.locator("#bitcoin-style").selectOption("line");
+  await checkReferenceLevels();
+  assert.equal(await price.locator("#support-resistance").isVisible(), true);
+  assert.equal(await seasonal.locator("#support-resistance").isVisible(), false);
+  await price.locator("#support-resistance").click();
+  assert.equal(await price.locator("#support-resistance").getAttribute("aria-pressed"), "false");
+  assert.equal(await price.evaluate(() => SecretSatoshisChart.state.supportResistance), false);
+  assert.equal(await price.evaluate(() => SecretSatoshisChart.state.events), true);
+  await checkReferenceLevels(false);
+  await price.locator("#bitcoin-style").selectOption("candles");
+  await price.locator("#candle-interval").selectOption("monthly");
+  await price.locator("#scale-right").selectOption("linear");
+  await checkReferenceLevels(false);
+  const exportedLevels = await price.evaluate(async () => {
+    window.__exportReferenceLabels = [];
+    const image = await SecretSatoshisChart.exportImage(false);
+    return {png: image.startsWith("data:image/png"), labels: window.__exportReferenceLabels,
+      levels: SecretSatoshisChart.payload.referenceLines};
+  });
+  assert.equal(exportedLevels.png, true);
+  for (const level of exportedLevels.levels) {
+    assert.equal(exportedLevels.labels.some(label => label.startsWith(level.name + " · ")),
+      !["support", "resistance"].includes(level.type), level.name + " respects export visibility");
+  }
+  await price.locator("#events").click();
+  assert.equal(await price.evaluate(() => SecretSatoshisChart.state.supportResistance), false);
+  await price.locator("#support-resistance").click();
+  assert.equal(await price.evaluate(() => SecretSatoshisChart.state.events), false);
+  await checkReferenceLevels();
+  await price.locator("#support-resistance").click();
+  await price.locator("#reset").click();
+  assert.equal(await price.locator("#support-resistance").getAttribute("aria-pressed"), "true");
+  assert.equal(await price.evaluate(() => SecretSatoshisChart.state.supportResistance), true);
+  await checkReferenceLevels();
   for (const range of ["YTD", "1Y", "4Y", "10Y", "ALL", "2Y"]) {
     await price.locator(`[data-range="${range}"]`).click();
     assert.equal(

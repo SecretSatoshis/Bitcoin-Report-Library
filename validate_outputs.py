@@ -22,6 +22,7 @@ from report_tables import (
     CORRELATION_ASSETS,
     CORRELATION_MATRIX_PERIODS,
     PERFORMANCE_GROUPS,
+    PERFORMANCE_RETURN_FIELDS,
     RELATIVE_RANK_FILE,
     RELATIVE_RANK_COLUMNS,
     asset_valuation_definitions,
@@ -108,10 +109,8 @@ REQUIRED_COLUMNS = {
         "date", "BTC Price", "Electricity Cost", "Metcalfe Value", "Power Law Price",
         "50-day MA", "3-month MA", "200-day MA", "1-year MA", "200-week MA",
     },
-    "performance_table.csv": {
-        "Category", "Asset", "Price", "MTD Return (%)", "YTD Return (%)",
-    },
-    "price_outlook.csv": {"label", "price", "type", "color", "outlook_year"},
+    "performance_table.csv": {"Category", "Asset", "Price", *PERFORMANCE_RETURN_FIELDS},
+    "price_outlook.csv": {"label", "price", "type", "color", "outlook_year", "start_date"},
     "relative_value_comparison.csv": {"Asset", "Market Cap (USD)", "BTC Price at Market Cap"},
     RELATIVE_RANK_FILE: set(RELATIVE_RANK_COLUMNS),
     "report_ohlc_summary.csv": {"date", "daily_close"},
@@ -149,6 +148,7 @@ RETAINED_OUTPUTS = {
     "mtd_price_paths.csv",
     "onchain_price_models.csv",
     "performance_table.csv",
+    "price_outlook.csv",
     "report_ohlc_summary.csv",
     "summary_history.csv",
     "summary_table.csv",
@@ -694,7 +694,8 @@ def _validate_investor_sentiment(summary, master_path, report_date, errors):
 
 
 PERFORMANCE_VALUE_COLUMNS = [
-    "Price", "7 Day Return (%)", "MTD Return (%)", "YTD Return (%)", "90 Day Return (%)",
+    "Price", "7 Day Return (%)", "30 Day Return (%)", "90 Day Return (%)",
+    "WTD Return (%)", "MTD Return (%)", "YTD Return (%)",
 ]
 
 
@@ -714,7 +715,7 @@ def _validate_performance_rows(frames, errors):
     if list(zip(table["Category"], table["Asset"])) != expected:
         errors.append("performance_table.csv: rows do not match the configured assets and categories")
         return
-    absent = [column for column in PERFORMANCE_VALUE_COLUMNS if column not in table.columns]
+    absent = [column for column in ["Price", *PERFORMANCE_RETURN_FIELDS] if column not in table.columns]
     if absent:
         errors.append(f"performance_table.csv: missing columns {absent}")
         return
@@ -724,6 +725,11 @@ def _validate_performance_rows(frames, errors):
         errors.append(
             "performance_table.csv: missing price or returns for " + ", ".join(blank)
         )
+    # A newer asset can legitimately lack a 1/2/4-year baseline; nonnumeric values cannot.
+    historical = table[["365 Day Return (%)", "2 Year Return (%)", "4 Year Return (%)"]]
+    invalid = historical.notna() & historical.apply(pd.to_numeric, errors="coerce").isna()
+    if invalid.any().any():
+        errors.append("performance_table.csv: invalid long-horizon returns")
 
 
 def _validate_review_contracts(frames, output_dir, report_date, errors):
@@ -824,6 +830,7 @@ def validate_outputs(
             errors,
         )
 
+    _validate_outlook_levels(retained_frames, expected_report_date, errors)
     _validate_report_agreement(retained_frames, expected_report_date, errors)
     _validate_review_contracts(retained_frames, output_dir, expected_report_date, errors)
     _validate_performance_rows(retained_frames, errors)
@@ -839,6 +846,19 @@ def validate_outputs(
             errors.append(f"Chart candle exports: {exc}")
     _validate_release_manifest(output_dir, expected_report_date, errors, require_release_manifest)
     return errors
+
+
+def _validate_outlook_levels(frames, report_date, errors):
+    table = frames.get("price_outlook.csv")
+    if table is None or not REQUIRED_COLUMNS["price_outlook.csv"].issubset(table.columns):
+        return
+    if not table["type"].isin(["case", "support", "resistance"]).all():
+        errors.append("price_outlook.csv: unknown level type")
+    technical = table.loc[table["type"].isin(["support", "resistance"]), "start_date"]
+    dates = pd.to_datetime(technical, format="%Y-%m-%d", errors="coerce")
+    if (dates.isna() | dates.gt(report_date) |
+            technical.fillna("").ne(dates.dt.strftime("%Y-%m-%d"))).any():
+        errors.append("price_outlook.csv: technical levels need valid ISO start dates on or before the report date")
 
 
 def _validate_relative_rank_changes(frames, output_dir, report_date, errors):

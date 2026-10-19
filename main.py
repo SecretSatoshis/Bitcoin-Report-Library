@@ -84,7 +84,8 @@ data = metrics.electric_price_models(data)
 
 # Period changes for CHANGE_COLUMNS, Bitcoin's YoY change and the 4-year CAGRs.
 report_data = pd.concat(
-    [data, metrics.calculate_all_changes(data[CHANGE_COLUMNS], YOY_COLUMNS)], axis=1
+    [data, metrics.calculate_all_changes(data[CHANGE_COLUMNS], YOY_COLUMNS),
+     metrics.calculate_performance_changes(data[report_tables.CORRELATION_COLUMNS])], axis=1
 )
 report_data = report_data.merge(
     metrics.calculate_rolling_cagr_for_all_columns(data[CAGR_COLUMNS], 4),

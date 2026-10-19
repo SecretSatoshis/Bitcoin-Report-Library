@@ -53,16 +53,16 @@
       "size_bytes": 122123
     },
     "master_metrics_data.csv.gz": {
-      "sha256": "a6ef7d0e942cfae864105a11406205ca0d6e726c75c6535299bc716dcc25ca29",
-      "size_bytes": 8223350
+      "sha256": "f3b41182e6c90ca3f09cca7fd60ccc93e4f3333d0aeb024fed6eca08c23b225d",
+      "size_bytes": 10443841
     },
     "monthly_heatmap_data.csv": {
       "sha256": "823e426239c76effa8905aa6db6a741509ff8dc4b431c3e666643020f131587a",
       "size_bytes": 3015
     },
     "monthly_metrics_data.csv.gz": {
-      "sha256": "c65e7f8182c991962b769b35978b4f17cbe4a421eb3956167e96a1c8d533ddb6",
-      "size_bytes": 308520
+      "sha256": "3e37cacb6698f5ff24e37f7e8d638832d3df8b650835f2a9454895a41f5c15e7",
+      "size_bytes": 384899
     },
     "mtd_price_paths.csv": {
       "sha256": "7b6b49e9f5b35cf66e09520c68caf94d3b737a2c22284f1734853a7d96fa781d",
@@ -77,12 +77,12 @@
       "size_bytes": 801921
     },
     "performance_table.csv": {
-      "sha256": "319f18f5cdc4f4c75afaf110c9801240e8e2916790d5920a9f402dbf5ccbb599",
-      "size_bytes": 2542
+      "sha256": "4120e04776a7dde5de123c144a64e61f1ae922cfba985cd5f3998e98f5d4a32a",
+      "size_bytes": 3688
     },
     "price_outlook.csv": {
-      "sha256": "bc2e62c43e97121330d24b89b98255c9effdbaabc5f98b49c9d4cfc90173ca13",
-      "size_bytes": 670
+      "sha256": "d55116c14110f651ab94131716060e74250fdd2f0b986039ce02a83f94324416",
+      "size_bytes": 772
     },
     "relative_value_comparison.csv": {
       "sha256": "b9d66148a6bfa620867881fdd2cba8f4674fe21d2e7c8464167e07a22b5b45c2",
@@ -109,8 +109,8 @@
       "size_bytes": 475
     },
     "weekly_metrics_data.csv.gz": {
-      "sha256": "f09099dc89a08a991c84fd5bd9ade714a23808e0a43ecf84b4fda48b1b8d33ef",
-      "size_bytes": 1305892
+      "sha256": "3dc895549a02dafdfcbc7b244070b5a59c0c67d983cc4989ee08fb79b42f44f6",
+      "size_bytes": 1636081
     },
     "ytd_price_paths.csv": {
       "sha256": "543a0b49cf2d0afc8c0a21df9d651e2b3e382b2bd78ac95f691323c127348d88",
@@ -121,7 +121,7 @@
       "size_bytes": 180
     }
   },
-  "generated_at": "2026-10-19T05:07:07+00:00",
+  "generated_at": "2026-10-19T15:36:50+00:00",
   "model_parameters": {
     "metcalfe_scale": 0.0002844613151914459,
     "power_law_exponent": 5.620760734171435,

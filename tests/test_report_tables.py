@@ -19,6 +19,11 @@ class PerformanceTableTests(unittest.TestCase):
                 "price_close_mtd_change": [3.0, 4.0, 999.0],
                 "price_close_ytd_change": [5.0, 6.0, 999.0],
                 "price_close_90d_change": [7.0, 8.0, 999.0],
+                "price_close_30d_change": [9.0, 10.0, 999.0],
+                "price_close_365d_change": [11.0, 12.0, 999.0],
+                "price_close_2y_change": [13.0, 14.0, 999.0],
+                "price_close_4y_change": [15.0, 16.0, 999.0],
+                "price_close_wtd_change": [17.0, 18.0, 999.0],
             },
             index=dates,
         )
@@ -35,6 +40,12 @@ class PerformanceTableTests(unittest.TestCase):
         self.assertEqual(result["MTD Return (%)"], 4.0)
         self.assertEqual(result["YTD Return (%)"], 6.0)
         self.assertEqual(result["90 Day Return (%)"], 8.0)
+        for period, value in [("30 Day", 10.), ("365 Day", 12.), ("2 Year", 14.), ("4 Year", 16.), ("WTD", 18.)]:
+            self.assertEqual(result[f"{period} Return (%)"], value)
+        self.assertEqual(list(result.index)[3:12], [
+            "7 Day Return (%)", "30 Day Return (%)", "90 Day Return (%)", "365 Day Return (%)",
+            "2 Year Return (%)", "4 Year Return (%)", "WTD Return (%)", "MTD Return (%)", "YTD Return (%)",
+        ])
         self.assertEqual(result["52 Week High"], 100.0)
         self.assertEqual(result["52 Week Low"], 50.0)
 

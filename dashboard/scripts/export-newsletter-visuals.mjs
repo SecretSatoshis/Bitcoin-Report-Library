@@ -53,7 +53,7 @@ const VISUALS = [
     id: "bitcoin-price",
     file: "bitcoin-price.png",
     sourceUrl: "https://dashboard.secretsatoshis.com/#bitcoin-price",
-    alt: "Bitcoin price with realized-price models, 3-month, 1-year and 200-week moving averages, and Secret Satoshis bear, base, and bull cases.",
+    alt: "Bitcoin price with realized-price models, moving averages, dated support and resistance levels, and Secret Satoshis bear, base, and bull cases.",
     requiredText: [
       "Bitcoin Price",
       "Bear Case",
@@ -120,7 +120,7 @@ const QUARTERLY_VISUALS = [
     selector: `[data-quarterly-visual="${id}"]`,
     sourceUrl: "https://dashboard.secretsatoshis.com/#performance",
     alt: `${title} at the reporting cutoff, including year-to-date returns.`,
-    requiredText: [title, "YTD Return"],
+    requiredText: [title, "7 Day", "30 Day", "90 Day", "365 Day", "2 Year", "4 Year", "WTD", "MTD", "YTD"],
     forbiddenText: [],
   })),
   {

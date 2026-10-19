@@ -48,6 +48,10 @@ const reference = JSON.parse(
 const data = () =>
   createDashboard(structuredClone(tables), release, colors, events);
 
+test("dashboard legends use the shared value sorter rather than fixed series lists", () => {
+  for (const chart of data().charts) assert.equal(chart.seriesOrder, undefined, chart.id);
+});
+
 test("the published dashboard loads one shared Google Analytics tag", () => {
   const html = readFileSync(resolve(root, "build/index.html"), "utf8");
   assert.equal(html.split('src="/analytics.js?v=1"').length - 1, 1);
@@ -158,6 +162,31 @@ test("frozen release: all seven price series, ranges, events and candle payloads
       reference.price.candleViews[interval].hash,
       interval,
     );
+  }
+});
+
+test("dated technical levels retain their event dates and chart style without changing annual cases", () => {
+  const copy = structuredClone(tables);
+  const dates: Record<string, string> = {
+    "126219": "2025-10-06", "108287": "2024-12-17", "100000": "2024-12-05",
+    "80600": "2025-11-21", "73757": "2024-03-14", "60132": "2026-06-30",
+  };
+  for (const row of copy["price_outlook.csv"])
+    row.start_date = row.type === "case" ? "" : dates[row.price];
+  const lines = createDashboard(copy, release, colors, events).charts[0].referenceLines!;
+  assert.deepEqual(lines.filter((line) => !line.type), data().charts[0].referenceLines);
+  const technical = lines.filter((line) => line.type);
+  assert.equal(technical.length, copy["price_outlook.csv"].filter((row) => row.type !== "case").length);
+  for (const line of technical) {
+    assert.equal(line.startDate, dates[String(line.price)]);
+    assert.equal(line.lineStyle, "solid");
+    assert.equal(line.labelAlign, "right");
+    assert.ok(!line.name.startsWith("Resistance $") && !line.name.startsWith("Support $"));
+  }
+  const support = copy["price_outlook.csv"].find((row) => row.type === "support")!;
+  for (const value of ["", "2026-02-30", "2026-12-01", "2026-6-30"]) {
+    support.start_date = value;
+    assert.throws(() => createDashboard(copy, release, colors, events), /Invalid outlook start date/);
   }
 });
 test("every seasonal observation, average and median agrees with the original aggregator", () => {

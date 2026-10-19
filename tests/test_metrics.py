@@ -287,6 +287,26 @@ class ElectricityAndChangeTests(unittest.TestCase):
         ]))
 
 
+class PerformanceChangeTests(unittest.TestCase):
+    def test_calendar_windows_leap_years_and_monday_week_start(self):
+        data = pd.DataFrame({"price": [50., 80., 160., 100., 200., 210., 240.]},
+            index=pd.to_datetime(["2020-02-29", "2022-02-28", "2023-03-01", "2024-01-30",
+                                  "2024-02-25", "2024-02-26", "2024-02-29"]))
+        result = metrics.calculate_performance_changes(data)
+        expected = {"30d": 140., "365d": 50., "2y": 200., "4y": 380., "wtd": 20.}
+        for suffix, value in expected.items():
+            self.assertAlmostEqual(result.loc["2024-02-29", f"price_{suffix}_change"], value)
+        self.assertAlmostEqual(result.loc["2024-02-26", "price_wtd_change"], 5.)
+
+    def test_unavailable_or_zero_baselines_do_not_invent_returns(self):
+        data = pd.DataFrame({"price": [0., 100., 200.]},
+            index=pd.to_datetime(["2024-01-01", "2024-01-31", "2024-02-01"]))
+        result = metrics.calculate_performance_changes(data)
+        self.assertTrue(pd.isna(result.loc["2024-01-31", "price_30d_change"]))
+        self.assertTrue(result[["price_365d_change", "price_2y_change", "price_4y_change"]].isna().all().all())
+        self.assertTrue(pd.isna(result.loc["2024-02-01", "price_30d_change"]))
+
+
 class CorrelationSchemaTests(unittest.TestCase):
     def test_absent_asset_keeps_correlation_schema(self):
         frame = pd.DataFrame({'price_close': np.arange(1,41)**2}, index=pd.date_range('2024-01-01', periods=40))

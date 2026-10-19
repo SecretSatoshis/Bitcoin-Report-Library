@@ -39,16 +39,47 @@
     }
   }
 
-  // Scenario levels sit behind data, with left-side labels away from latest price.
+  // Annual cases span the plot; dated technical levels begin at their historical anchor.
+  // The same primitive draws the live chart and exported images.
   class ReferenceLevels {
-    constructor(levels,series){this.levels=levels;this.series=series;this.views=[{zOrder:()=> 'bottom',renderer:()=>({draw:target=>this.draw(target)})}];}
+    constructor(levels,series,times=[]){
+      this.levels=levels;this.series=series;this.supportResistance=true;
+      this.starts=new Map(levels.filter(l=>l.startDate).map(level=>{
+        const index=times.findIndex(time=>time>=level.startDate);
+        // Interpolate within a weekly/monthly candle instead of moving its anchor to
+        // the next observation. Dates preceding this chart's history clip at the edge.
+        const logical=index===0?0:index<0?Infinity:index-1+
+          (Date.parse(level.startDate)-Date.parse(times[index-1]))/(Date.parse(times[index])-Date.parse(times[index-1]));
+        return [level,logical];
+      }));
+      this.views=[{zOrder:()=> 'bottom',renderer:()=>({draw:target=>this.draw(target)})}];
+    }
+    attached({chart,requestUpdate}){this.chart=chart;this.requestUpdate=requestUpdate;}
+    detached(){this.chart=null;this.requestUpdate=null;}
+    visibleLevels(){return this.levels.filter(level=>this.supportResistance||!['support','resistance'].includes(level.type));}
+    setSupportResistance(visible){this.supportResistance=visible;this.requestUpdate?.();}
     paneViews(){return this.views;}
     draw(target){target.useMediaCoordinateSpace(({context:ctx,mediaSize})=>{
-      for(const level of this.levels){const y=this.series.priceToCoordinate(level.price);if(y===null||y<0||y>mediaSize.height)continue;
-        ctx.save();ctx.strokeStyle=level.color;ctx.globalAlpha=.5;ctx.lineWidth=1;ctx.setLineDash([4,5]);
-        ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(mediaSize.width,y);ctx.stroke();
+      for(const level of this.visibleLevels()){const y=this.series.priceToCoordinate(level.price);if(y===null||y<0||y>mediaSize.height)continue;
+        const logical=this.starts.get(level);
+        if(logical===Infinity)continue;
+        // Map whole candle indexes, then interpolate their coordinates. Some renderer
+        // versions return zero for a fractional logical index.
+        const scale=this.chart?.timeScale(),index=Math.floor(logical);
+        const left=logical===undefined?0:scale?.logicalToCoordinate(index);
+        const next=logical===undefined||logical===index?left:scale?.logicalToCoordinate(index+1);
+        const coordinate=left===null||left===undefined||next===null||next===undefined?null:
+          logical===undefined?0:left+(next-left)*(logical-index);
+        if(coordinate===null||coordinate===undefined||coordinate>=mediaSize.width)continue;
+        const start=Math.max(0,coordinate),right=level.labelAlign==='right';
+        // Keep the full right-aligned label readable even when the dated line is short.
+        ctx.save();ctx.beginPath();ctx.rect(0,0,mediaSize.width,mediaSize.height);ctx.clip();
+        ctx.strokeStyle=level.color;ctx.globalAlpha=.5;ctx.lineWidth=1;ctx.setLineDash(level.lineStyle==='solid'?[]:[4,5]);
+        ctx.beginPath();ctx.moveTo(start,y);ctx.lineTo(mediaSize.width,y);ctx.stroke();
         ctx.globalAlpha=.85;ctx.fillStyle=level.color;ctx.font='10px "JetBrains Mono"';
-        ctx.fillText(level.label||`${level.name} · ${readout(level.price,'USD')}`,8,Math.max(12,y-6));ctx.restore();
+        ctx.textAlign=right?'right':'left';
+        const label=level.label||`${level.name} · ${readout(level.price,'USD')}`;
+        ctx.fillText(label,right?mediaSize.width-8:start+8,Math.max(12,y-6));ctx.restore();
       }
     });}
   }
@@ -249,7 +280,7 @@
     }
     const axes=Object.keys(payload.axes), panels=payload.panels;
     const configs=panels?panels.map(panel=>[panel.axis]):stacked&&axes.length>1?[['right'],['left']]:[axes];
-    const charts=[],nodes=[],events=[],bands=[],stacks=[],entries=payload.series.map(definition=>({definition,parts:[]}));
+    const charts=[],nodes=[],events=[],references=[],bands=[],stacks=[],entries=payload.series.map(definition=>({definition,parts:[]}));
     let syncing=false,rangeRevision=0;
     const pendingRanges=new Map();
     const sameRange=(a,b)=>a&&b&&Math.abs(a.from-b.from)<1e-6&&Math.abs(a.to-b.to)<1e-6;
@@ -349,7 +380,7 @@
         const anchor=chart.addSeries(lwc.LineSeries,{priceScaleId:scale,color:'transparent',lineVisible:false,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:false,
           autoscaleInfoProvider:()=>({priceRange:{minValue:Math.min(...levels.map(l=>l.price)),maxValue:Math.max(...levels.map(l=>l.price))}})});
         anchor.setData([payload.x[0],payload.x.at(-1)].map(time=>({time,value:levels[0].price})));
-        chart.panes()[0].attachPrimitive(new ReferenceLevels(levels,anchor));
+        chart.panes()[0].attachPrimitive(new ReferenceLevels(levels,anchor,payload.x));
       }
       for(const id of visibleAxes){
         const axis=payload.axes[id];if(!axis.value_bands?.length)continue;
@@ -364,10 +395,15 @@
       }
       if(payload.referenceLines?.length && visibleAxes.includes('right')){
         const levels=payload.referenceLines;
+        let overlay;
         const anchor=chart.addSeries(lwc.LineSeries,{priceScaleId:'right',color:'transparent',lineVisible:false,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:false,
-          autoscaleInfoProvider:()=>({priceRange:{minValue:Math.min(...levels.map(l=>l.price)),maxValue:Math.max(...levels.map(l=>l.price))}})});
+          autoscaleInfoProvider:()=>{
+            const visible=overlay?.visibleLevels()||levels;
+            return visible.length?{priceRange:{minValue:Math.min(...visible.map(l=>l.price)),maxValue:Math.max(...visible.map(l=>l.price))}}:null;
+          }});
         anchor.setData([payload.x[0],payload.x.at(-1)].map(time=>({time,value:levels[0].price})));
-        chart.panes()[0].attachPrimitive(new ReferenceLevels(levels,anchor));
+        overlay=new ReferenceLevels(levels,anchor,payload.x);overlay.setSupportResistance(state.supportResistance!==false);
+        chart.panes()[0].attachPrimitive(overlay);references.push({overlay,anchor});
       }
       const markers=new EventLines(payload.events,!panels||panelIndex===0,panels?42:12);chart.panes()[0].attachPrimitive(markers);markers.setVisible(state.events);events.push(markers);
       if(panels||configs.length>1){const label=document.createElement('div');label.className='pane-label';label.textContent=panels?panels[panelIndex].label:payload.axes[visibleAxes[0]].label;div.append(label);}
@@ -412,6 +448,7 @@
         syncing=true;for(const chart of charts){applyRange(chart,logical);chart.applyOptions({});}syncing=false;onRange(range);
       },
       fit(){charts[0].timeScale().fitContent();},
+      supportResistance(visible){for(const {overlay,anchor} of references){overlay.setSupportResistance(visible);anchor.applyOptions({});}},
       visibility(id,visible){for(const e of entries)if(e.definition.id===id)for(const {api} of e.parts)api.applyOptions({visible});for(const overlay of bands)overlay.requestUpdate?.();for(const stack of stacks)stack.refresh();if(payload.alignZero)for(const entry of entries)for(const part of entry.parts)part.api.applyOptions({});alignScales();},
       destroy(){alignmentObserver?.disconnect();cancelAnimationFrame(alignmentFrame);for(const chart of charts)chart.remove();host.replaceChildren();}};
   }
@@ -442,7 +479,7 @@
     if(payload.schemaVersion!==2)throw new Error('Unsupported chart schema');
     await Promise.all([document.fonts.load('400 12px "JetBrains Mono"'),document.fonts.load('600 12px "JetBrains Mono"'),document.fonts.load('700 32px Syne')]);
     const defaultHidden=new Set(source.defaultHiddenSeries||[]);
-    const state={modes:Object.fromEntries(Object.entries(payload.axes).map(([id,a])=>[id,a.mode])),visible:new Set(payload.series.filter(s=>!defaultHidden.has(s.id)).map(s=>s.id)),events:true,presentation:'line',interval:'daily',flowInterval:source.defaultFlowInterval||null,requestedRange:null};
+    const state={modes:Object.fromEntries(Object.entries(payload.axes).map(([id,a])=>[id,a.mode])),visible:new Set(payload.series.filter(s=>!defaultHidden.has(s.id)).map(s=>s.id)),events:true,supportResistance:true,presentation:'line',interval:'daily',flowInterval:source.defaultFlowInterval||null,requestedRange:null};
     const numeric=payload.axisKind==='days';let reading=payload.readingPoint,view,exporting=false;
     const params=new URL(location.href).searchParams;
     const mobile=matchMedia('(max-width:760px)'),embedded=document.body.classList.contains('embedded')||params.get('embed')==='1';
@@ -472,6 +509,20 @@
     });
     // A fade at the bottom of the series list while more rows sit below the fold.
     function legendFade(){const legend=$('legend');legend.classList.toggle('more-below',legend.scrollHeight-legend.scrollTop-legend.clientHeight>4);}
+    let legendFrame;
+    function layoutLegend(){
+      const body=document.body,legend=$('legend');
+      if(!body.classList.contains('dashboard-legend')||body.classList.contains('capture'))return;
+      // Measure a single column so a two-column legend that fits does not oscillate
+      // back to one column. The final layout is applied before the browser paints.
+      body.classList.remove('legend-two-columns');
+      const count=legend.querySelectorAll('.indicator-row').length;
+      if(!mobile.matches&&count>1&&legend.scrollHeight>legend.clientHeight+1)
+        body.classList.add('legend-two-columns');
+      legendFade();
+    }
+    function scheduleLegendLayout(){cancelAnimationFrame(legendFrame);legendFrame=requestAnimationFrame(layoutLegend);}
+    window.addEventListener('resize',scheduleLegendLayout);
     function readingAt(time){
       reading=time===null?payload.readingPoint:time;
       $('reading-date').textContent=xLabel(reading,payload);
@@ -493,7 +544,7 @@
         const values=document.createElement('div');values.className='ohlc-values';
         for(const [label,key] of [['Open','open'],['High','high'],['Low','low'],['Close','close']]){const item=document.createElement('span');item.textContent=`${label} ${format(candle[key],'USD')}`;values.append(item);}panel.append(dates,values);
       }
-
+      scheduleLegendLayout();
     }
     function rangeEnd(range){return payload.candles?.find(c=>c.time===dateString(range.to))?.observationDate||range.to;}
     function onRange(range){$('view-range').textContent=`${xLabel(range.from,payload)} — ${xLabel(rangeEnd(range),payload)}`;}
@@ -601,17 +652,19 @@
     if(!payload.events.length){$('events').hidden=true;document.querySelector('.events-list').hidden=true;}
     for(const event of payload.events){const li=document.createElement('li');li.textContent=`${event.date} · ${event.name}`;$('event-list').append(li);}
     $('events').onclick=()=>{state.events=!state.events;for(const e of view.events)e.setVisible(state.events);$('events').setAttribute('aria-pressed',String(state.events));};
+    $('support-resistance').hidden=!(source.referenceLines||[]).some(level=>['support','resistance'].includes(level.type));
+    $('support-resistance').onclick=()=>{state.supportResistance=!state.supportResistance;view.supportResistance(state.supportResistance);$('support-resistance').setAttribute('aria-pressed',String(state.supportResistance));};
     $('show-all').onclick=()=>{for(const s of payload.series)setVisible(s,true);$('status').textContent='';};
     const retainedSeries=payload.series.find(s=>s.id==='price_close') || payload.series.find(s=>s.id.startsWith('price_close')) || payload.series.find(s=>s.role==='highlight') || payload.series[0];
     $('remove-all').title=`Keep only ${retainedSeries.name}`;
     $('remove-all').onclick=()=>{for(const s of payload.series)setVisible(s,s.id===retainedSeries.id);$('status').textContent='';};
-    $('reset').onclick=()=>{state.events=defaultEvents;state.modes=Object.fromEntries(Object.entries(source.axes).map(([k,a])=>[k,a.mode]));setPresentation(source.defaultPresentation||'line',source.defaultInterval||'daily');if(source.flowIntervals)setFlowInterval(source.defaultFlowInterval);for(const s of payload.series)setVisible(s,!defaultHidden.has(s.id));for(const [id,a] of Object.entries(payload.axes))$('scale-'+id).value=a.mode;for(const e of view.events)e.setVisible(state.events);$('events').setAttribute('aria-pressed',String(state.events));selectRange(payload.defaultRange);readingAt(null);};
+    $('reset').onclick=()=>{state.events=defaultEvents;state.supportResistance=true;state.modes=Object.fromEntries(Object.entries(source.axes).map(([k,a])=>[k,a.mode]));setPresentation(source.defaultPresentation||'line',source.defaultInterval||'daily');if(source.flowIntervals)setFlowInterval(source.defaultFlowInterval);for(const s of payload.series)setVisible(s,!defaultHidden.has(s.id));for(const [id,a] of Object.entries(payload.axes))$('scale-'+id).value=a.mode;for(const e of view.events)e.setVisible(state.events);$('events').setAttribute('aria-pressed',String(state.events));$('support-resistance').setAttribute('aria-pressed','true');selectRange(payload.defaultRange);readingAt(null);};
     const clearPreset=()=>{state.requestedRange=null;$('ranges').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed','false'));};
     $('chart').addEventListener('wheel',clearPreset,{passive:true});$('chart').addEventListener('pointerdown',clearPreset);
     async function exportImage(download=true){
       if(exporting)throw new Error('Export already in progress');exporting=true;$('export').disabled=true;
       let host,exportView;
-      const scenarios=payload.referenceLines||[],plotTop=scenarios.length?410:300,plotHeight=1155-plotTop;
+      const scenarios=(payload.referenceLines||[]).filter(level=>!level.type||level.type==='case'),plotTop=scenarios.length?410:300,plotHeight=1155-plotTop;
       try{
         host=document.createElement('div');host.style.cssText=`position:fixed;left:-10000px;top:0;width:1690px;height:${plotHeight}px`;host.setAttribute('aria-hidden','true');document.body.append(host);
         exportView=createView(host,payload,state,false);
@@ -675,7 +728,7 @@
     if(source.defaultPresentation==='candles')setPresentation('candles',source.defaultInterval||'daily');
     $('loading').hidden=true;
     if(payload.unavailable.length)$('status').textContent=`Unavailable: ${payload.unavailable.join(', ')}`;
-    function setCapture(on){document.body.classList.toggle('capture',Boolean(on));legendFade();reportHeight();}
+    function setCapture(on){document.body.classList.toggle('capture',Boolean(on));layoutLegend();legendFade();reportHeight();}
     const api={ready,get payload(){return payload;},exportImage,selectRange,setScale,setPresentation,setFlowInterval,setCapture,get readingPoint(){return reading;},get view(){return view;},get state(){return state;}};
     window.SecretSatoshisChart=api;new ResizeObserver(reportHeight).observe(document.body);reportHeight();await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));resolveReady(api);
   }
