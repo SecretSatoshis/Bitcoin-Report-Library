@@ -394,16 +394,40 @@ async function main() {
         });
         if (chartDate !== args.reportDate)
           throw new Error("Chart iframe cutoff mismatch");
-        // Preserve normal chart dimensions and the scrollable legend in captures.
-        await embedded.addStyleTag({
-          content: ".toolbar{display:none!important}",
+        // Capture mode is the renderer's still image: no controls or hints, and every
+        // visible series listed in full. The frame reports its new height to the page.
+        await embedded.evaluate(async () => {
+          const chart = await SecretSatoshisChart.ready;
+          chart.setCapture(true);
+          await new Promise((r) =>
+            requestAnimationFrame(() => requestAnimationFrame(r)),
+          );
         });
+        // Wait until the page has resized the frame to the captured content.
+        const frameId = await chartFrame.getAttribute("data-chart-frame");
+        await page.waitForFunction(
+          (id) => {
+            const frame = document.querySelector(`[data-chart-frame="${id}"]`);
+            const content = frame?.contentDocument?.documentElement;
+            return (
+              content &&
+              Math.abs(
+                frame.getBoundingClientRect().height -
+                  Math.ceil(content.getBoundingClientRect().height),
+              ) <= 1
+            );
+          },
+          frameId,
+          { timeout: 10_000 },
+        );
+        // Let the resized frame repaint before the capture.
         await embedded.evaluate(
           () =>
             new Promise((r) =>
               requestAnimationFrame(() => requestAnimationFrame(r)),
             ),
         );
+        await page.waitForTimeout(500);
         text += " " + (await embedded.locator("body").innerText());
       }
       text = text.replace(/\s+/g, " ").trim();
@@ -436,7 +460,16 @@ async function main() {
           `${visual.id} has an implausible capture box: ${JSON.stringify(box)}`,
         );
       }
-      await locator.scrollIntoViewIfNeeded();
+      // Start the visual at the top of the viewport: chart frames are only painted inside
+      // it, so a frame that runs past the bottom edge would capture blank.
+      // (scrollIntoView would honour the sections' scroll margin for the sticky navigation).
+      await locator.evaluate((element) =>
+        window.scrollTo(0, window.scrollY + element.getBoundingClientRect().top),
+      );
+      await page.evaluate(
+        () =>
+          new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+      );
       const temporaryPath = join(temporaryDir, visual.file);
       await locator.screenshot({
         path: temporaryPath,

@@ -24,12 +24,13 @@
           const x=this.chart.timeScale().timeToCoordinate(event.date);
           if (x===null || x<0 || x>mediaSize.width) continue;
           ctx.save();
-          ctx.strokeStyle=THEME.border; ctx.lineWidth=1; ctx.setLineDash([3,5]);
+          // Background context: faint lines and labels that the series draw over.
+          ctx.globalAlpha=.6;ctx.strokeStyle=THEME.border; ctx.lineWidth=1; ctx.setLineDash([3,5]);
           ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,mediaSize.height);ctx.stroke();
           // Keep every line; nearby labels remain available in the event list.
           if (this.labels && x-lastLabel>22 && x<mediaSize.width-18) {
             ctx.translate(x+7,this.labelOffset);ctx.rotate(Math.PI/2);
-            ctx.font='9px "JetBrains Mono"';ctx.fillStyle=THEME.dim;
+            ctx.globalAlpha=.4;ctx.font='9px "JetBrains Mono"';ctx.fillStyle=THEME.dim;
             ctx.fillText(event.name,0,0);lastLabel=x;
           }
           ctx.restore();
@@ -47,7 +48,7 @@
         ctx.save();ctx.strokeStyle=level.color;ctx.globalAlpha=.5;ctx.lineWidth=1;ctx.setLineDash([4,5]);
         ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(mediaSize.width,y);ctx.stroke();
         ctx.globalAlpha=.85;ctx.fillStyle=level.color;ctx.font='10px "JetBrains Mono"';
-        ctx.fillText(level.label||`${level.name} · ${format(level.price,'USD')}`,8,Math.max(12,y-6));ctx.restore();
+        ctx.fillText(level.label||`${level.name} · ${readout(level.price,'USD')}`,8,Math.max(12,y-6));ctx.restore();
       }
     });}
   }
@@ -202,10 +203,18 @@
       return `${decimal(value/d,axis?1:2)} ${u}`;
     }
     if(unit==='percent')return `${decimal(value,2)}%`;
-    if(unit==='ratio')return decimal(value,Math.abs(value)<0.01?6:2);
+    if(unit==='ratio')return decimal(value,value!==0&&Math.abs(value)<0.01?6:2);
     const n=axis&&Math.abs(value)>=1000?compact(value):decimal(value,unit==='count'?0:Math.abs(value)>0&&Math.abs(value)<0.01?8:2);
     if(unit.startsWith('USD'))return (value<0?'-$':'$')+n.replace(/^-/,'')+(axis||unit==='USD'?'':' /TH/s/day');
     return n+(axis||unit==='count'?'':` ${unit}`);
+  }
+  // Series readings: whole units from 1,000 and compact units from a million. The
+  // exact value stays in each reading's tooltip and in the chart data download.
+  function readout(value,unit){
+    if(!Number.isFinite(value)||['percent','ratio','hashrate'].includes(unit)||Math.abs(value)<1000)return format(value,unit);
+    const n=Math.abs(value)>=1e6?new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:2}).format(value):decimal(value,0);
+    if(unit.startsWith('USD'))return (value<0?'-$':'$')+n.replace(/^-/,'')+(unit==='USD'?'':' /TH/s/day');
+    return n+(unit==='count'?'':` ${unit}`);
   }
   const dateString=t=>typeof t==='string'?t:typeof t==='number'?new Date(t*1000).toISOString().slice(0,10):`${t.year}-${String(t.month).padStart(2,'0')}-${String(t.day).padStart(2,'0')}`;
   const xLabel=(x,p)=>p.axisKind==='days'?`${p.xAxisLabel||'Day'} ${x}`:dateString(x);
@@ -225,7 +234,19 @@
     if(run.length)result.push(run);
     return result;
   }
+  const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function tickLabel(time,type){
+    const [year,month]=dateString(time).split('-').map(Number);
+    return type===lwc.TickMarkType.Year?String(year):type===lwc.TickMarkType.Month?MONTHS[month-1]:null;
+  }
   function createView(host,payload,state,stacked=false,onHover=()=>{},onRange=()=>{}) {
+    // A linear axis whose series never go negative and reach down near zero gets no
+    // margin below its range, so it never shows negative tick labels.
+    function startsNearZero(axis){
+      let min=Infinity,max=-Infinity;
+      for(const s of payload.series)if(s.axis===axis)for(const v of s.values)if(Number.isFinite(v)){min=Math.min(min,v);max=Math.max(max,v);}
+      return min>=0&&max>0&&min<=max*.05;
+    }
     const axes=Object.keys(payload.axes), panels=payload.panels;
     const configs=panels?panels.map(panel=>[panel.axis]):stacked&&axes.length>1?[['right'],['left']]:[axes];
     const charts=[],nodes=[],events=[],bands=[],stacks=[],entries=payload.series.map(definition=>({definition,parts:[]}));
@@ -250,16 +271,17 @@
     }
     for(const [panelIndex,visibleAxes] of configs.entries()){
       const div=document.createElement('div');div.className='chart-pane';host.append(div);nodes.push(div);
-      const options={autoSize:true,layout:{background:{type:lwc.ColorType.Solid,color:THEME.bg},textColor:THEME.dim,fontFamily:'JetBrains Mono',fontSize:10,attributionLogo:true},
+      const options={autoSize:true,layout:{background:{type:lwc.ColorType.Solid,color:THEME.bg},textColor:THEME.dim,fontFamily:'JetBrains Mono',fontSize:10,attributionLogo:false},
         grid:{vertLines:{visible:false},horzLines:{visible:false}},
         rightPriceScale:{visible:false},leftPriceScale:{visible:false},
         timeScale:{visible:!panels||panelIndex===configs.length-1,borderColor:THEME.border,minBarSpacing:0.02,rightOffset:5,lockVisibleTimeRangeOnResize:true},
         crosshair:{mode:lwc.CrosshairMode.Normal,vertLine:{color:'#69697c',labelBackgroundColor:'#292938'},horzLine:{color:'#69697c',labelBackgroundColor:'#292938'}},
         localization:{locale:'en-US',dateFormat:'yyyy-MM-dd',precision:0},handleScroll:{vertTouchDrag:false}};
+      if(payload.axisKind!=='days')options.timeScale.tickMarkFormatter=tickLabel;
       for(const id of visibleAxes){
         const actual=panels||configs.length>1?'right':id;
-        options[actual+'PriceScale']={visible:true,borderVisible:false,minimumWidth:panels?96:configs.length>1?78:68,
-          mode:state.modes[id]==='log'?1:0,scaleMargins:{top:0.15,bottom:0.08}};
+        options[actual+'PriceScale']={visible:true,borderVisible:false,entireTextOnly:true,minimumWidth:panels?96:configs.length>1?78:68,
+          mode:state.modes[id]==='log'?1:0,scaleMargins:{top:0.15,bottom:state.modes[id]!=='log'&&startsNearZero(id)?0:0.08}};
       }
       const chart=(payload.axisKind==='days'?lwc.createOptionsChart:lwc.createChart)(div,options);charts.push(chart);
       // A whitespace calendar preserves actual elapsed spacing even across all-series gaps.
@@ -382,7 +404,11 @@
     return {charts,nodes,entries,events,stacks,get rangeRevision(){return rangeRevision;},range(){return charts[0].timeScale().getVisibleRange();},
       setRange(range){
         rangeRevision++;
-        const scale=charts[0].timeScale(),logical={from:scale.timeToIndex(range.from,true),to:scale.timeToIndex(range.to,true)};
+        const scale=charts[0].timeScale(),from=scale.timeToIndex(range.from,true),to=scale.timeToIndex(range.to,true);
+        // A range that starts at the first observation gets a little room before it, so the
+        // first date label sits inside the axis. Later starts are left as they are, which
+        // keeps a range unchanged when the chart is rebuilt.
+        const logical={from:from<=0?from-Math.max(1,(to-from)*.02):from,to};
         syncing=true;for(const chart of charts){applyRange(chart,logical);chart.applyOptions({});}syncing=false;onRange(range);
       },
       fit(){charts[0].timeScale().fitContent();},
@@ -418,8 +444,13 @@
     const defaultHidden=new Set(source.defaultHiddenSeries||[]);
     const state={modes:Object.fromEntries(Object.entries(payload.axes).map(([id,a])=>[id,a.mode])),visible:new Set(payload.series.filter(s=>!defaultHidden.has(s.id)).map(s=>s.id)),events:true,presentation:'line',interval:'daily',flowInterval:source.defaultFlowInterval||null,requestedRange:null};
     const numeric=payload.axisKind==='days';let reading=payload.readingPoint,view,exporting=false;
-    const mobile=matchMedia('(max-width:760px)'),embedded=document.body.classList.contains('embedded')||new URL(location.href).searchParams.get('embed')==='1';
+    const params=new URL(location.href).searchParams;
+    const mobile=matchMedia('(max-width:760px)'),embedded=document.body.classList.contains('embedded')||params.get('embed')==='1';
     document.body.classList.toggle('embedded',embedded);
+    // Capture mode is the still image for newsletters: no controls, every visible series listed.
+    document.body.classList.toggle('capture',document.body.classList.contains('capture')||params.get('capture')==='1');
+    // Phones start without event lines; the Events button turns them on.
+    const defaultEvents=!mobile.matches;state.events=defaultEvents;
     document.body.classList.toggle('panel-layout',Boolean(payload.panels));
     const navToggle=$('navToggle'),navLinks=$('navLinks');
     if(navToggle&&navLinks){
@@ -439,11 +470,17 @@
       document.body.style.setProperty('--chart-viewport-height',height);
       reportHeight();
     });
+    // A fade at the bottom of the series list while more rows sit below the fold.
+    function legendFade(){const legend=$('legend');legend.classList.toggle('more-below',legend.scrollHeight-legend.scrollTop-legend.clientHeight>4);}
     function readingAt(time){
       reading=time===null?payload.readingPoint:time;
       $('reading-date').textContent=xLabel(reading,payload);
       $('reading-mode').textContent=time===null?(payload.family==='seasonal'?'REPORT DAY':numeric?'CURRENT CYCLE DAY':payload.dataDate?'LATEST DATA':'REPORT DATE'):(numeric?'CURSOR DAY':'CURSOR DATE');
-      for(const s of payload.series)$('value-'+s.id).textContent=format(valueAt(s,reading,payload),payload.axes[s.axis].unit);
+      for(const s of payload.series){
+        const value=valueAt(s,reading,payload),unit=payload.axes[s.axis].unit,cell=$('value-'+s.id);
+        cell.textContent=readout(value,unit);cell.title=format(value,unit);
+      }
+      legendFade();
       const sorted=orderedSeries(payload,reading),order=sorted.map(s=>s.id).join('|');
       if(order!==legendOrder){
         for(const s of sorted)(legendGroups.get(s.axis)||$('legend')).append(legendRows.get(s.id));
@@ -535,6 +572,8 @@
       b.onclick=()=>{if(state.visible.has(s.id)&&state.visible.size===1){$('status').textContent='Keep at least one series visible.';return;}setVisible(s,!state.visible.has(s.id));};
       row.append(b,solo);legendRows.set(s.id,row);(legendGroups.get(s.axis)||$('legend')).append(row);
     }
+    $('legend').classList.toggle('many-series',payload.series.length>8);
+    $('legend').addEventListener('scroll',legendFade,{passive:true});new ResizeObserver(legendFade).observe($('legend'));
     rebuild();for(const s of payload.series)setVisible(s,!defaultHidden.has(s.id));readingAt(null);
     mobile.addEventListener('change',()=>rebuild());
     $('chart').addEventListener('mouseleave',()=>readingAt(null));
@@ -558,6 +597,7 @@
       for(const value of (axis.modes||['linear','log'])){const option=document.createElement('option');option.value=value;option.textContent=value==='log'?'Log':'Linear';select.append(option);}select.value=axis.mode;
       select.onchange=()=>setScale(id,select.value);label.append(select);$('scales').append(label);
     }
+    $('events').setAttribute('aria-pressed',String(state.events));
     if(!payload.events.length){$('events').hidden=true;document.querySelector('.events-list').hidden=true;}
     for(const event of payload.events){const li=document.createElement('li');li.textContent=`${event.date} · ${event.name}`;$('event-list').append(li);}
     $('events').onclick=()=>{state.events=!state.events;for(const e of view.events)e.setVisible(state.events);$('events').setAttribute('aria-pressed',String(state.events));};
@@ -565,7 +605,7 @@
     const retainedSeries=payload.series.find(s=>s.id==='price_close') || payload.series.find(s=>s.id.startsWith('price_close')) || payload.series.find(s=>s.role==='highlight') || payload.series[0];
     $('remove-all').title=`Keep only ${retainedSeries.name}`;
     $('remove-all').onclick=()=>{for(const s of payload.series)setVisible(s,s.id===retainedSeries.id);$('status').textContent='';};
-    $('reset').onclick=()=>{state.events=true;state.modes=Object.fromEntries(Object.entries(source.axes).map(([k,a])=>[k,a.mode]));setPresentation(source.defaultPresentation||'line',source.defaultInterval||'daily');if(source.flowIntervals)setFlowInterval(source.defaultFlowInterval);for(const s of payload.series)setVisible(s,!defaultHidden.has(s.id));for(const [id,a] of Object.entries(payload.axes))$('scale-'+id).value=a.mode;$('events').setAttribute('aria-pressed','true');selectRange(payload.defaultRange);readingAt(null);};
+    $('reset').onclick=()=>{state.events=defaultEvents;state.modes=Object.fromEntries(Object.entries(source.axes).map(([k,a])=>[k,a.mode]));setPresentation(source.defaultPresentation||'line',source.defaultInterval||'daily');if(source.flowIntervals)setFlowInterval(source.defaultFlowInterval);for(const s of payload.series)setVisible(s,!defaultHidden.has(s.id));for(const [id,a] of Object.entries(payload.axes))$('scale-'+id).value=a.mode;for(const e of view.events)e.setVisible(state.events);$('events').setAttribute('aria-pressed',String(state.events));selectRange(payload.defaultRange);readingAt(null);};
     const clearPreset=()=>{state.requestedRange=null;$('ranges').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed','false'));};
     $('chart').addEventListener('wheel',clearPreset,{passive:true});$('chart').addEventListener('pointerdown',clearPreset);
     async function exportImage(download=true){
@@ -610,7 +650,7 @@
         const selected=orderedSeries(payload).filter(s=>state.visible.has(s.id)),step=Math.min(100,(plotHeight-40)/selected.length),dense=selected.length>12;
         function legendEntry(s,y){ctx.fillStyle=s.color;ctx.fillRect(1800,y-7,18,3);
           text(s.name,1830,y,dense?13:16,THEME.dim,'JetBrains Mono',400,dense?245:485);
-          text(format(valueAt(s,payload.readingPoint,payload),payload.axes[s.axis].unit),dense?2090:1830,dense?y:y+30,dense?16:24,s.color,'JetBrains Mono',600,dense?230:485);
+          text(readout(valueAt(s,payload.readingPoint,payload),payload.axes[s.axis].unit),dense?2090:1830,dense?y:y+30,dense?16:24,s.color,'JetBrains Mono',600,dense?230:485);
         }
         if(payload.panels){
           for(const [i,panel] of payload.panels.entries()){
@@ -635,7 +675,8 @@
     if(source.defaultPresentation==='candles')setPresentation('candles',source.defaultInterval||'daily');
     $('loading').hidden=true;
     if(payload.unavailable.length)$('status').textContent=`Unavailable: ${payload.unavailable.join(', ')}`;
-    const api={ready,get payload(){return payload;},exportImage,selectRange,setScale,setPresentation,setFlowInterval,get readingPoint(){return reading;},get view(){return view;},get state(){return state;}};
+    function setCapture(on){document.body.classList.toggle('capture',Boolean(on));legendFade();reportHeight();}
+    const api={ready,get payload(){return payload;},exportImage,selectRange,setScale,setPresentation,setFlowInterval,setCapture,get readingPoint(){return reading;},get view(){return view;},get state(){return state;}};
     window.SecretSatoshisChart=api;new ResizeObserver(reportHeight).observe(document.body);reportHeight();await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));resolveReady(api);
   }
   initialize().catch(error=>{$('loading').textContent=`Unable to load chart: ${error.message}`;$('status').textContent='Chart could not be rendered.';console.error(error);rejectReady(error);});

@@ -40,16 +40,18 @@ h1{font-family:Syne,sans-serif;font-size:clamp(26px,3vw,43px);font-weight:700;li
 .reading-date{display:flex;justify-content:space-between;align-items:center;margin:21px 0 7px}.reading-date span{font-size:8px;color:var(--dim);letter-spacing:.05em}.reading-date strong{font-size:10px;font-weight:400}
 .candle-reading{font-size:9px;line-height:1.8;color:var(--dim);padding:8px 0 12px;border-bottom:1px solid var(--border)}.candle-reading .ohlc-values{display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;margin-top:6px;color:var(--text)}
 #legend{max-height:440px;overflow:auto;scrollbar-color:var(--border) var(--surface)}
-.indicator-row{display:flex;align-items:center;gap:6px}
-.indicator{display:grid;grid-template-columns:12px 1fr 12px;column-gap:9px;min-width:0;flex:1;text-align:left;width:100%;border:0;border-bottom:1px solid #20202e;background:none;padding:11px 0;color:var(--text)}
+#legend.more-below{-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 36px),transparent)}
+.indicator-row{display:flex;align-items:flex-start;gap:6px;border-bottom:1px solid #20202e}
+.indicator{display:grid;grid-template-columns:12px 1fr 12px;column-gap:9px;min-width:0;flex:1;text-align:left;width:100%;border:0;background:none;padding:10px 0;color:var(--text)}
 .swatch{height:3px;margin-top:6px;background:var(--series-color)}.indicator .name{font-size:10px;line-height:1.6}.indicator .value{display:block;font-size:14px;font-weight:600;margin-top:5px;color:var(--series-color)}.indicator .eye{font-size:10px;color:var(--dim);margin-top:2px}
 .indicator[aria-pressed=false]{opacity:.45}.indicator[aria-pressed=false] .swatch{background:none;border-top:1px dashed var(--series-color)}.indicator:hover{background:var(--surface2)}
-.solo{background:none;border:0;color:var(--dim);font-size:8px;padding:6px 2px}.solo:hover{color:var(--orange)}
+.solo{background:none;border:0;color:var(--dim);font-size:9px;line-height:1.6;padding:10px 2px 0;opacity:.8}.solo:hover{color:var(--orange);opacity:1}
 .legend-hint{font-size:8px;line-height:1.8;color:var(--dim);margin:18px 0 0}
 
 /* Below the chart. */
 .chart-foot{display:flex;justify-content:space-between;gap:15px;padding:12px 20px;border-top:1px solid var(--border);color:var(--dim);font-size:9px;line-height:1.5}
 .below-chart{display:flex;justify-content:space-between;gap:24px;color:var(--dim);font-size:10px;line-height:1.9;margin-top:14px}.below-chart p{margin:0}.below-chart a{color:var(--text);white-space:nowrap}.below-chart a span{color:var(--orange);margin-left:10px}
+.below-chart a.chart-credit{color:var(--dim);white-space:normal}.below-chart a.chart-credit:hover{color:var(--orange)}
 .events-list{font-size:10px;margin-top:20px;color:var(--dim)}summary{cursor:pointer}.events-list ul{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 20px;padding-left:18px;line-height:1.7}
 .status{font-size:10px;color:var(--orange);min-height:14px;margin:16px 0 0}
 footer{color:var(--dim)}footer details{margin-top:10px;line-height:1.7}footer a:hover{color:var(--orange)}
@@ -63,7 +65,9 @@ footer{color:var(--dim)}footer details{margin-top:10px;line-height:1.7}footer a:
 }
 @media(max-width:760px){
 main{padding-top:92px}.heading{margin-bottom:21px}.description{font-size:10px}.eyebrow{font-size:8px}
-.toolbar{padding:10px 12px;gap:10px}.toolbar button{padding:8px 10px;min-height:40px}.chart-actions{width:100%;flex-wrap:wrap;justify-content:flex-start}#scales{gap:8px}.axis-control{font-size:8px}.export{white-space:nowrap}
+.toolbar{padding:10px 12px;gap:10px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;justify-content:flex-start}.toolbar::-webkit-scrollbar{display:none}
+.toolbar button{padding:8px 10px;min-height:40px;white-space:nowrap}.toolbar .button-group,.toolbar .chart-actions,#bitcoin-controls{flex:none;flex-wrap:nowrap}
+.chart-actions{gap:8px}#scales{gap:8px}.axis-control{font-size:8px;white-space:nowrap}.export{white-space:nowrap}
 .chart-layout{grid-template-columns:1fr}.plot-wrap{height:442px;min-height:442px;padding:14px 6px 0}.plot-wrap.dual-mobile{height:740px;min-height:740px}.plot-label{font-size:8px;max-width:100%}#chart{inset:42px 6px 0}
 .indicators{min-width:0;border-left:0;border-top:1px solid var(--border);padding:20px 16px}#legend{display:grid;grid-template-columns:1fr 1fr;column-gap:12px;max-height:400px}.indicator-row{min-width:0}
 .indicator .name{font-size:9px;overflow-wrap:anywhere}.indicator .value{font-size:12px}.solo{font-size:7px}.reading-date{justify-content:flex-start;gap:14px;margin-top:16px}.legend-hint{font-size:9px}
@@ -94,6 +98,16 @@ main{padding-top:92px}.heading{margin-bottom:21px}.description{font-size:10px}.e
 .panel-layout .legend-group h3{margin-top:12px}
 .panel-layout .legend-group:first-child h3{margin-top:0}
 @media(max-width:760px){.panel-layout #chart{inset:12px 6px 0}.panel-layout #legend{display:block;max-height:500px}.panel-layout .pane-label{font-size:8px}}
+
+/* Capture mode: the still image used in newsletters. No controls or hints, and every
+   visible series is listed in full instead of scrolling. */
+.capture .toolbar,.capture .chart-foot,.capture .series-actions,.capture .solo,.capture .indicator .eye,
+.capture .legend-hint,.capture #download-data,.capture .events-list,.capture .status{display:none!important}
+.capture .indicator-row:has(.indicator[aria-pressed=false]){display:none}
+.capture .indicator{grid-template-columns:12px 1fr;cursor:default}.capture .indicator:hover{background:none}
+.capture #legend{max-height:none;overflow:visible;-webkit-mask-image:none;mask-image:none}
+.capture #legend.many-series{display:grid;grid-template-columns:1fr 1fr;column-gap:14px}
+.capture #legend.many-series .indicator{padding:7px 0}.capture #legend.many-series .indicator .value{font-size:12px}
 
 /* Standard Secret Satoshis site navigation and footer, shared by chart pages and the catalog. */
 :root {
