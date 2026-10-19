@@ -117,6 +117,8 @@ const QUARTERLY_VISUALS = [
   ].map(([id, title]) => ({
     id,
     file: `${id}.png`,
+    // Nine return periods need room for the table plus the capture's outer padding.
+    widthCssPx: 1280,
     selector: `[data-quarterly-visual="${id}"]`,
     sourceUrl: "https://dashboard.secretsatoshis.com/#performance",
     alt: `${title} at the reporting cutoff, including year-to-date returns.`,
@@ -375,6 +377,17 @@ async function main() {
         await locator.evaluate((element, width) => {
           element.style.width = `${width}px`;
         }, visual.widthCssPx);
+      }
+      for (const table of await locator.locator("table.performance").all()) {
+        const fits = await table.evaluate((element) => {
+          if (element.getBoundingClientRect().width > element.parentElement.clientWidth + 1)
+            return false;
+          return [...element.querySelectorAll(".delta")].every((chip) => {
+            const cell = chip.parentElement.getBoundingClientRect(), box = chip.getBoundingClientRect();
+            return box.left >= cell.left && box.right <= cell.right;
+          });
+        });
+        if (!fits) throw new Error(`${visual.id}: performance columns exceed the capture width`);
       }
       let text = await locator.innerText();
       const chartFrame = locator.locator("[data-chart-frame]");
