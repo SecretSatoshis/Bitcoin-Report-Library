@@ -264,6 +264,32 @@ try {
     assert.deepEqual(legend.domOrder, legend.expected);
     assert.deepEqual(legend.visualOrder, legend.expected, "Pinned series, then descending values, across each row");
   }
+  // A fixed pointer near the last candle must not make the legend resize the plot,
+  // change which date is under the pointer, and then switch its layout back again.
+  await page.locator("[data-chart-frame]").first().scrollIntoViewIfNeeded();
+  const hoverBoundary = await price.evaluate(() => {
+    const a = SecretSatoshisChart, time = a.payload.x.find(time => time > a.payload.reportDate);
+    return {time, x: a.view.charts[0].timeScale().timeToCoordinate(time),
+      width: document.querySelector(".chart-pane").getBoundingClientRect().width,
+      legendTop: document.querySelector("#legend").getBoundingClientRect().top};
+  });
+  await price.locator(".chart-pane").hover({position: {x: hoverBoundary.x, y: 120}});
+  const hoverSamples = await price.evaluate(async () => {
+    const samples = [];
+    for (let i = 0; i < 20; i++) {
+      await new Promise(requestAnimationFrame);
+      samples.push({width: document.querySelector(".chart-pane").getBoundingClientRect().width,
+        legendTop: document.querySelector("#legend").getBoundingClientRect().top,
+        time: SecretSatoshisChart.readingPoint});
+    }
+    return samples;
+  });
+  assert.deepEqual([...new Set(hoverSamples.map(s => s.width))], [hoverBoundary.width], "Hovering beyond the last candle preserves the plot width");
+  assert.deepEqual([...new Set(hoverSamples.map(s => s.legendTop))], [hoverBoundary.legendTop], "The candle readout reserves its space over data gaps");
+  assert.deepEqual([...new Set(hoverSamples.map(s => s.time))], [hoverBoundary.time], "A stationary pointer keeps the same date");
+  assert.equal(await price.locator("#candle-reading").isVisible(), false, "Missing candle details stay hidden");
+  await page.locator('[data-newsletter-visual="bitcoin-price"]').screenshot({path: resolve(artifacts, "hover-stable.png")});
+  await page.mouse.move(0, 0);
   // The ranking follows the displayed candle/day, rather than a saved latest-date order.
   for (const [index, frame] of frames.entries()) {
     const element = page.locator("[data-chart-frame]").nth(index);

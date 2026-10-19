@@ -537,14 +537,16 @@
         for(const s of sorted)(legendGroups.get(s.axis)||$('legend')).append(legendRows.get(s.id));
         legendOrder=order;
       }
-      const candle=payload.candles?.find(c=>c.time===reading),panel=$('candle-reading');panel.hidden=!candle;
+      const candle=payload.candles?.find(c=>c.time===reading),panel=$('candle-reading');
+      // Keep the candle readout's space over calendar gaps. Hiding its box changes
+      // legend capacity and can resize the plot underneath a stationary pointer.
+      panel.hidden=!payload.candles;panel.style.visibility=candle?'':'hidden';
       if(candle){
         const label=periodLabel(candle);$('reading-mode').textContent=label.toUpperCase();$('reading-date').textContent=candle.observationDate;
         panel.replaceChildren();const dates=document.createElement('div');dates.textContent=`${candle.time} — ${candle.observationDate}`;
         const values=document.createElement('div');values.className='ohlc-values';
         for(const [label,key] of [['Open','open'],['High','high'],['Low','low'],['Close','close']]){const item=document.createElement('span');item.textContent=`${label} ${format(candle[key],'USD')}`;values.append(item);}panel.append(dates,values);
       }
-      scheduleLegendLayout();
     }
     function rangeEnd(range){return payload.candles?.find(c=>c.time===dateString(range.to))?.observationDate||range.to;}
     function onRange(range){$('view-range').textContent=`${xLabel(range.from,payload)} — ${xLabel(rangeEnd(range),payload)}`;}
@@ -561,7 +563,9 @@
       to=to>payload.x.at(-1)?payload.x.at(-1):to<payload.x[0]?payload.x[0]:to;
       return {from,to:to<from?from:to};
     }
-    function rebuild(requested){const range=requested||view?.range();view?.destroy();view=createView($('chart'),payload,state,mobile.matches,readingAt,onRange);document.querySelector('.plot-wrap').classList.toggle('dual-mobile',mobile.matches&&Object.keys(payload.axes).length>1);if(range){const target=view,bounded=calendarRange(range);target.setRange(bounded);const revision=target.rangeRevision;requestAnimationFrame(()=>{if(view===target&&target.rangeRevision===revision)target.setRange(bounded);});}reportHeight();}
+    // Column capacity belongs to chart/layout changes, not cursor updates. Otherwise
+    // changing the plot width changes the hovered date and can trigger a resize loop.
+    function rebuild(requested){const range=requested||view?.range();view?.destroy();view=createView($('chart'),payload,state,mobile.matches,readingAt,onRange);document.querySelector('.plot-wrap').classList.toggle('dual-mobile',mobile.matches&&Object.keys(payload.axes).length>1);if(range){const target=view,bounded=calendarRange(range);target.setRange(bounded);const revision=target.rangeRevision;requestAnimationFrame(()=>{if(view===target&&target.rangeRevision===revision)target.setRange(bounded);});}reportHeight();scheduleLegendLayout();}
     // The payload is the default flow frequency; flowViews holds the others.
     const flowPayload=interval=>interval===source.defaultFlowInterval?source:{...source,...source.flowViews[interval]};
     function setFlowInterval(interval){
