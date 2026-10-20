@@ -89,8 +89,8 @@
       "size_bytes": 1020
     },
     "relative_value_rank_changes.csv": {
-      "sha256": "6936a3f3c7e37ce780dd35d59415ee41ea8ce980242fc5c20c7e05f858b1f86f",
-      "size_bytes": 4412
+      "sha256": "d74b41c84a54f7f400003833631d4eabd9e56bd6a007232d7f76846515a1f27c",
+      "size_bytes": 8710
     },
     "report_ohlc_summary.csv": {
       "sha256": "34b676be50a1d5fae5c0856f8ac173933eb1dfbd5f58dfec2152236a1086c1a1",
@@ -121,7 +121,7 @@
       "size_bytes": 180
     }
   },
-  "generated_at": "2026-10-20T05:09:34+00:00",
+  "generated_at": "2026-10-20T12:13:48+00:00",
   "model_parameters": {
     "metcalfe_scale": 0.0002844889087545094,
     "power_law_exponent": 5.620568780915798,
