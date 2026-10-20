@@ -771,6 +771,7 @@ def create_period_returns_table(report_data, report_date, period):
 
 
 RELATIVE_RANK_FILE = "relative_value_rank_changes.csv"
+RELATIVE_RANK_ROLLING_DAYS = (7, 30, 90, 365)
 RELATIVE_RANK_COLUMNS = [
     "Asset", "Timeframe", "Current Date", "Baseline Date", "Current Rank",
     "Previous Rank", "Change", "Status",
@@ -831,7 +832,7 @@ def asset_valuation_definitions():
 
 
 def relative_rank_baselines(report_date):
-    """Calendar comparisons use completed UTC-day closes, never intraday values."""
+    """Rolling and calendar comparisons use exact completed UTC-day closes."""
     date = pd.Timestamp(report_date).normalize()
     quarter_month = ((date.month - 1) // 3) * 3 + 1
     return {
@@ -839,6 +840,7 @@ def relative_rank_baselines(report_date):
         "wtd": date - pd.Timedelta(days=date.weekday() + 1),
         "qtd": pd.Timestamp(date.year, quarter_month, 1) - pd.Timedelta(days=1),
         "ytd": pd.Timestamp(date.year, 1, 1) - pd.Timedelta(days=1),
+        **{f"{days}d": date - pd.Timedelta(days=days) for days in RELATIVE_RANK_ROLLING_DAYS},
     }
 
 
@@ -865,7 +867,7 @@ def asset_ranks_on_date(report_data, date, assets=None):
 
 
 def create_relative_value_rank_changes(report_data, report_date):
-    """Four calendar-period rank comparisons over each date's full asset roster."""
+    """Rolling-day and calendar rank comparisons over the full asset roster."""
     date = pd.Timestamp(report_date).normalize()
     assets = asset_valuation_definitions()
     current = asset_ranks_on_date(report_data, date, assets)

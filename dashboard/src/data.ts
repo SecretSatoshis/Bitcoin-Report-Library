@@ -53,6 +53,7 @@ export interface ChartPayload {
   note: string;
   defaultPresentation?: string;
   defaultInterval?: string;
+  rangeAnchorDate?: string;
   rangeEndDate?: string;
   referenceLines?: {
     name: string;
@@ -129,7 +130,8 @@ export const CORRELATION_FILE = "correlation_matrix.csv";
 export const correlationPeriods = [30, 90, 365];
 export type CorrelationMatrices = Record<number, Row[]>;
 export const RELATIVE_RANK_FILE = "relative_value_rank_changes.csv";
-export const relativeRankPeriods = ["daily", "wtd", "qtd", "ytd"] as const;
+export const relativeRankRollingPeriods = ["7d", "30d", "90d", "365d"] as const;
+export const relativeRankPeriods = ["daily", "wtd", "qtd", "ytd", ...relativeRankRollingPeriods] as const;
 export type RelativeRankPeriod = typeof relativeRankPeriods[number];
 export interface RelativeRankChange {
   currentDate: string;
@@ -153,6 +155,10 @@ export function relativeRankBaselines(date: string): Record<RelativeRankPeriod, 
     wtd: before(new Date(current), ((current.getUTCDay() + 6) % 7) + 1),
     qtd: before(new Date(Date.UTC(current.getUTCFullYear(), Math.floor(current.getUTCMonth() / 3) * 3, 1))),
     ytd: before(new Date(Date.UTC(current.getUTCFullYear(), 0, 1))),
+    "7d": before(new Date(current), 7),
+    "30d": before(new Date(current), 30),
+    "90d": before(new Date(current), 90),
+    "365d": before(new Date(current), 365),
   };
 }
 
@@ -163,7 +169,13 @@ export function readRelativeRankChanges(t: Tables, date: string): RelativeRankCh
   const fields = ["Asset", "Timeframe", "Current Date", "Baseline Date", "Current Rank", "Previous Rank", "Change", "Status"];
   const baselines = relativeRankBaselines(date);
   const invalid = (reason: string): never => { throw new Error(`${RELATIVE_RANK_FILE}: ${reason}`); };
-  if (rows.length !== assets.length * relativeRankPeriods.length) invalid("expected four comparisons per asset");
+  // Accept the two earlier release formats without substituting calendar ranks for
+  // rolling windows. A partially populated new format remains an error.
+  const periods = rows.some(row => ["30d", "90d", "365d"].includes(row.Timeframe))
+    ? relativeRankPeriods : relativeRankPeriods.filter(period =>
+      ["daily", "wtd", "qtd", "ytd"].includes(period) ||
+      (period === "7d" && rows.some(row => row.Timeframe === "7d")));
+  if (rows.length !== assets.length * periods.length) invalid(`expected ${periods.length} comparisons per asset`);
   const result = Object.fromEntries(relativeRankPeriods.map((period) => [period, Object.create(null)])) as RelativeRankChanges;
   for (const row of rows) {
     if (Object.keys(row).length !== fields.length || fields.some((field) => !(field in row))) invalid("invalid columns");
@@ -490,6 +502,12 @@ function futureCalendar(
     result.push(label);
   }
 }
+function yearOffset(date: string, years: number): string {
+  const result = new Date(date + "T00:00:00Z"), month = result.getUTCMonth();
+  result.setUTCFullYear(result.getUTCFullYear() + years);
+  if (result.getUTCMonth() !== month) result.setUTCDate(0);
+  return result.toISOString().slice(0, 10);
+}
 export function pricePayload(
   t: Tables,
   date: string,
@@ -550,11 +568,12 @@ export function pricePayload(
   ]
     .filter((e) => e.date >= x[0] && e.date <= date)
     .sort((a, b) => a.date.localeCompare(b.date));
-  const end = date.slice(0, 4) + "-12-31";
+  const end = yearOffset(date, 1);
   p.x = [...x, ...futureCalendar(date, end)];
+  p.rangeAnchorDate = date;
   p.rangeEndDate = end;
   p.coverage = `${x[0]}/${date}`;
-  // Opens on the last two years; the full set of ranges stays one click away.
+  // Two years of observations plus a year of empty space for level labels.
   p.defaultRange = "2Y";
   p.ranges = ["YTD", "1Y", "2Y", "4Y", "10Y", "ALL"];
   p.defaultPresentation = "candles";

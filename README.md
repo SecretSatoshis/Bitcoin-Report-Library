@@ -140,8 +140,11 @@ npm run dev
 `npm run build` writes the site, its sitemap and its `llms.txt` guide to `dashboard/build/`.
 `npm test` and `npm run test:browser` check it.
 
-The relative valuation table shows how each asset's market-cap rank has moved since the start
-of the week, quarter or year, from `relative_value_rank_changes.csv`. That file has one row
+The relative valuation table shows how each asset's market-cap rank has moved over 7, 30,
+90 or 365 days, from `relative_value_rank_changes.csv`, defaulting to 7 Day. Each comparison
+uses the exact close that many calendar days before the report date. A 365-day window is
+always 365 days, including across leap years. The export also retains daily, WTD, QTD and
+YTD comparisons for existing consumers. That file has one row
 per asset and period, with the baseline date, both ranks, the change and whether either rank
 was missing.
 

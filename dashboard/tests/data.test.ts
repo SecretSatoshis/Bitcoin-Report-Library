@@ -122,6 +122,7 @@ test("frozen release: all seven price series, ranges, events and candle payloads
     "defaultRange",
     "ranges",
     "readingPoint",
+    "rangeAnchorDate",
     "rangeEndDate",
   ] as const)
     assert.deepEqual(p[key], reference.price[key], key);
@@ -162,6 +163,22 @@ test("frozen release: all seven price series, ranges, events and candle payloads
       reference.price.candleViews[interval].hash,
       interval,
     );
+  }
+});
+
+test("price view anchors history to the data date and reserves a year without future observations", () => {
+  const p = data().charts[0];
+  assert.equal(p.defaultRange, "2Y");
+  assert.equal(p.rangeAnchorDate, "2026-09-29");
+  assert.equal(p.rangeEndDate, "2027-09-29");
+  assert.equal(p.x.at(-1), p.rangeEndDate);
+  for (const s of p.series)
+    assert.ok(p.x[s.start + s.values.length - 1] <= p.reportDate);
+  for (const view of Object.values(p.candleViews!)) {
+    assert.equal(view.candles.at(-1)!.observationDate, p.reportDate);
+    assert.ok(view.x.at(-1)! > p.reportDate);
+    assert.ok(view.x.at(-1)! <= p.rangeEndDate!);
+    assert.ok(view.series.every(s => s.values.length === view.candles.length));
   }
 });
 

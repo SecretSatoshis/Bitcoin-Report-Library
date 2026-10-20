@@ -1,4 +1,4 @@
-import { relativeRankBaselines, type RelativeRankPeriod, type RelativeRankChange, correlationGroups, correlationLabel, correlationName, correlationPeriods, num, type DashboardData, type Row, type Metric } from "./data";
+import { relativeRankBaselines, relativeRankRollingPeriods, type RelativeRankPeriod, type RelativeRankChange, correlationGroups, correlationLabel, correlationName, correlationPeriods, num, type DashboardData, type Row, type Metric } from "./data";
 import { PAGE_TITLE, PAGE_DESCRIPTION, PAGE_URL } from "./site";
 const SOCIAL_IMAGE = "https://secretsatoshis.com/assets/images/dashboard-social-card.jpg";
 const SOCIAL_IMAGE_ALT = "The Bitcoin Market Dashboard: Bitcoin's market performance, on-chain conditions, valuation, and network activity, updated daily";
@@ -228,19 +228,23 @@ function fundamentalsTable(d: DashboardData): string {
     .join("");
   return `<div class="table-scroll" role="region" aria-label="Network fundamentals" tabindex="0"><table class="fundamentals"><thead><tr>${["Category", "Metric", "Current Value", "7 Days Ago", "7d Change", "52W Low", "52W High"].map((h) => `<th scope="col">${h}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
-const rankTogglePeriods: RelativeRankPeriod[] = ["wtd", "qtd", "ytd"];
-const defaultRankPeriod: RelativeRankPeriod = "ytd";
+const rankTogglePeriods = relativeRankRollingPeriods;
+const defaultRankPeriod: RelativeRankPeriod = "7d";
 const relativeAssetLabel = (asset: string) => asset === "Berkshire Hathaway Class B" ? "Berkshire Hathaway" : asset;
-const rankPeriodLabels: Record<RelativeRankPeriod, string> = { daily: "Daily", wtd: "WTD", qtd: "QTD", ytd: "YTD" };
+const rankPeriodLabels: Record<RelativeRankPeriod, string> = { daily: "Daily", wtd: "WTD", qtd: "QTD", ytd: "YTD", "7d": "7 Day", "30d": "30 Day", "90d": "90 Day", "365d": "365 Day" };
 const rankPeriodDescriptions: Record<RelativeRankPeriod, string> = {
   daily: "since the previous day's close", wtd: "since the start of this week",
   qtd: "since the start of this quarter", ytd: "since the start of this year",
+  "7d": "over the past seven days",
+  "30d": "over the past 30 days",
+  "90d": "over the past 90 days",
+  "365d": "over the past 365 days",
 };
 export function rankChip(asset: string, period: RelativeRankPeriod, comparison?: RelativeRankChange): string {
   const change = comparison?.change ?? null;
   const direction = change === null ? "unavailable" : change > 0 ? "positive" : change < 0 ? "negative" : "flat";
   const text = change === null ? "N/A" : change === 0 ? "—" : `${change > 0 ? "↑" : "↓"} ${Math.abs(change)}`;
-  let description = "Rank history is unavailable for this release.";
+  let description = `Rank history is unavailable for this ${rankPeriodLabels[period]} comparison.`;
   if (comparison) {
     const dates = `${comparison.baselineDate} → ${comparison.currentDate} (UTC closes)`;
     description = comparison.status === "available"

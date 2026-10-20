@@ -14,10 +14,10 @@ const assets = [
   { Asset: "SpaceX", "Market Cap (USD)": "10" },
   { Asset: "Unavailable", "Market Cap (USD)": "" },
 ];
-function tables() {
-  const baselines = relativeRankBaselines(date);
+function tables(reportDate = date) {
+  const baselines = relativeRankBaselines(reportDate);
   const rows: Row[] = relativeRankPeriods.flatMap((period) => assets.map((asset, i) => ({
-    Asset: asset.Asset, Timeframe: period, "Current Date": date, "Baseline Date": baselines[period],
+    Asset: asset.Asset, Timeframe: period, "Current Date": reportDate, "Baseline Date": baselines[period],
     "Current Rank": ["1", "2", "2", "4", ""][i],
     "Previous Rank": ["2", "1", "2", "", "4"][i],
     Change: ["1", "-1", "0", "", ""][i],
@@ -51,7 +51,7 @@ test("invalid dates, ranks, availability, duplicates and incomplete periods are 
     [(r) => { r[1] = { ...r[0] }; }, /duplicate/],
     [(r) => { r[0].Timeframe = "monthly"; }, /timeframe/],
     [(r) => { delete r[0].Status; }, /columns/],
-    [(r) => { r.pop(); }, /four comparisons/],
+    [(r) => { r.pop(); }, /comparisons/],
   ];
   for (const [mutate, message] of mutations) {
     const t = tables(); mutate(t[RELATIVE_RANK_FILE]);
@@ -60,13 +60,47 @@ test("invalid dates, ranks, availability, duplicates and incomplete periods are 
 });
 test("calendar baselines handle week, quarter, year and leap-day boundaries", () => {
   for (const [date, expected] of [
-    ["2026-10-12", ["2026-10-11", "2026-10-11", "2026-09-30", "2025-12-31"]],
-    ["2026-10-11", ["2026-10-10", "2026-10-04", "2026-09-30", "2025-12-31"]],
-    ["2026-10-01", ["2026-09-30", "2026-09-27", "2026-09-30", "2025-12-31"]],
-    ["2024-01-01", ["2023-12-31", "2023-12-31", "2023-12-31", "2023-12-31"]],
-    ["2024-03-01", ["2024-02-29", "2024-02-25", "2023-12-31", "2023-12-31"]],
-    ["2024-04-01", ["2024-03-31", "2024-03-31", "2024-03-31", "2023-12-31"]],
-  ] as const) assert.deepEqual(Object.values(relativeRankBaselines(date)), expected);
+    ["2026-10-12", ["2026-10-11", "2026-10-11", "2026-09-30", "2025-12-31", "2026-10-05"]],
+    ["2026-10-11", ["2026-10-10", "2026-10-04", "2026-09-30", "2025-12-31", "2026-10-04"]],
+    ["2026-10-01", ["2026-09-30", "2026-09-27", "2026-09-30", "2025-12-31", "2026-09-24"]],
+    ["2024-01-01", ["2023-12-31", "2023-12-31", "2023-12-31", "2023-12-31", "2023-12-25"]],
+    ["2024-03-01", ["2024-02-29", "2024-02-25", "2023-12-31", "2023-12-31", "2024-02-23"]],
+    ["2024-04-01", ["2024-03-31", "2024-03-31", "2024-03-31", "2023-12-31", "2024-03-25"]],
+  ] as const) assert.deepEqual(Object.values(relativeRankBaselines(date)).slice(0, 5), expected);
+});
+test("rolling windows use calendar days rather than month, quarter or year boundaries", () => {
+  for (const [report, expected] of [
+    ["2024-03-01", ["2024-02-23", "2024-01-31", "2023-12-02", "2023-03-02"]],
+    ["2026-10-12", ["2026-10-05", "2026-09-12", "2026-07-14", "2025-10-12"]],
+  ] as const) {
+    const baselines = relativeRankBaselines(report);
+    assert.deepEqual([baselines["7d"], baselines["30d"], baselines["90d"], baselines["365d"]], expected);
+  }
+  const t = tables();
+  t[RELATIVE_RANK_FILE].find(row => row.Asset === "Apple" && row.Timeframe === "30d")!.Change = "3";
+  t[RELATIVE_RANK_FILE].find(row => row.Asset === "Apple" && row.Timeframe === "30d")!["Previous Rank"] = "4";
+  const ranks = readRelativeRankChanges(t, date)!;
+  assert.equal(ranks["7d"].Apple.change, 1);
+  assert.equal(ranks["30d"].Apple.change, 3);
+  assert.equal(ranks["90d"].Apple.change, 1);
+  assert.equal(ranks["365d"].Apple.change, 1);
+});
+test("seven-day history uses its exact baseline and never substitutes legacy WTD data", () => {
+  const t = tables("2026-10-12");
+  assert.equal(readRelativeRankChanges(t, "2026-10-12")!["7d"].Apple.baselineDate, "2026-10-05");
+  const wrong = structuredClone(t);
+  wrong[RELATIVE_RANK_FILE].find(row => row.Timeframe === "7d")!["Baseline Date"] = "2026-10-11";
+  assert.throws(() => readRelativeRankChanges(wrong, "2026-10-12"), /dates/);
+  const intermediate = structuredClone(t);
+  intermediate[RELATIVE_RANK_FILE] = intermediate[RELATIVE_RANK_FILE].filter(row => !["30d", "90d", "365d"].includes(row.Timeframe));
+  const previous = readRelativeRankChanges(intermediate, "2026-10-12")!;
+  assert.equal(previous["7d"].Apple.baselineDate, "2026-10-05");
+  assert.deepEqual(Object.keys(previous["30d"]), []);
+  t[RELATIVE_RANK_FILE] = t[RELATIVE_RANK_FILE].filter(row => ["daily", "wtd", "qtd", "ytd"].includes(row.Timeframe));
+  const legacy = readRelativeRankChanges(t, "2026-10-12")!;
+  assert.deepEqual(Object.keys(legacy["7d"]), []);
+  assert.equal(legacy.wtd.Apple.baselineDate, "2026-10-11");
+  assert.match(rankChip("Apple", "7d", legacy["7d"].Apple), /unavailable.*7 Day comparison.*>N\/A<\/button>/);
 });
 test("chips show directions, unchanged and unavailable with accessible explanations", () => {
   const ranks = readRelativeRankChanges(tables(), date)!.wtd;
@@ -76,7 +110,8 @@ test("chips show directions, unchanged and unavailable with accessible explanati
   assert.match(rankChip("SpaceX", "wtd", ranks.SpaceX), /unavailable.*baseline.*>N\/A<\/button>/);
   assert.match(rankChip("<asset>", "wtd"), /aria-label="&lt;asset&gt;: Rank history is unavailable/);
   assert.match(rankChip("Apple", "wtd", ranks.Apple), /hidden>↑ 1/);
-  assert.doesNotMatch(rankChip("Apple", "ytd", ranks.Apple), /hidden/);
+  assert.doesNotMatch(rankChip("Apple", "7d", ranks.Apple), /hidden/);
+  assert.match(rankChip("Apple", "365d", ranks.Apple), /over the past 365 days.*hidden/);
 });
 test("older manifests omit rank data and keep the existing inputs readable", () => {
   const release = { files: {} } as ReleaseManifest;

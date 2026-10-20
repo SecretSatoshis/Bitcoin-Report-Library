@@ -637,7 +637,7 @@
       let range;
       if(label==='ALL')range={from:payload.x[0],to:payload.x.at(-1)};
       else if(numeric)range={from:0,to:Math.min(payload.x.at(-1),label==='CURRENT'?payload.readingPoint:parseInt(label))};
-      else{const start=new Date((payload.rangeEndDate||payload.reportDate)+'T00:00:00Z');
+      else{const start=new Date((payload.rangeAnchorDate||payload.rangeEndDate||payload.reportDate)+'T00:00:00Z');
         if(label==='MTD')start.setUTCDate(1);else if(label==='YTD')start.setUTCMonth(0,1);
         else if(/^\d+M$/.test(label)){const day=start.getUTCDate();start.setUTCMonth(start.getUTCMonth()-parseInt(label));if(start.getUTCDate()!==day)start.setUTCDate(0);}
         else{const month=start.getUTCMonth();start.setUTCFullYear(start.getUTCFullYear()-(/^\d+Y$/.test(label)?parseInt(label):4));if(start.getUTCMonth()!==month)start.setUTCDate(0);}

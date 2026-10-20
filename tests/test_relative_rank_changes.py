@@ -1,4 +1,4 @@
-"""Calendar ranking comparisons for the relative valuation dashboard."""
+"""Rolling and calendar ranking comparisons for the relative valuation dashboard."""
 
 import unittest
 import tempfile
@@ -79,16 +79,47 @@ class RelativeRankTests(unittest.TestCase):
 
     def test_calendar_boundaries_and_leap_year(self):
         cases = {
-            "2026-10-12": ["2026-10-11", "2026-10-11", "2026-09-30", "2025-12-31"],
-            "2026-10-11": ["2026-10-10", "2026-10-04", "2026-09-30", "2025-12-31"],
-            "2026-10-01": ["2026-09-30", "2026-09-27", "2026-09-30", "2025-12-31"],
-            "2024-01-01": ["2023-12-31"] * 4,
-            "2024-03-01": ["2024-02-29", "2024-02-25", "2023-12-31", "2023-12-31"],
-            "2024-04-01": ["2024-03-31", "2024-03-31", "2024-03-31", "2023-12-31"],
+            "2026-10-12": ["2026-10-11", "2026-10-11", "2026-09-30", "2025-12-31", "2026-10-05"],
+            "2026-10-11": ["2026-10-10", "2026-10-04", "2026-09-30", "2025-12-31", "2026-10-04"],
+            "2026-10-01": ["2026-09-30", "2026-09-27", "2026-09-30", "2025-12-31", "2026-09-24"],
+            "2024-01-01": ["2023-12-31"] * 4 + ["2023-12-25"],
+            "2024-03-01": ["2024-02-29", "2024-02-25", "2023-12-31", "2023-12-31", "2024-02-23"],
+            "2024-04-01": ["2024-03-31", "2024-03-31", "2024-03-31", "2023-12-31", "2024-03-25"],
         }
         for date, expected in cases.items():
             with self.subTest(date=date):
-                self.assertEqual([str(d.date()) for d in relative_rank_baselines(date).values()], expected)
+                self.assertEqual([str(d.date()) for d in relative_rank_baselines(date).values()][:5], expected)
+
+    def test_rolling_windows_use_exact_days_including_leap_years(self):
+        for date, expected in {
+            "2024-03-01": ["2024-02-23", "2024-01-31", "2023-12-02", "2023-03-02"],
+            "2026-10-12": ["2026-10-05", "2026-09-12", "2026-07-14", "2025-10-12"],
+        }.items():
+            with self.subTest(date=date):
+                baselines = relative_rank_baselines(date)
+                self.assertEqual([str(baselines[p].date()) for p in ("7d", "30d", "90d", "365d")], expected)
+        frame = pd.DataFrame({
+            "market_cap": [40e12, 20e12, 5e12, 30e12, 30e12],
+            "AAPL_market_cap": [20e12, 30e12, 40e12, 20e12, 20e12],
+        }, index=pd.to_datetime(["2025-10-12", "2026-07-14", "2026-09-12", "2026-10-05", "2026-10-12"]))
+        result = create_relative_value_rank_changes(frame, "2026-10-12")
+        bitcoin = result.loc[result.Asset.eq("Bitcoin")].set_index("Timeframe")
+        self.assertEqual(bitcoin.loc[["7d", "30d", "90d", "365d"], "Change"].tolist(), [0, 2, 1, 0])
+
+    def test_seven_day_change_does_not_reset_on_monday(self):
+        frame = pd.DataFrame({
+            "market_cap": [30e12, 10e12, 30e12],
+            "AAPL_market_cap": [20e12, 40e12, 20e12],
+        }, index=pd.to_datetime(["2026-10-05", "2026-10-11", "2026-10-12"]))
+        table = create_relative_value_rank_changes(frame, "2026-10-12")
+        bitcoin = table.loc[table.Asset.eq("Bitcoin")].set_index("Timeframe")
+        self.assertEqual(bitcoin.loc["7d", "Baseline Date"], "2026-10-05")
+        self.assertEqual(bitcoin.loc["7d", "Change"], 0)
+        self.assertEqual(bitcoin.loc["wtd", "Change"], 1)
+        missing = create_relative_value_rank_changes(frame.drop(pd.Timestamp("2026-10-05")), "2026-10-12")
+        rolling = missing.loc[missing.Timeframe.eq("7d") & missing.Asset.eq("Bitcoin")].iloc[0]
+        self.assertEqual(rolling.Status, "missing_baseline")
+        self.assertTrue(pd.isna(rolling.Change))
 
     def test_release_validation_recomputes_dates_ranks_and_availability(self):
         frame = self.frame({"market_cap": 30e12}, {"market_cap": 20e12})

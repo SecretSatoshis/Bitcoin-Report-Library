@@ -1,7 +1,7 @@
 {
   "source": "Bitcoin-Chart-Library",
   "files": {
-    "renderer.js": "2fb0015fd28e31e0ead736cc369f654e0acc3a6fcb6f11807cdc911b87371462",
+    "renderer.js": "6fd5c8fe50485bcd7dfacd6ce076e02989131c4c90aeff19dfdfb488c935861e",
     "chart.html": "52ec53710af841abdff1c96190d61d6d228c378effa1f8b91ff7f269ff0a2fde",
     "chart.css": "87df7e0c4f8ab1b6b5ba7ac8659810e2b32858031d02db545b854e49be1a0a56",
     "site.css": "f3e18513840db190b554037c27304ee5320193b347264a643b27bbd8826e02a6",
@@ -13,7 +13,7 @@
   },
   "assets": {
     "STYLE": "assets/chart.73a40aef56d33c61.css",
-    "RENDERER": "assets/renderer.2fb0015fd28e31e0.js",
+    "RENDERER": "assets/renderer.6fd5c8fe50485bcd.js",
     "RUNTIME": "assets/lightweight-charts.e21cc5caa0226ef3.js",
     "LICENSE": "assets/LICENSE",
     "NOTICEFILE": "assets/NOTICE"
@@ -25,13 +25,13 @@
   ],
   "vendored_hashes": {
     "assets/chart.73a40aef56d33c61.css": "73a40aef56d33c6113a1c32d3ca0eb5bd8d94ed10f0a282f52d63c4c7a6a9a66",
-    "assets/renderer.2fb0015fd28e31e0.js": "2fb0015fd28e31e0ead736cc369f654e0acc3a6fcb6f11807cdc911b87371462",
+    "assets/renderer.6fd5c8fe50485bcd.js": "6fd5c8fe50485bcd7dfacd6ce076e02989131c4c90aeff19dfdfb488c935861e",
     "assets/lightweight-charts.e21cc5caa0226ef3.js": "e21cc5caa0226ef30bd8549c50b9ef926615f2a4ee6b4e486353477a55f598cf",
     "assets/LICENSE": "70c9d5382506dd184465425c08a99ad9bd6d9ac1313c252968ba0b585e5ef823",
     "assets/NOTICE": "f76c6afab94884448f0426e30d6e9d555ca7247894cd3484e477d2f87513036e",
     "frame.html": "9f5cc94d7a3c6bf076597ce917b8f8fd90c3361b2e82f407fe9ffafffff2a55d",
     "seasonal-mtd.html": "19cb330475f1fa601f80d5004597fe999be1edbe8de0849f20a8232a0fa535bd",
     "seasonal-ytd.html": "4569a1a350fa51afe0fd2056a803289983d9bd6d9b2c423ef50ec204283378d4",
-    "embed-host.js": "f793332b8330167d10dad7b5ee12d887e5d5dc643a492b46eeac4470f53190b2"
+    "embed-host.js": "68206fd04dd51a0a10098766c4dee86dd3c9e2ef6bf0bf8bca5bb02db683fc85"
   }
 }

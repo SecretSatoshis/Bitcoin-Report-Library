@@ -68,7 +68,7 @@ try {
     };
     p.fillText = function(text, x, y, ...args) {
       if (this.canvas.closest("#chart") && / · \$/.test(text))
-        window.__referenceDraws[text] = { x, y, align: this.textAlign, ...this._referenceStroke };
+        window.__referenceDraws[text] = { x, y, align: this.textAlign, textWidth: this.measureText(text).width, ...this._referenceStroke };
       else if (this.canvas.closest('[aria-hidden="true"]') && / · \$/.test(text))
         window.__exportReferenceLabels.push(text);
       return fill.call(this, text, x, y, ...args);
@@ -229,6 +229,47 @@ try {
     writeFileSync(resolve(artifacts, payload.id + "-export.png"), bytes);
   }
   const price = frames[0];
+  const defaultWindow = await price.evaluate(() => ({
+    requested: SecretSatoshisChart.state.requestedRange,
+    actual: SecretSatoshisChart.view.range(),
+    report: SecretSatoshisChart.payload.reportDate,
+  }));
+  const anchor = new Date(defaultWindow.report + "T00:00:00Z"),
+    history = new Date(anchor), future = new Date(anchor);
+  history.setUTCFullYear(history.getUTCFullYear() - 2);
+  future.setUTCFullYear(future.getUTCFullYear() + 1);
+  assert.deepEqual(defaultWindow.requested, {
+    from: history.toISOString().slice(0, 10), to: future.toISOString().slice(0, 10),
+  }, "Default window contains two years of history and one year of future whitespace");
+  for (const end of ["from", "to"])
+    assert.ok(Math.abs(Date.parse(defaultWindow.actual[end]) - Date.parse(defaultWindow.requested[end])) <= 7 * 86400000,
+      "Weekly candle boundaries preserve the requested default window");
+  const defaultLabels = await price.evaluate(() => {
+    const a = SecretSatoshisChart, last = a.payload.candles.at(-1).time,
+      candleX = a.view.charts[0].timeScale().timeToCoordinate(last);
+    return a.payload.referenceLines.filter(level => level.type).map(level => {
+      const draw = Object.entries(window.__referenceDraws).find(([label]) => label.startsWith(level.name + " · "))?.[1];
+      return {name:level.name, labelStart:draw?.x - draw?.textWidth, candleX};
+    });
+  });
+  for (const label of defaultLabels)
+    assert.ok(label.labelStart > label.candleX, label.name + " label sits beyond the latest candle by default");
+  for (const [index, frame] of frames.entries()) {
+    await frame.evaluate(() => SecretSatoshisChart.setCapture(true));
+    const collisions = await frame.evaluate(async () => {
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      return [...document.querySelectorAll('.indicator-row')].filter(row => row.getBoundingClientRect().width > 0)
+        .flatMap(row => {
+          const value = row.querySelector('.value'), box = row.getBoundingClientRect(), text = document.createRange();
+          text.selectNodeContents(value);
+          const drawn = text.getBoundingClientRect();
+          return drawn.right > box.right + 1 || drawn.left < box.left - 1 ? [{value:value.textContent, drawn:drawn.toJSON(), cell:box.toJSON()}] : [];
+        });
+    });
+    assert.deepEqual(collisions, [], "Every exported legend value fits inside its own column");
+    await page.locator('[data-chart-frame]').nth(index).screenshot({path:resolve(artifacts, `capture-legend-${index}.png`)});
+    await frame.evaluate(() => SecretSatoshisChart.setCapture(false));
+  }
   async function desktopLegend(frame) {
     return frame.evaluate(async () => {
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -454,21 +495,24 @@ try {
     [...row.querySelectorAll("th,td")].slice(1).map((cell) => cell.textContent.trim()),
   ));
   await relative.locator("tbody tr").first().evaluate((row) => { window.relativeFirstRow = row; });
-  assert.equal(await page.locator('[data-rank-toggle="ytd"]').getAttribute("aria-pressed"), "true");
-  assert.equal(await page.locator("[data-rank-toggle]").count(), 3);
+  assert.equal(await page.locator('[data-rank-toggle="7d"]').getAttribute("aria-pressed"), "true");
+  assert.deepEqual(await page.locator("[data-rank-toggle]").allTextContents(), ["7 Day", "30 Day", "90 Day", "365 Day"]);
+  assert.equal(await page.locator('[data-rank-toggle="qtd"], [data-rank-toggle="ytd"]').count(), 0);
   assert.equal(await page.locator('[data-rank-toggle="daily"]').count(), 0);
+  assert.equal(await page.locator('[data-rank-toggle="wtd"]').count(), 0);
+  assert.equal(await page.locator('[data-rank-toggle="7d"]').textContent(), "7 Day");
   assert.equal(await page.locator('[data-rank-period="daily"]').count(), 0);
   const requestsBeforeToggle = [];
   const recordRankRequest = (request) => requestsBeforeToggle.push(request.url());
   page.on("request", recordRankRequest);
-  for (const period of ["wtd", "qtd", "ytd"]) {
+  for (const period of ["7d", "30d", "90d", "365d"]) {
     await page.locator(`[data-rank-toggle="${period}"]`).click();
     assert.equal(await page.locator(`[data-rank-toggle="${period}"]`).getAttribute("aria-pressed"), "true");
     assert.equal(await page.locator(`[data-rank-comparison="${period}"]`).isVisible(), true);
     assert.equal(await relative.locator(`[data-rank-period="${period}"]:visible`).count(), data.relative.length);
     const chips = await relative.locator(`[data-rank-period="${period}"]`).allTextContents();
     assert.deepEqual(chips, data.relative.map((row) => {
-      const change = data.relativeRankChanges?.[period][row.Asset].change ?? null;
+      const change = data.relativeRankChanges?.[period][row.Asset]?.change ?? null;
       return change === null ? "N/A" : change === 0 ? "—" : `${change > 0 ? "↑" : "↓"} ${Math.abs(change)}`;
     }));
     assert.deepEqual(await relative.locator("tbody tr").evaluateAll((rows) => rows.map((row) =>
@@ -481,17 +525,18 @@ try {
   assert.equal(await relative.locator('tbody th[scope="row"]').count(), data.relative.length);
   const flatChip = relative.locator('.rank-chip.flat:not([hidden])').first();
   if (await flatChip.count()) assert.equal(await flatChip.evaluate((el) => getComputedStyle(el).backgroundColor), "rgba(0, 0, 0, 0)");
-  const rankToggle = page.locator('[data-rank-toggle="ytd"]');
+  const rankToggle = page.locator('[data-rank-toggle="7d"]');
   await rankToggle.press("End");
-  assert.equal(await page.locator('[data-rank-toggle="ytd"]').getAttribute("aria-pressed"), "true");
-  await page.locator('[data-rank-toggle="ytd"]').press("Home");
-  await page.locator('[data-rank-toggle="wtd"]').press("ArrowLeft");
-  assert.equal(await page.locator('[data-rank-toggle="ytd"]').getAttribute("aria-pressed"), "true");
-  await page.locator('[data-rank-toggle="ytd"]').press("ArrowRight");
-  await page.locator('[data-rank-toggle="wtd"]').press("ArrowRight");
-  assert.equal(await page.locator('[data-rank-toggle="qtd"]').getAttribute("aria-pressed"), "true");
-  await page.locator('[data-rank-toggle="qtd"]').press("ArrowRight");
-  const chip = relative.locator('[data-rank-period="ytd"]').first();
+  assert.equal(await page.locator('[data-rank-toggle="365d"]').getAttribute("aria-pressed"), "true");
+  await page.locator('[data-rank-toggle="365d"]').press("Home");
+  await page.locator('[data-rank-toggle="7d"]').press("ArrowLeft");
+  assert.equal(await page.locator('[data-rank-toggle="365d"]').getAttribute("aria-pressed"), "true");
+  await page.locator('[data-rank-toggle="365d"]').press("ArrowRight");
+  await page.locator('[data-rank-toggle="7d"]').press("ArrowRight");
+  assert.equal(await page.locator('[data-rank-toggle="30d"]').getAttribute("aria-pressed"), "true");
+  await page.locator('[data-rank-toggle="30d"]').press("ArrowRight");
+  assert.equal(await page.locator('[data-rank-toggle="90d"]').getAttribute("aria-pressed"), "true");
+  const chip = relative.locator('[data-rank-period="90d"]').first();
   await chip.focus();
   assert.equal(await page.locator("#relative-rank-tooltip").isVisible(), true);
   assert.equal(await page.locator("#relative-rank-tooltip").textContent(), await chip.getAttribute("data-rank-description"));
@@ -560,14 +605,14 @@ try {
     }
     await page.locator("#relative-valuation").screenshot({ path: resolve(artifacts, `relative-valuation-${width}.png`) });
     if (width === 390) {
-      await page.locator('[data-rank-toggle="ytd"]').click();
-      const mobileChip = relative.locator('[data-rank-period="ytd"]').first();
+      await page.locator('[data-rank-toggle="365d"]').click();
+      const mobileChip = relative.locator('[data-rank-period="365d"]').first();
       await mobileChip.click();
       const tip = page.locator("#relative-rank-tooltip");
       assert.equal(await tip.isVisible(), true);
       const bounds = await tip.boundingBox();
       assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width, "Tooltip stays within mobile viewport");
-      await page.locator('[data-rank-toggle="wtd"]').click();
+      await page.locator('[data-rank-toggle="7d"]').click();
       assert.equal(await tip.isVisible(), false);
       await page.evaluate(() => scrollTo(0, 0));
       await page.locator("#nav-toggle").click();
@@ -598,7 +643,7 @@ try {
   await staticPage.goto(base);
   assert.equal(await staticPage.locator(".metric-card").count(), 9);
   assert.equal(await staticPage.locator("table").count(), 9 + (data.correlations ? 3 : 0));
-  assert.equal(await staticPage.locator('[data-rank-period="ytd"]:visible').count(), data.relative.length);
+  assert.equal(await staticPage.locator('[data-rank-period="7d"]:visible').count(), data.relative.length);
   assert.equal(await staticPage.locator('[data-rank-period="wtd"]:visible').count(), 0);
   assert.equal(await staticPage.locator('[data-rank-period="daily"]:visible').count(), 0);
   if (data.correlations) {
