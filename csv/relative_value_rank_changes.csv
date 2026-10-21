@@ -3,11 +3,11 @@ Bitcoin,daily,2026-10-20,2026-10-19,11,11,0,available
 Switzerland M0,daily,2026-10-20,2026-10-19,20,20,0,available
 UK M0,daily,2026-10-20,2026-10-19,15,15,0,available
 US M0,daily,2026-10-20,2026-10-19,2,2,0,available
-Total Silver Market,daily,2026-10-20,2026-10-19,9,9,0,available
+Total Silver Market,daily,2026-10-20,2026-10-19,8,9,1,available
 Total Gold Market,daily,2026-10-20,2026-10-19,1,1,0,available
 Apple,daily,2026-10-20,2026-10-19,4,4,0,available
 Amazon,daily,2026-10-20,2026-10-19,5,5,0,available
-Meta,daily,2026-10-20,2026-10-19,8,8,0,available
+Meta,daily,2026-10-20,2026-10-19,9,8,-1,available
 NVIDIA,daily,2026-10-20,2026-10-19,3,3,0,available
 Broadcom,daily,2026-10-20,2026-10-19,12,12,0,available
 Tesla,daily,2026-10-20,2026-10-19,13,13,0,available
@@ -23,11 +23,11 @@ Bitcoin,wtd,2026-10-20,2026-10-18,11,11,0,available
 Switzerland M0,wtd,2026-10-20,2026-10-18,20,20,0,available
 UK M0,wtd,2026-10-20,2026-10-18,15,15,0,available
 US M0,wtd,2026-10-20,2026-10-18,2,2,0,available
-Total Silver Market,wtd,2026-10-20,2026-10-18,9,9,0,available
+Total Silver Market,wtd,2026-10-20,2026-10-18,8,9,1,available
 Total Gold Market,wtd,2026-10-20,2026-10-18,1,1,0,available
 Apple,wtd,2026-10-20,2026-10-18,4,4,0,available
 Amazon,wtd,2026-10-20,2026-10-18,5,5,0,available
-Meta,wtd,2026-10-20,2026-10-18,8,8,0,available
+Meta,wtd,2026-10-20,2026-10-18,9,8,-1,available
 NVIDIA,wtd,2026-10-20,2026-10-18,3,3,0,available
 Broadcom,wtd,2026-10-20,2026-10-18,12,12,0,available
 Tesla,wtd,2026-10-20,2026-10-18,13,13,0,available
@@ -43,11 +43,11 @@ Bitcoin,qtd,2026-10-20,2026-09-30,11,12,1,available
 Switzerland M0,qtd,2026-10-20,2026-09-30,20,20,0,available
 UK M0,qtd,2026-10-20,2026-09-30,15,16,1,available
 US M0,qtd,2026-10-20,2026-09-30,2,2,0,available
-Total Silver Market,qtd,2026-10-20,2026-09-30,9,8,-1,available
+Total Silver Market,qtd,2026-10-20,2026-09-30,8,8,0,available
 Total Gold Market,qtd,2026-10-20,2026-09-30,1,1,0,available
 Apple,qtd,2026-10-20,2026-09-30,4,4,0,available
 Amazon,qtd,2026-10-20,2026-09-30,5,5,0,available
-Meta,qtd,2026-10-20,2026-09-30,8,9,1,available
+Meta,qtd,2026-10-20,2026-09-30,9,9,0,available
 NVIDIA,qtd,2026-10-20,2026-09-30,3,3,0,available
 Broadcom,qtd,2026-10-20,2026-09-30,12,10,-2,available
 Tesla,qtd,2026-10-20,2026-09-30,13,13,0,available
@@ -63,11 +63,11 @@ Bitcoin,ytd,2026-10-20,2025-12-31,11,7,-4,available
 Switzerland M0,ytd,2026-10-20,2025-12-31,20,17,-3,available
 UK M0,ytd,2026-10-20,2025-12-31,15,13,-2,available
 US M0,ytd,2026-10-20,2025-12-31,2,2,0,available
-Total Silver Market,ytd,2026-10-20,2025-12-31,9,6,-3,available
+Total Silver Market,ytd,2026-10-20,2025-12-31,8,6,-2,available
 Total Gold Market,ytd,2026-10-20,2025-12-31,1,1,0,available
 Apple,ytd,2026-10-20,2025-12-31,4,4,0,available
 Amazon,ytd,2026-10-20,2025-12-31,5,5,0,available
-Meta,ytd,2026-10-20,2025-12-31,8,8,0,available
+Meta,ytd,2026-10-20,2025-12-31,9,8,-1,available
 NVIDIA,ytd,2026-10-20,2025-12-31,3,3,0,available
 Broadcom,ytd,2026-10-20,2025-12-31,12,9,-3,available
 Tesla,ytd,2026-10-20,2025-12-31,13,12,-1,available
@@ -83,11 +83,11 @@ Bitcoin,7d,2026-10-20,2026-10-13,11,12,1,available
 Switzerland M0,7d,2026-10-20,2026-10-13,20,20,0,available
 UK M0,7d,2026-10-20,2026-10-13,15,16,1,available
 US M0,7d,2026-10-20,2026-10-13,2,2,0,available
-Total Silver Market,7d,2026-10-20,2026-10-13,9,9,0,available
+Total Silver Market,7d,2026-10-20,2026-10-13,8,9,1,available
 Total Gold Market,7d,2026-10-20,2026-10-13,1,1,0,available
 Apple,7d,2026-10-20,2026-10-13,4,4,0,available
 Amazon,7d,2026-10-20,2026-10-13,5,5,0,available
-Meta,7d,2026-10-20,2026-10-13,8,8,0,available
+Meta,7d,2026-10-20,2026-10-13,9,8,-1,available
 NVIDIA,7d,2026-10-20,2026-10-13,3,3,0,available
 Broadcom,7d,2026-10-20,2026-10-13,12,11,-1,available
 Tesla,7d,2026-10-20,2026-10-13,13,13,0,available
@@ -103,11 +103,11 @@ Bitcoin,30d,2026-10-20,2026-09-20,11,12,1,available
 Switzerland M0,30d,2026-10-20,2026-09-20,20,20,0,available
 UK M0,30d,2026-10-20,2026-09-20,15,17,2,available
 US M0,30d,2026-10-20,2026-09-20,2,2,0,available
-Total Silver Market,30d,2026-10-20,2026-09-20,9,7,-2,available
+Total Silver Market,30d,2026-10-20,2026-09-20,8,7,-1,available
 Total Gold Market,30d,2026-10-20,2026-09-20,1,1,0,available
 Apple,30d,2026-10-20,2026-09-20,4,4,0,available
 Amazon,30d,2026-10-20,2026-09-20,5,5,0,available
-Meta,30d,2026-10-20,2026-09-20,8,11,3,available
+Meta,30d,2026-10-20,2026-09-20,9,11,2,available
 NVIDIA,30d,2026-10-20,2026-09-20,3,3,0,available
 Broadcom,30d,2026-10-20,2026-09-20,12,10,-2,available
 Tesla,30d,2026-10-20,2026-09-20,13,13,0,available
@@ -123,11 +123,11 @@ Bitcoin,90d,2026-10-20,2026-07-22,11,13,2,available
 Switzerland M0,90d,2026-10-20,2026-07-22,20,20,0,available
 UK M0,90d,2026-10-20,2026-07-22,15,15,0,available
 US M0,90d,2026-10-20,2026-07-22,2,2,0,available
-Total Silver Market,90d,2026-10-20,2026-07-22,9,8,-1,available
+Total Silver Market,90d,2026-10-20,2026-07-22,8,8,0,available
 Total Gold Market,90d,2026-10-20,2026-07-22,1,1,0,available
 Apple,90d,2026-10-20,2026-07-22,4,4,0,available
 Amazon,90d,2026-10-20,2026-07-22,5,5,0,available
-Meta,90d,2026-10-20,2026-07-22,8,10,2,available
+Meta,90d,2026-10-20,2026-07-22,9,10,1,available
 NVIDIA,90d,2026-10-20,2026-07-22,3,3,0,available
 Broadcom,90d,2026-10-20,2026-07-22,12,7,-5,available
 Tesla,90d,2026-10-20,2026-07-22,13,12,-1,available
@@ -143,11 +143,11 @@ Bitcoin,365d,2026-10-20,2025-10-20,11,6,-5,available
 Switzerland M0,365d,2026-10-20,2025-10-20,20,17,-3,available
 UK M0,365d,2026-10-20,2025-10-20,15,13,-2,available
 US M0,365d,2026-10-20,2025-10-20,2,2,0,available
-Total Silver Market,365d,2026-10-20,2025-10-20,9,10,1,available
+Total Silver Market,365d,2026-10-20,2025-10-20,8,10,2,available
 Total Gold Market,365d,2026-10-20,2025-10-20,1,1,0,available
 Apple,365d,2026-10-20,2025-10-20,4,4,0,available
 Amazon,365d,2026-10-20,2025-10-20,5,5,0,available
-Meta,365d,2026-10-20,2025-10-20,8,7,-1,available
+Meta,365d,2026-10-20,2025-10-20,9,7,-2,available
 NVIDIA,365d,2026-10-20,2025-10-20,3,3,0,available
 Broadcom,365d,2026-10-20,2025-10-20,12,8,-4,available
 Tesla,365d,2026-10-20,2025-10-20,13,12,-1,available
