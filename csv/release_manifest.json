@@ -1,133 +1,133 @@
 {
   "files": {
     "annual_reference_data.csv": {
-      "sha256": "1149591b9406caee7abbdf8135e8a84c38adc9ac4c3dfafd387aba740cc54df2",
+      "sha256": "dc8c3486e2664874a30cc62961aafc370c18169492f5898ac78d2b0ae3ef45c2",
       "size_bytes": 19129
     },
     "bitcoin_candles.csv.gz": {
-      "sha256": "437dff066b76bb212ab97249efec6d86b0f90ba80183be1e39c5f24cec2457fd",
-      "size_bytes": 134465
+      "sha256": "051c4e247b9b9ef695eaeef379531cf0df16e12413436ad5af4f6ebc8accbeb0",
+      "size_bytes": 134479
     },
     "correlation_matrix.csv": {
-      "sha256": "5866d568c8cfa53f3f8e4065d0b0988cfd59a67656388b88ff73f7c5a89b0400",
-      "size_bytes": 14353
+      "sha256": "67a1c1796198b2131b140b95c0329d7241c0bee8114128261c308f22963d1512",
+      "size_bytes": 14333
     },
     "cycle_low_data.csv": {
-      "sha256": "1bb070650d2175b8a88f350f2b88f9ab9de0ec28b7edad3fc51f3035fcb6b397",
-      "size_bytes": 176856
+      "sha256": "3ff472642a35f2f0866745124ae2df6c7f6fb19ef5cd09191cbb6bee78c05cc1",
+      "size_bytes": 176887
     },
     "drawdown_data.csv": {
-      "sha256": "9eeef2d8c2494146447d943cffec5a0fc138d05955a7d1b15d6f27dbfd5aca59",
-      "size_bytes": 139927
+      "sha256": "4539afa2c15b158a791acc2df2c00ab6fdf06c0f49f88e74bb0f53a39c555083",
+      "size_bytes": 139959
     },
     "etf_daily.csv": {
-      "sha256": "b915481981f89e4aa368d12d516bb2f87aeb44857a630fdf81337b654433c6cb",
-      "size_bytes": 1261243
+      "sha256": "8e57b5e10e94c1dc9ebe41a7d7fa2fca945dc29a6197a52e2b29b7dc901c3ded",
+      "size_bytes": 1263020
     },
     "etf_filing_counts.csv": {
       "sha256": "ae40297015bf39bd8716a7284c29db2c66eaa449dedfabf16a296ee1cf43bc72",
       "size_bytes": 12738
     },
     "etf_nav_history.csv": {
-      "sha256": "05b6250cf9c46851ba7b9370122db4feff6db49917cc6a593d83229da1ab16fb",
-      "size_bytes": 47643
+      "sha256": "73a0c3348b3b41c46994d58b3ad6cf9d8dc4bb29cda85944f9b073251c82124b",
+      "size_bytes": 47695
     },
     "etf_quarterly.csv": {
-      "sha256": "499ceef0c8c6674d8b013abce9e8a1a038fca1295f7921c4601ec7f01f1f5e16",
+      "sha256": "c7d21f7e6aa70c4b11517ad316f2b12ddc65e4b60347673a0ce28339e8c8c5c0",
       "size_bytes": 23140
     },
     "etf_snapshots.csv": {
-      "sha256": "1c9d5a1307277f7bea764cd8b60173c0ba05643f30402da6d1bceac911512704",
-      "size_bytes": 26457
+      "sha256": "3c928a7030651a70b73a720e853d1d35fe15e8a8ef8eabcdb6ee5765e67f6172",
+      "size_bytes": 27748
     },
     "etf_totals_daily.csv": {
-      "sha256": "aabe49f587d277ca40137b19fbf778f2085000fe6c34b62e2a945afd1efdf117",
-      "size_bytes": 68851
+      "sha256": "88e5b4413a649628b680a04b38354268ce0e220f2f5867338d4a6a4be0c87854",
+      "size_bytes": 68912
     },
     "fundamentals_table.csv": {
-      "sha256": "d0d6ff3e2d9f5a82640bed7afe74b9577b07ef9c0680e9976b439cf63c75813d",
-      "size_bytes": 2628
+      "sha256": "e9cec3f9934e50d455907dfed2c86805b52b1b152795dfd1c87056400acc4248",
+      "size_bytes": 2828
     },
     "halving_data.csv": {
-      "sha256": "675107e34baadb27529da40d5d0a9cf19de777781c4fc0c30568506025e5358a",
-      "size_bytes": 122195
+      "sha256": "ce0f4cc660cda3feef38375e1f399491761b19adf98f331badcb4d3aae34ab3d",
+      "size_bytes": 122219
     },
     "master_metrics_data.csv.gz": {
-      "sha256": "d9284cfbfac45372d3ceb9fa0a3044be1403e871a38a33af42db893722a29aa1",
-      "size_bytes": 10364976
+      "sha256": "f4d6bcd81a1df8b6ddf4b9d0377b92a37e37350fa344bec39b1472ec154122c1",
+      "size_bytes": 10366248
     },
     "monthly_heatmap_data.csv": {
-      "sha256": "cd96d3ae875bb7d351bb7cfd1a65545dd0c6eaf96ece1141f8d3c9412cba4f13",
-      "size_bytes": 3014
+      "sha256": "9d870abbdb3c63a291dd1aad5595cd2dfa3db8d93c465564399c519f3bae0186",
+      "size_bytes": 3015
     },
     "monthly_metrics_data.csv.gz": {
-      "sha256": "99fd3ed805e147802bdfa72ae827e8fb165e530b7a303e51ae5a3ceb73346212",
-      "size_bytes": 373848
+      "sha256": "dec94f8af0e2033089b856a3c8f0db2cd8409330749443bafd00e35a277738e8",
+      "size_bytes": 373999
     },
     "mtd_price_paths.csv": {
-      "sha256": "84ee19e847b36f41f51d077ef4873036cb359b61f4d708d24a53ba7c0e808489",
-      "size_bytes": 4897
+      "sha256": "c1eaa5799673e94636d50887b10180978f7de5bdb231ffdf1659e360965bce5d",
+      "size_bytes": 4905
     },
     "mtd_return_comparison.csv": {
-      "sha256": "2ab59df9b5550006a211cbd896b1dfb3e55f5485527fe0e50df7f730ff93ad89",
-      "size_bytes": 178
+      "sha256": "6651e2622f17dfa302dce0ff5f00675aeda9909802431a114573d6fa747df5b2",
+      "size_bytes": 181
     },
     "onchain_price_models.csv": {
-      "sha256": "622a73138c2bb9169cbc4af157cdb61121653a2dd5d3fc5ebeb4ecc791d0d4df",
-      "size_bytes": 802328
+      "sha256": "8d85db544eee9e37fc8fa70969855399dc9cf059918cb205cf67e7541ba289b8",
+      "size_bytes": 802484
     },
     "performance_table.csv": {
-      "sha256": "81229ecb0a3ad7cc125515103742faa4d6f4a734c778f5d505f70e5e8c4da2e8",
-      "size_bytes": 3679
+      "sha256": "04537c060091d35e3b5773512956c561786a2cdb415e20f9bff38391abf6954e",
+      "size_bytes": 3694
     },
     "price_outlook.csv": {
       "sha256": "d55116c14110f651ab94131716060e74250fdd2f0b986039ce02a83f94324416",
       "size_bytes": 772
     },
     "relative_value_comparison.csv": {
-      "sha256": "3cc300ffd3e85a3deff603bd82ebcb3a8d15d8eb41bab0c1a7f21e49fe304f41",
-      "size_bytes": 1020
+      "sha256": "54ce45911afddfc3f24a5594d46fb83c61b15940a51fedf6cfc69f562270f279",
+      "size_bytes": 1021
     },
     "relative_value_rank_changes.csv": {
-      "sha256": "de712f45d1855e74998fe4e920275e44d44de30a7c2454a478c53e202cecdf4f",
-      "size_bytes": 8714
+      "sha256": "80ca89e784777b2567aa5d41d94497e4ff622331b7c0a3cffcaa4bb250c84b4e",
+      "size_bytes": 8710
     },
     "report_ohlc_summary.csv": {
-      "sha256": "e5396d51f5988832b41528ba2733a5ca07ce09d0dd99c4dcb9a317e8fbe635a8",
+      "sha256": "b76c50faff236b7ebc2cbe5313e4c09a0c6a7a15ad72b6e0d60475b3c8bc6763",
       "size_bytes": 246
     },
     "roi_table.csv": {
-      "sha256": "8e36e7a6db4a102ee906f6f2dbd7952caaa53d28c3460c8a6957cca887f88793",
-      "size_bytes": 427
+      "sha256": "93aefdb0ef2fdae2a8fee378c69d87334f6d2051dbd6e353af985ca1baab366d",
+      "size_bytes": 433
     },
     "summary_history.csv": {
-      "sha256": "dca80bce9d869f55d37a95ed2ef20fd9c87f71a34d141c1e46271790d83c277e",
+      "sha256": "255cf16b6ad4971681dcdedbe79aba2bd690de84aecedbea1acefa81367b57f7",
       "size_bytes": 7880
     },
     "summary_table.csv": {
-      "sha256": "691ce4472a470cfc8b755e084631633b1cd2a9fb40e7b175eb64cc20e2dc9049",
-      "size_bytes": 480
+      "sha256": "4df2a263421fdf94829d148e35f3c3b27c3308ae2ccbf8b4e8ae1a96c329a10e",
+      "size_bytes": 475
     },
     "weekly_metrics_data.csv.gz": {
-      "sha256": "fc37a40d57bc3adb8aea9fb6fa17c47f2b0f09ab1a8376dd0312773080fd6f43",
-      "size_bytes": 1587151
+      "sha256": "e4ecf6ba5d9d17d085f03d6a8c0dc8fafd1545b95caf8ac917556bec9267bee2",
+      "size_bytes": 1587584
     },
     "ytd_price_paths.csv": {
-      "sha256": "8070e4ade36561d54b0956135178c85e1934f43ef47c6791ec7e8e2f8371c160",
-      "size_bytes": 56299
+      "sha256": "b61103bcbf6c1ac0d43bf80a2391a33e5ccf13bba710306402558609d6efcf1e",
+      "size_bytes": 56307
     },
     "ytd_return_comparison.csv": {
-      "sha256": "0d705cbe35f3a33aee8770a3202a77ddf2c12d5fc91ca4c594d9e82b83ecfeff",
+      "sha256": "633c9abb3845fe80a9482c04f036f09f4e1d157f47b2f9b35f3a367e084e9d37",
       "size_bytes": 180
     }
   },
-  "generated_at": "2026-10-22T05:14:24+00:00",
+  "generated_at": "2026-10-23T00:27:31+00:00",
   "model_parameters": {
-    "metcalfe_scale": 0.00028454588185172715,
-    "power_law_exponent": 5.620197204304978,
-    "power_law_scale": 5.295278849837251e-17
+    "metcalfe_scale": 0.000284572971254858,
+    "power_law_exponent": 5.620001183755053,
+    "power_law_scale": 5.303105982886697e-17
   },
-  "release_id": "2026-10-21",
-  "report_date": "2026-10-21",
+  "release_id": "2026-10-22",
+  "report_date": "2026-10-22",
   "schema_version": 1
 }
