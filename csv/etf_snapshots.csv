@@ -17,6 +17,7 @@ ARKB,2026-10-21,32140,https://assets.ark-funds.com/fund-documents/funds-etf-csv/
 ARKB,2026-10-22,30795,https://assets.ark-funds.com/fund-documents/funds-etf-csv/ARK_21SHARES_BITCOIN_ETF_ARKB_HOLDINGS.csv,,,,2504216340,file dated 2026-10-23; whole coins only,2026-10-26T05:10:00+00:00
 ARKB,2026-10-23,30795,https://assets.ark-funds.com/fund-documents/funds-etf-csv/ARK_21SHARES_BITCOIN_ETF_ARKB_HOLDINGS.csv,,,,2501881929,file dated 2026-10-26; whole coins only,2026-10-27T05:24:52+00:00
 ARKB,2026-10-26,30795,https://assets.ark-funds.com/fund-documents/funds-etf-csv/ARK_21SHARES_BITCOIN_ETF_ARKB_HOLDINGS.csv,,,,2460540075,file dated 2026-10-27; whole coins only,2026-10-28T06:04:34+00:00
+ARKB,2026-10-27,30795,https://assets.ark-funds.com/fund-documents/funds-etf-csv/ARK_21SHARES_BITCOIN_ETF_ARKB_HOLDINGS.csv,,,,2481909177,file dated 2026-10-28; whole coins only,2026-10-29T00:26:34+00:00
 BITB,2026-09-30,37920.11028,https://bitbetf.com/,69890000,0.0005425684688,45.42,3174740268,"65 custody addresses holding 37,920.11027723 BTC",2026-10-01T23:09:52+00:00
 BITB,2026-10-02,37838.72546,https://bitbetf.com/,69740000,0.0005425684752,45.94,3184227128,"65 custody addresses holding 37,838.72545298 BTC",2026-10-05T06:04:40+00:00
 BITB,2026-10-05,37838.72546,https://bitbetf.com/,69740000,0.0005425684752,45.66,3242567253,"65 custody addresses holding 37,838.72545298 BTC",2026-10-06T06:43:38+00:00
@@ -35,7 +36,7 @@ BITB,2026-10-21,37420.95536,https://bitbetf.com/,68970000,0.0005425685857,45.78,
 BITB,2026-10-22,37084.60282,https://bitbetf.com/,68350000,0.0005425691707,44.11,3015496281,"65 custody addresses holding 37,084.60281079 BTC",2026-10-24T00:26:28+00:00
 BITB,2026-10-23,37084.60282,https://bitbetf.com/,68350000,0.0005425691707,44.07,3012371161,"65 custody addresses holding 37,084.60281079 BTC",2026-10-27T00:26:27+00:00
 BITB,2026-10-26,37084.60282,https://bitbetf.com/,68350000,0.0005425691707,43.35,2963094995,"65 custody addresses holding 37,084.60281079 BTC",2026-10-28T00:26:39+00:00
-BITB,2026-10-27,37084.60282,https://bitbetf.com/,68350000,0.0005425691707,43.35,2989101686,"65 custody addresses holding 37,084.60281079 BTC",2026-10-28T06:04:34+00:00
+BITB,2026-10-27,37084.60282,https://bitbetf.com/,68350000,0.0005425691707,43.73,2989101686,"65 custody addresses holding 37,084.60281079 BTC",2026-10-29T00:26:34+00:00
 BRRR,2026-09-30,5704.396155,"https://www-api.coinshares.com/api/v2/Widgets?ApiKey=094DA478-140C-4E3E-B394-7A19BBE8326B&names=VALKYRIE_HOLDINGS_BRRR,VALKYRIE_DAILY_BRRR",20245000,0.0002817681479,23.59,477585623.5,,2026-10-01T23:09:53+00:00
 BRRR,2026-10-01,5704.357083,"https://www-api.coinshares.com/api/v2/Widgets?ApiKey=094DA478-140C-4E3E-B394-7A19BBE8326B&names=VALKYRIE_HOLDINGS_BRRR,VALKYRIE_DAILY_BRRR",20245000,0.000281766218,23.86,483035577.5,,2026-10-05T06:04:48+00:00
 BRRR,2026-10-02,5704.23987,"https://www-api.coinshares.com/api/v2/Widgets?ApiKey=094DA478-140C-4E3E-B394-7A19BBE8326B&names=VALKYRIE_HOLDINGS_BRRR,VALKYRIE_DAILY_BRRR",20245000,0.0002817604283,23.71,480037293,,2026-10-06T06:43:39+00:00
@@ -55,6 +56,7 @@ BRRR,2026-10-21,5720.47937,"https://www-api.coinshares.com/api/v2/Widgets?ApiKey
 BRRR,2026-10-22,5720.440189,"https://www-api.coinshares.com/api/v2/Widgets?ApiKey=094DA478-140C-4E3E-B394-7A19BBE8326B&names=VALKYRIE_HOLDINGS_BRRR,VALKYRIE_DAILY_BRRR",20305000,0.0002817256926,22.91,465155062,,2026-10-26T05:10:00+00:00
 BRRR,2026-10-23,5720.322646,"https://www-api.coinshares.com/api/v2/Widgets?ApiKey=094DA478-140C-4E3E-B394-7A19BBE8326B&names=VALKYRIE_HOLDINGS_BRRR,VALKYRIE_DAILY_BRRR",20305000,0.0002817199038,22.88,464669772.5,,2026-10-27T05:24:52+00:00
 BRRR,2026-10-26,5720.283466,"https://www-api.coinshares.com/api/v2/Widgets?ApiKey=094DA478-140C-4E3E-B394-7A19BBE8326B&names=VALKYRIE_HOLDINGS_BRRR,VALKYRIE_DAILY_BRRR",20305000,0.0002817179742,22.51,457059458.5,,2026-10-28T06:04:35+00:00
+BRRR,2026-10-27,5720.244285,"https://www-api.coinshares.com/api/v2/Widgets?ApiKey=094DA478-140C-4E3E-B394-7A19BBE8326B&names=VALKYRIE_HOLDINGS_BRRR,VALKYRIE_DAILY_BRRR",20305000,0.0002817160446,22.71,461067665.5,,2026-10-29T00:26:35+00:00
 BTC,2026-10-01,63086.50524,https://reporting-prod-20231113144948145500000003.s3.amazonaws.com/product-performance/9ba286d6-3067-4153-b430-81d9d7a25696.xlsx,142719963,0.00044203,37.41,5339318841,,2026-10-01T23:09:52+00:00
 BTC,2026-10-02,63258.89694,https://reporting-prod-20231113144948145500000003.s3.amazonaws.com/product-performance/9ba286d6-3067-4153-b430-81d9d7a25696.xlsx,143109963,0.00044203,37.26,5332758612,,2026-10-05T06:04:40+00:00
 BTC,2026-10-05,63258.89694,https://reporting-prod-20231113144948145500000003.s3.amazonaws.com/product-performance/9ba286d6-3067-4153-b430-81d9d7a25696.xlsx,143109963,0.00044203,37.89,5422566652,,2026-10-06T06:43:38+00:00
@@ -74,6 +76,7 @@ BTC,2026-10-22,63130.84365,https://reporting-prod-20231113144948145500000003.s3.
 BTC,2026-10-23,63129.41535,https://reporting-prod-20231113144948145500000003.s3.amazonaws.com/product-performance/9ba286d6-3067-4153-b430-81d9d7a25696.xlsx,142829963,0.00044199,35.88,5125139242,,2026-10-26T05:09:59+00:00
 BTC,2026-10-26,63129.41535,https://reporting-prod-20231113144948145500000003.s3.amazonaws.com/product-performance/9ba286d6-3067-4153-b430-81d9d7a25696.xlsx,142829963,0.00044199,35.31,5043431039,,2026-10-27T05:24:52+00:00
 BTC,2026-10-27,63129.41535,https://reporting-prod-20231113144948145500000003.s3.amazonaws.com/product-performance/9ba286d6-3067-4153-b430-81d9d7a25696.xlsx,142829963,0.00044199,35.67,5095217723,,2026-10-28T06:04:34+00:00
+BTC,2026-10-28,63127.98705,https://reporting-prod-20231113144948145500000003.s3.amazonaws.com/product-performance/9ba286d6-3067-4153-b430-81d9d7a25696.xlsx,142829963,0.00044198,36.03,5146423829,,2026-10-29T00:26:34+00:00
 BTCO,2026-09-30,5102.3317,https://dng-api.invesco.com/cache/v1/accounts/en_US/shareclasses/46091J101 (fundDetails),5130000,0.0009946065692,83.089689,426250105.7,,2026-10-01T23:09:54+00:00
 BTCO,2026-10-05,5051.6119,https://dng-api.invesco.com/cache/v1/accounts/en_US/shareclasses/46091J101 (fundDetails),5080000,0.0009944117913,85.250283,433071438.4,,2026-10-06T06:43:40+00:00
 BTCO,2026-10-06,5051.6119,https://dng-api.invesco.com/cache/v1/accounts/en_US/shareclasses/46091J101 (fundDetails),5080000,0.0009944117913,85.128142,432450963.1,,2026-10-07T06:19:41+00:00
@@ -87,7 +90,7 @@ BTCO,2026-10-20,5001.8965,https://dng-api.invesco.com/cache/v1/accounts/en_US/sh
 BTCO,2026-10-21,5001.8965,https://dng-api.invesco.com/cache/v1/accounts/en_US/shareclasses/46091J101 (fundDetails),5030000,0.0009944128231,83.952569,422281423.6,,2026-10-23T00:26:51+00:00
 BTCO,2026-10-22,5001.8965,https://dng-api.invesco.com/cache/v1/accounts/en_US/shareclasses/46091J101 (fundDetails),5030000,0.0009944128231,80.914252,406998687.6,,2026-10-24T00:26:29+00:00
 BTCO,2026-10-26,5001.8965,https://dng-api.invesco.com/cache/v1/accounts/en_US/shareclasses/46091J101 (fundDetails),5030000,0.0009944128231,79.413499,399449899.3,,2026-10-28T00:26:41+00:00
-BTCO,2026-10-27,5001.8965,https://dng-api.invesco.com/cache/v1/accounts/en_US/shareclasses/46091J101 (fundDetails),5030000,0.0009944128231,80.240545,403609941.7,,2026-10-28T06:04:36+00:00
+BTCO,2026-10-27,5001.8965,https://dng-api.invesco.com/cache/v1/accounts/en_US/shareclasses/46091J101 (fundDetails),5030000,0.0009944128231,80.240545,403609941.7,,2026-10-29T00:26:36+00:00
 EZBC,2026-09-30,5603.61,https://www.franklintempleton.com/api/pds/price-and-performance?op=FundFact,9700000,0.0005776917526,48.36,469074864.9,,2026-10-01T23:09:54+00:00
 EZBC,2026-10-02,5603.61,https://www.franklintempleton.com/api/pds/price-and-performance?op=FundFact,9700000,0.0005776917526,48.61,471483931.8,,2026-10-06T06:43:40+00:00
 EZBC,2026-10-06,5603.61,https://www.franklintempleton.com/api/pds/price-and-performance?op=FundFact,9700000,0.0005776917526,,,,2026-10-07T06:19:40+00:00
@@ -105,8 +108,8 @@ EZBC,2026-10-21,5748,https://www.franklintempleton.com/api/pds/price-and-perform
 EZBC,2026-10-22,5747.15,https://www.franklintempleton.com/api/pds/price-and-performance?op=FundFact,9950000,0.0005776030151,46.96,467269628.9,,2026-10-24T04:55:22+00:00
 EZBC,2026-10-23,5747.15,https://www.franklintempleton.com/api/pds/price-and-performance?op=FundFact,9950000,0.0005776030151,46.91,466782884.5,,2026-10-27T00:26:28+00:00
 EZBC,2026-10-26,5747.15,https://www.franklintempleton.com/api/pds/price-and-performance?op=FundFact,9950000,0.0005776030151,46.14,459139074.6,,2026-10-28T00:26:41+00:00
-EZBC,2026-10-27,5747.15,https://www.franklintempleton.com/api/pds/price-and-performance?op=FundFact,9950000,0.0005776030151,,,,2026-10-28T06:04:35+00:00
-FBTC,2026-09-30,183166.98,https://www.actionsxchangerepository.fidelity.com/ShowDocument/documentPDF.htm?clientId=Fidelity&applicationId=MFL&securityId=315948109&docType=DALY&docFormat=pdf&securityIdType=CUSIP&collectionId=1101373&docName=FBTC_Holdings.pdf&criticalIndicator=Y&pdfReaderStatus=Y,210553476,0.0008699309243,72.80087962,15328478260,,2026-10-28T06:04:32+00:00
+EZBC,2026-10-27,5747.15,https://www.franklintempleton.com/api/pds/price-and-performance?op=FundFact,9950000,0.0005776030151,46.55,463167043.2,,2026-10-29T00:26:35+00:00
+FBTC,2026-09-30,183166.98,https://www.actionsxchangerepository.fidelity.com/ShowDocument/documentPDF.htm?clientId=Fidelity&applicationId=MFL&securityId=315948109&docType=DALY&docFormat=pdf&securityIdType=CUSIP&collectionId=1101373&docName=FBTC_Holdings.pdf&criticalIndicator=Y&pdfReaderStatus=Y,210553476,0.0008699309243,72.80087962,15328478260,,2026-10-29T00:26:33+00:00
 GBTC,2026-10-01,126983.4613,https://reporting-prod-20231113144948145500000003.s3.us-east-1.amazonaws.com/product-performance/672e88c7-dac6-4fcd-9069-18eef01a2c73.xlsx,164350100,0.00077264,65.39,10747069810,,2026-10-01T23:09:52+00:00
 GBTC,2026-10-02,126606.0393,https://reporting-prod-20231113144948145500000003.s3.us-east-1.amazonaws.com/product-performance/672e88c7-dac6-4fcd-9069-18eef01a2c73.xlsx,163870100,0.0007726,65.13,10672954983,,2026-10-05T06:04:40+00:00
 GBTC,2026-10-05,126591.291,https://reporting-prod-20231113144948145500000003.s3.us-east-1.amazonaws.com/product-performance/672e88c7-dac6-4fcd-9069-18eef01a2c73.xlsx,163870100,0.00077251,66.22,10851492158,,2026-10-06T06:43:38+00:00
@@ -126,6 +129,7 @@ GBTC,2026-10-22,125645.9144,https://reporting-prod-20231113144948145500000003.s3
 GBTC,2026-10-23,125278.2198,https://reporting-prod-20231113144948145500000003.s3.us-east-1.amazonaws.com/product-performance/672e88c7-dac6-4fcd-9069-18eef01a2c73.xlsx,162290100,0.00077194,62.67,10170538456,,2026-10-26T05:09:59+00:00
 GBTC,2026-10-26,125261.9908,https://reporting-prod-20231113144948145500000003.s3.us-east-1.amazonaws.com/product-performance/672e88c7-dac6-4fcd-9069-18eef01a2c73.xlsx,162290100,0.00077184,61.66,10007282832,,2026-10-27T05:24:52+00:00
 GBTC,2026-10-27,125257.1221,https://reporting-prod-20231113144948145500000003.s3.us-east-1.amazonaws.com/product-performance/672e88c7-dac6-4fcd-9069-18eef01a2c73.xlsx,162290100,0.00077181,62.29,10109665134,,2026-10-28T06:04:33+00:00
+GBTC,2026-10-28,125252.2534,https://reporting-prod-20231113144948145500000003.s3.us-east-1.amazonaws.com/product-performance/672e88c7-dac6-4fcd-9069-18eef01a2c73.xlsx,162290100,0.00077178,62.92,10210887938,,2026-10-29T00:26:33+00:00
 HODL,2026-09-30,14726,https://www.vaneck.com/Main/HoldingsBlock/GetDataset/?blockId=348327&pageId=243755&ticker=HODL,,,,1232908178,"custody quantity, whole coins",2026-10-01T23:09:53+00:00
 HODL,2026-10-01,14726,https://www.vaneck.com/Main/HoldingsBlock/GetDataset/?blockId=348327&pageId=243755&ticker=HODL,,,,1246944487,"custody quantity, whole coins",2026-10-05T06:04:40+00:00
 HODL,2026-10-02,14681,https://www.vaneck.com/Main/HoldingsBlock/GetDataset/?blockId=348327&pageId=243755&ticker=HODL,,,,1235400678,"custody quantity, whole coins",2026-10-06T06:43:39+00:00
@@ -145,6 +149,7 @@ HODL,2026-10-21,14667,https://www.vaneck.com/Main/HoldingsBlock/GetDataset/?bloc
 HODL,2026-10-22,14667,https://www.vaneck.com/Main/HoldingsBlock/GetDataset/?blockId=348327&pageId=243755&ticker=HODL,,,,1192674495,"custody quantity, whole coins",2026-10-26T05:10:00+00:00
 HODL,2026-10-23,14667,https://www.vaneck.com/Main/HoldingsBlock/GetDataset/?blockId=348327&pageId=243755&ticker=HODL,,,,1191251989,"custody quantity, whole coins",2026-10-27T05:24:52+00:00
 HODL,2026-10-26,14667,https://www.vaneck.com/Main/HoldingsBlock/GetDataset/?blockId=348327&pageId=243755&ticker=HODL,,,,1171846021,"custody quantity, whole coins",2026-10-28T06:04:34+00:00
+HODL,2026-10-27,14667,https://www.vaneck.com/Main/HoldingsBlock/GetDataset/?blockId=348327&pageId=243755&ticker=HODL,,,,1182074756,"custody quantity, whole coins",2026-10-29T00:26:34+00:00
 IBIT,2026-09-30,801033.4265,https://www.ishares.com/us/products/333011/ishares-bitcoin-trust-etf/latest-holdings.csv,1414960000,0.0005661173648,47.393896,67360166462,,2026-10-01T23:09:51+00:00
 IBIT,2026-10-01,803343.0541,https://www.ishares.com/us/products/333011/ishares-bitcoin-trust-etf/latest-holdings.csv,1414760000,0.0005678299175,47.934783,67603744101,,2026-10-05T06:04:39+00:00
 IBIT,2026-10-02,805222.4284,https://www.ishares.com/us/products/333011/ishares-bitcoin-trust-etf/latest-holdings.csv,1418840000,0.0005675216574,47.637156,68685473143,,2026-10-06T06:43:37+00:00
@@ -164,4 +169,5 @@ IBIT,2026-10-21,814262.5975,https://www.ishares.com/us/products/333011/ishares-b
 IBIT,2026-10-22,811138.2604,https://www.ishares.com/us/products/333011/ishares-bitcoin-trust-etf/latest-holdings.csv,1438400000,0.0005639170331,46.023958,66188663047,,2026-10-25T05:06:51+00:00
 IBIT,2026-10-23,809779.8626,https://www.ishares.com/us/products/333011/ishares-bitcoin-trust-etf/latest-holdings.csv,1432880000,0.0005651414372,45.975937,66094604883,,2026-10-27T05:24:51+00:00
 IBIT,2026-10-26,811160.8205,https://www.ishares.com/us/products/333011/ishares-bitcoin-trust-etf/latest-holdings.csv,1430480000,0.0005670549889,45.222799,64995153017,,2026-10-28T06:04:32+00:00
+IBIT,2026-10-27,813039.8471,https://www.ishares.com/us/products/333011/ishares-bitcoin-trust-etf/latest-holdings.csv,1432920000,0.0005674007252,45.619477,65498603913,,2026-10-29T00:26:32+00:00
 MSBT,2026-09-30,10436.00608,https://www.morganstanley.com/im/json/imwebdata/data/product/EF/100761/chart/etfTradeDateHoldingsCurrent.json,36420141.33,0.000286544909,23.977941,873280000,shares = net assets (to $10k) / NAV,2026-10-01T23:09:53+00:00
