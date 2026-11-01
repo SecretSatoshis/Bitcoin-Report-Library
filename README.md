@@ -150,6 +150,10 @@ was missing.
 
 ## Data sources
 
+The [BRK v0.13 migration audit](docs/brk-v0.13-migration.md) records the October 30,
+2026 upstream breaking changes, verified source links, renamed/removed series,
+reconstructed cohorts, current Puell and inflation definitions, and compatibility tests.
+
 | Source | What | Terms |
 |--------|------|-------|
 | [BRK](https://bitview.space) | On-chain series and daily candles | BRK's terms |

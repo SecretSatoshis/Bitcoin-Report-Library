@@ -365,6 +365,8 @@ FUNDAMENTALS_TEMPLATE = {
 BRK_BULK_URL = "https://bitview.space/api/series/bulk"
 
 BRK_METRICS = [
+    # Stable Report Library column names. brk_contract.py resolves the v0.13 wire
+    # names and reconstructs removed open-ended cohorts from disjoint bands.
     "timestamp",
     "price_close",
     "market_cap",
@@ -403,7 +405,8 @@ BRK_METRICS = [
     "addrs_over_100btc_addr_count",
     "addrs_over_1k_btc_addr_count",
     "addrs_over_10k_btc_addr_count",
-    # Unique active addresses per day, published as daily_active_addresses_sending
+    # Trailing-24h mean of per-block active (sending OR receiving) address counts.
+    # The published legacy column is daily_active_addresses_sending, not daily uniques.
     "active_addrs_average_24h",
     # UTXO age band supply
     "utxos_under_1m_old_supply",

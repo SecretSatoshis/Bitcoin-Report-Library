@@ -37,6 +37,7 @@ from data_definitions import (
     YAHOO_SHARE_TICKER_ALIASES,
 )
 from data_validation import OHLC_COLUMNS, assert_ohlc_usable, validate_calendar
+from brk_contract import DAILY_INDEX, request_series, restore_columns
 
 
 # Bridges weekends and short exchange holidays; a source stalled longer becomes NaN.
@@ -97,7 +98,7 @@ def get_brk_ohlc(start: str = "2009-01-03") -> pd.DataFrame:
     monthly candles are built from these in candle_data.
     """
     base_url = "https://bitview.space/api/series"
-    index = "day1"
+    index = DAILY_INDEX
     params = {"start": start}
 
     try:
@@ -602,7 +603,7 @@ def _brk_error_code(response: requests.Response) -> Optional[str]:
 
 def _brk_fetch_csv(
     metrics,
-    index="dateindex",
+    index=DAILY_INDEX,
     start=0,
     timeout=API_TIMEOUT,
     verbose=False,
@@ -695,7 +696,7 @@ def _brk_fetch_csv(
 
 def _brk_fetch_csv_resilient(
     metrics,
-    index="dateindex",
+    index=DAILY_INDEX,
     start=0,
     timeout=API_TIMEOUT,
     verbose=False,
@@ -768,7 +769,7 @@ def _brk_fetch_csv_resilient(
 
 def get_brk_onchain(
     start_date: str,
-    index: str = "dateindex",
+    index: str = DAILY_INDEX,
     verbose: bool = False,
 ) -> pd.DataFrame:
     """Every BRK_METRICS series and the BRK_DAILY_FLOWS from `start_date`, with a `date`
@@ -778,7 +779,7 @@ def get_brk_onchain(
     first day has a flow. The partial current UTC day is included; main.py applies the
     report-date cutoff.
     """
-    metric_list = BRK_METRICS[:]
+    metric_list = request_series(BRK_METRICS)
     if "timestamp" not in metric_list:
         metric_list = ["timestamp"] + metric_list
 
@@ -842,6 +843,7 @@ def get_brk_onchain(
     frame.index = pd.to_datetime(frame.index.astype(float).astype(int), unit="s")
     frame = frame.sort_index().reindex(columns=ordered_cols[1:])
     frame = frame.apply(pd.to_numeric, errors="coerce")
+    frame = restore_columns(frame, BRK_METRICS)
     frame = _add_daily_flows(frame)
     frame = frame.loc[frame.index >= pd.to_datetime(start_date)]
     frame = _blank_pre_price_placeholders(frame)
