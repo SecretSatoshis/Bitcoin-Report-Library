@@ -1,21 +1,21 @@
 Section,Metric,Current Value,7 Days Ago,7 Day Change (%),Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday,52W Low,52W High
-Network Performance,Total Address Count,"57,212,089","57,206,011",0.0106247576,"57,212,089",,,,,,,"54,668,441","57,242,676"
-Network Performance,Address Count > $10,"39,077,574","39,067,344",0.02618555282,"39,077,574",,,,,,,"37,715,415","39,186,262"
-Network Performance,Active Addresses,"8,705","6,142",41.72492151,"8,705",,,,,,,"4,300","10,240"
-Network Performance,Supply Held 1+ Year %,64.02%,63.70%,0.4972293296,64.02%,,,,,,,58.37%,64.04%
-Network Performance,Transaction Count,"381,886","822,379",-53.56325976,"381,886",,,,,,,"289,144","913,196"
-Network Performance,Transaction Volume,"$97,835,212,924","$96,591,332,176",1.287776781,"$97,835,212,924",,,,,,,"$27,382,450,833","$136,693,513,804"
-Network Performance,Transaction Fee USD,"$222,390","$200,314",11.02048466,"$222,390",,,,,,,"$108,207","$577,018"
-Network Security,Hash Rate,936.66 EH/s,"1,132.08 EH/s",-17.26247781,936.66 EH/s,,,,,,,732.41 EH/s,"1,248.96 EH/s"
-Network Security,Network Difficulty,148.36T,140.58T,5.539201493,148.36T,,,,,,,124.93T,155.97T
-Network Security,Miner Revenue,"$31,026,306","$40,652,806",-23.67979285,"$31,026,306",,,,,,,"$22,731,098","$50,267,940"
-Network Security,Fee % Of Reward,0.72%,0.49%,45.76629683,0.72%,,,,,,,0.30%,1.39%
-Network Economics,Bitcoin Supply,"20,107,014","20,103,873",0.01562201473,"20,107,014",,,,,,,"19,943,889","20,107,014"
-Network Economics,% Supply Issued,95.75%,95.73%,0.01562197195,95.75%,,,,,,,94.97%,95.75%
-Network Economics,Bitcoin Mined Per Day,397,506,-21.60493827,397,,,,,,,306,616
-Network Economics,Annual Inflation Rate,0.82%,0.82%,-0.0122435736,0.82%,,,,,,,0.82%,0.82%
-Network Economics,Velocity,14.83,14.26,4.023853204,14.83,,,,,,,11.77,20.71
-Network Valuation,Market Cap,"$1,542,907,869,433","$1,605,440,815,714",-3.895063939,"$1,542,907,869,433",,,,,,,"$1,170,266,627,064","$2,117,051,759,243"
-Network Valuation,Bitcoin Price,"$76,735","$79,857",-3.910075085,"$76,735",,,,,,,"$58,367","$106,150"
-Network Valuation,Realized Price,"$54,001","$54,059",-0.1073449233,"$54,001",,,,,,,"$52,631","$56,413"
-Network Valuation,Thermocap Price,"$4,967","$4,955",0.2340473425,"$4,967",,,,,,,"$4,375","$4,967"
+Network Performance,Total Address Count,"57,217,344","57,212,704",0.008110086879,"57,212,089","57,217,344",,,,,,"54,668,441","57,242,676"
+Network Performance,Address Count > $10,"39,087,436","39,068,286",0.04901673956,"39,077,574","39,087,436",,,,,,"37,715,415","39,186,262"
+Network Performance,Active Addresses,"7,678","6,279",22.28979026,"8,705","7,678",,,,,,"4,300","10,240"
+Network Performance,Supply Held 1+ Year %,63.98%,63.73%,0.389078159,64.02%,63.98%,,,,,,58.37%,64.04%
+Network Performance,Transaction Count,"619,285","753,868",-17.85232959,"381,886","619,285",,,,,,"289,144","913,196"
+Network Performance,Transaction Volume,"$92,193,219,886","$70,548,383,816",30.68083902,"$97,835,212,924","$92,193,219,886",,,,,,"$27,382,450,833","$136,693,513,804"
+Network Performance,Transaction Fee USD,"$195,143","$183,884",6.122990027,"$222,390","$195,143",,,,,,"$108,207","$577,018"
+Network Security,Hash Rate,"1,039.91 EH/s","1,111.12 EH/s",-6.408632583,936.66 EH/s,"1,039.91 EH/s",,,,,,732.41 EH/s,"1,248.96 EH/s"
+Network Security,Network Difficulty,148.36T,140.58T,5.539201493,148.36T,148.36T,,,,,,124.93T,155.97T
+Network Security,Miner Revenue,"$33,924,859","$39,664,979",-14.47150611,"$31,026,306","$33,924,859",,,,,,"$22,731,098","$50,267,940"
+Network Security,Fee % Of Reward,0.58%,0.46%,24.17620658,0.72%,0.58%,,,,,,0.30%,1.39%
+Network Economics,Bitcoin Supply,"20,107,451","20,104,367",0.0153418411,"20,107,014","20,107,451",,,,,,"19,944,298","20,107,451"
+Network Economics,% Supply Issued,95.75%,95.74%,0.01534180578,95.75%,95.75%,,,,,,94.97%,95.75%
+Network Economics,Bitcoin Mined Per Day,438,494,-11.39240506,397,438,,,,,,306,616
+Network Economics,Annual Inflation Rate,0.82%,0.82%,-0.0122435736,0.82%,0.82%,,,,,,0.82%,0.82%
+Network Economics,Velocity,14.65,14.12,3.810555529,14.83,14.65,,,,,,11.88,20.71
+Network Valuation,Market Cap,"$1,561,015,626,569","$1,620,065,963,294",-3.644934099,"$1,542,907,869,433","$1,561,015,626,569",,,,,,"$1,170,266,627,064","$2,112,426,917,991"
+Network Valuation,Bitcoin Price,"$77,634","$80,583",-3.659714438,"$76,735","$77,634",,,,,,"$58,367","$105,903"
+Network Valuation,Realized Price,"$53,970","$54,060",-0.1666477988,"$54,001","$53,970",,,,,,"$52,631","$56,413"
+Network Valuation,Thermocap Price,"$4,968","$4,957",0.2284696048,"$4,967","$4,968",,,,,,"$4,377","$4,968"
