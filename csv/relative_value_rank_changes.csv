@@ -1,161 +1,161 @@
 Asset,Timeframe,Current Date,Baseline Date,Current Rank,Previous Rank,Change,Status
-Bitcoin,daily,2026-11-06,2026-11-05,10,10,0,available
-Switzerland M0,daily,2026-11-06,2026-11-05,19,19,0,available
-UK M0,daily,2026-11-06,2026-11-05,14,14,0,available
-US M0,daily,2026-11-06,2026-11-05,2,2,0,available
-Total Silver Market,daily,2026-11-06,2026-11-05,8,8,0,available
-Total Gold Market,daily,2026-11-06,2026-11-05,1,1,0,available
-Apple,daily,2026-11-06,2026-11-05,3,3,0,available
-Amazon,daily,2026-11-06,2026-11-05,5,5,0,available
-Meta,daily,2026-11-06,2026-11-05,9,9,0,available
-NVIDIA,daily,2026-11-06,2026-11-05,4,4,0,available
-Broadcom,daily,2026-11-06,2026-11-05,12,11,-1,available
-Tesla,daily,2026-11-06,2026-11-05,11,12,1,available
-Micron,daily,2026-11-06,2026-11-05,18,18,0,available
-TSMC,daily,2026-11-06,2026-11-05,6,6,0,available
-SpaceX,daily,2026-11-06,2026-11-05,7,7,0,available
-Saudi Aramco,daily,2026-11-06,2026-11-05,,,,missing_both
-Samsung Electronics,daily,2026-11-06,2026-11-05,15,15,0,available
-Berkshire Hathaway Class B,daily,2026-11-06,2026-11-05,13,13,0,available
-JPMorgan,daily,2026-11-06,2026-11-05,16,16,0,available
-Visa,daily,2026-11-06,2026-11-05,17,17,0,available
-Bitcoin,wtd,2026-11-06,2026-11-01,10,10,0,available
-Switzerland M0,wtd,2026-11-06,2026-11-01,19,19,0,available
-UK M0,wtd,2026-11-06,2026-11-01,14,15,1,available
-US M0,wtd,2026-11-06,2026-11-01,2,2,0,available
-Total Silver Market,wtd,2026-11-06,2026-11-01,8,12,4,available
-Total Gold Market,wtd,2026-11-06,2026-11-01,1,1,0,available
-Apple,wtd,2026-11-06,2026-11-01,3,3,0,available
-Amazon,wtd,2026-11-06,2026-11-01,5,5,0,available
-Meta,wtd,2026-11-06,2026-11-01,9,9,0,available
-NVIDIA,wtd,2026-11-06,2026-11-01,4,4,0,available
-Broadcom,wtd,2026-11-06,2026-11-01,12,11,-1,available
-Tesla,wtd,2026-11-06,2026-11-01,11,8,-3,available
-Micron,wtd,2026-11-06,2026-11-01,18,16,-2,available
-TSMC,wtd,2026-11-06,2026-11-01,6,6,0,available
-SpaceX,wtd,2026-11-06,2026-11-01,7,7,0,available
-Saudi Aramco,wtd,2026-11-06,2026-11-01,,,,missing_both
-Samsung Electronics,wtd,2026-11-06,2026-11-01,15,14,-1,available
-Berkshire Hathaway Class B,wtd,2026-11-06,2026-11-01,13,13,0,available
-JPMorgan,wtd,2026-11-06,2026-11-01,16,17,1,available
-Visa,wtd,2026-11-06,2026-11-01,17,18,1,available
-Bitcoin,qtd,2026-11-06,2026-09-30,10,12,2,available
-Switzerland M0,qtd,2026-11-06,2026-09-30,19,20,1,available
-UK M0,qtd,2026-11-06,2026-09-30,14,16,2,available
-US M0,qtd,2026-11-06,2026-09-30,2,2,0,available
-Total Silver Market,qtd,2026-11-06,2026-09-30,8,8,0,available
-Total Gold Market,qtd,2026-11-06,2026-09-30,1,1,0,available
-Apple,qtd,2026-11-06,2026-09-30,3,4,1,available
-Amazon,qtd,2026-11-06,2026-09-30,5,5,0,available
-Meta,qtd,2026-11-06,2026-09-30,9,9,0,available
-NVIDIA,qtd,2026-11-06,2026-09-30,4,3,-1,available
-Broadcom,qtd,2026-11-06,2026-09-30,12,10,-2,available
-Tesla,qtd,2026-11-06,2026-09-30,11,13,2,available
-Micron,qtd,2026-11-06,2026-09-30,18,15,-3,available
-TSMC,qtd,2026-11-06,2026-09-30,6,6,0,available
-SpaceX,qtd,2026-11-06,2026-09-30,7,7,0,available
-Saudi Aramco,qtd,2026-11-06,2026-09-30,,11,,missing_current
-Samsung Electronics,qtd,2026-11-06,2026-09-30,15,14,-1,available
-Berkshire Hathaway Class B,qtd,2026-11-06,2026-09-30,13,17,4,available
-JPMorgan,qtd,2026-11-06,2026-09-30,16,18,2,available
-Visa,qtd,2026-11-06,2026-09-30,17,19,2,available
-Bitcoin,ytd,2026-11-06,2025-12-31,10,7,-3,available
-Switzerland M0,ytd,2026-11-06,2025-12-31,19,17,-2,available
-UK M0,ytd,2026-11-06,2025-12-31,14,13,-1,available
-US M0,ytd,2026-11-06,2025-12-31,2,2,0,available
-Total Silver Market,ytd,2026-11-06,2025-12-31,8,6,-2,available
-Total Gold Market,ytd,2026-11-06,2025-12-31,1,1,0,available
-Apple,ytd,2026-11-06,2025-12-31,3,4,1,available
-Amazon,ytd,2026-11-06,2025-12-31,5,5,0,available
-Meta,ytd,2026-11-06,2025-12-31,9,8,-1,available
-NVIDIA,ytd,2026-11-06,2025-12-31,4,3,-1,available
-Broadcom,ytd,2026-11-06,2025-12-31,12,9,-3,available
-Tesla,ytd,2026-11-06,2025-12-31,11,12,1,available
-Micron,ytd,2026-11-06,2025-12-31,18,19,1,available
-TSMC,ytd,2026-11-06,2025-12-31,6,10,4,available
-SpaceX,ytd,2026-11-06,2025-12-31,7,,,missing_baseline
-Saudi Aramco,ytd,2026-11-06,2025-12-31,,11,,missing_current
-Samsung Electronics,ytd,2026-11-06,2025-12-31,15,18,3,available
-Berkshire Hathaway Class B,ytd,2026-11-06,2025-12-31,13,14,1,available
-JPMorgan,ytd,2026-11-06,2025-12-31,16,15,-1,available
-Visa,ytd,2026-11-06,2025-12-31,17,16,-1,available
-Bitcoin,7d,2026-11-06,2026-10-30,10,12,2,available
-Switzerland M0,7d,2026-11-06,2026-10-30,19,20,1,available
-UK M0,7d,2026-11-06,2026-10-30,14,16,2,available
-US M0,7d,2026-11-06,2026-10-30,2,2,0,available
-Total Silver Market,7d,2026-11-06,2026-10-30,8,13,5,available
-Total Gold Market,7d,2026-11-06,2026-10-30,1,1,0,available
-Apple,7d,2026-11-06,2026-10-30,3,3,0,available
-Amazon,7d,2026-11-06,2026-10-30,5,5,0,available
-Meta,7d,2026-11-06,2026-10-30,9,10,1,available
-NVIDIA,7d,2026-11-06,2026-10-30,4,4,0,available
-Broadcom,7d,2026-11-06,2026-10-30,12,11,-1,available
-Tesla,7d,2026-11-06,2026-10-30,11,9,-2,available
-Micron,7d,2026-11-06,2026-10-30,18,17,-1,available
-TSMC,7d,2026-11-06,2026-10-30,6,6,0,available
-SpaceX,7d,2026-11-06,2026-10-30,7,7,0,available
-Saudi Aramco,7d,2026-11-06,2026-10-30,,8,,missing_current
-Samsung Electronics,7d,2026-11-06,2026-10-30,15,15,0,available
-Berkshire Hathaway Class B,7d,2026-11-06,2026-10-30,13,14,1,available
-JPMorgan,7d,2026-11-06,2026-10-30,16,18,2,available
-Visa,7d,2026-11-06,2026-10-30,17,19,2,available
-Bitcoin,30d,2026-11-06,2026-10-07,10,12,2,available
-Switzerland M0,30d,2026-11-06,2026-10-07,19,20,1,available
-UK M0,30d,2026-11-06,2026-10-07,14,16,2,available
-US M0,30d,2026-11-06,2026-10-07,2,3,1,available
-Total Silver Market,30d,2026-11-06,2026-10-07,8,8,0,available
-Total Gold Market,30d,2026-11-06,2026-10-07,1,1,0,available
-Apple,30d,2026-11-06,2026-10-07,3,4,1,available
-Amazon,30d,2026-11-06,2026-10-07,5,5,0,available
-Meta,30d,2026-11-06,2026-10-07,9,9,0,available
-NVIDIA,30d,2026-11-06,2026-10-07,4,2,-2,available
-Broadcom,30d,2026-11-06,2026-10-07,12,10,-2,available
-Tesla,30d,2026-11-06,2026-10-07,11,13,2,available
-Micron,30d,2026-11-06,2026-10-07,18,15,-3,available
-TSMC,30d,2026-11-06,2026-10-07,6,6,0,available
-SpaceX,30d,2026-11-06,2026-10-07,7,7,0,available
-Saudi Aramco,30d,2026-11-06,2026-10-07,,11,,missing_current
-Samsung Electronics,30d,2026-11-06,2026-10-07,15,14,-1,available
-Berkshire Hathaway Class B,30d,2026-11-06,2026-10-07,13,17,4,available
-JPMorgan,30d,2026-11-06,2026-10-07,16,18,2,available
-Visa,30d,2026-11-06,2026-10-07,17,19,2,available
-Bitcoin,90d,2026-11-06,2026-08-08,10,13,3,available
-Switzerland M0,90d,2026-11-06,2026-08-08,19,20,1,available
-UK M0,90d,2026-11-06,2026-08-08,14,15,1,available
-US M0,90d,2026-11-06,2026-08-08,2,2,0,available
-Total Silver Market,90d,2026-11-06,2026-08-08,8,8,0,available
-Total Gold Market,90d,2026-11-06,2026-08-08,1,1,0,available
-Apple,90d,2026-11-06,2026-08-08,3,4,1,available
-Amazon,90d,2026-11-06,2026-08-08,5,5,0,available
-Meta,90d,2026-11-06,2026-08-08,9,11,2,available
-NVIDIA,90d,2026-11-06,2026-08-08,4,3,-1,available
-Broadcom,90d,2026-11-06,2026-08-08,12,7,-5,available
-Tesla,90d,2026-11-06,2026-08-08,11,12,1,available
-Micron,90d,2026-11-06,2026-08-08,18,17,-1,available
-TSMC,90d,2026-11-06,2026-08-08,6,6,0,available
-SpaceX,90d,2026-11-06,2026-08-08,7,9,2,available
-Saudi Aramco,90d,2026-11-06,2026-08-08,,10,,missing_current
-Samsung Electronics,90d,2026-11-06,2026-08-08,15,16,1,available
-Berkshire Hathaway Class B,90d,2026-11-06,2026-08-08,13,14,1,available
-JPMorgan,90d,2026-11-06,2026-08-08,16,18,2,available
-Visa,90d,2026-11-06,2026-08-08,17,19,2,available
-Bitcoin,365d,2026-11-06,2025-11-06,10,6,-4,available
-Switzerland M0,365d,2026-11-06,2025-11-06,19,17,-2,available
-UK M0,365d,2026-11-06,2025-11-06,14,13,-1,available
-US M0,365d,2026-11-06,2025-11-06,2,2,0,available
-Total Silver Market,365d,2026-11-06,2025-11-06,8,12,4,available
-Total Gold Market,365d,2026-11-06,2025-11-06,1,1,0,available
-Apple,365d,2026-11-06,2025-11-06,3,4,1,available
-Amazon,365d,2026-11-06,2025-11-06,5,5,0,available
-Meta,365d,2026-11-06,2025-11-06,9,9,0,available
-NVIDIA,365d,2026-11-06,2025-11-06,4,3,-1,available
-Broadcom,365d,2026-11-06,2025-11-06,12,8,-4,available
-Tesla,365d,2026-11-06,2025-11-06,11,11,0,available
-Micron,365d,2026-11-06,2025-11-06,18,19,1,available
-TSMC,365d,2026-11-06,2025-11-06,6,10,4,available
-SpaceX,365d,2026-11-06,2025-11-06,7,,,missing_baseline
-Saudi Aramco,365d,2026-11-06,2025-11-06,,7,,missing_current
-Samsung Electronics,365d,2026-11-06,2025-11-06,15,18,3,available
-Berkshire Hathaway Class B,365d,2026-11-06,2025-11-06,13,14,1,available
-JPMorgan,365d,2026-11-06,2025-11-06,16,15,-1,available
-Visa,365d,2026-11-06,2025-11-06,17,16,-1,available
+Bitcoin,daily,2026-11-07,2026-11-06,10,10,0,available
+Switzerland M0,daily,2026-11-07,2026-11-06,19,19,0,available
+UK M0,daily,2026-11-07,2026-11-06,14,14,0,available
+US M0,daily,2026-11-07,2026-11-06,2,2,0,available
+Total Silver Market,daily,2026-11-07,2026-11-06,8,8,0,available
+Total Gold Market,daily,2026-11-07,2026-11-06,1,1,0,available
+Apple,daily,2026-11-07,2026-11-06,3,3,0,available
+Amazon,daily,2026-11-07,2026-11-06,5,5,0,available
+Meta,daily,2026-11-07,2026-11-06,9,9,0,available
+NVIDIA,daily,2026-11-07,2026-11-06,4,4,0,available
+Broadcom,daily,2026-11-07,2026-11-06,12,12,0,available
+Tesla,daily,2026-11-07,2026-11-06,11,11,0,available
+Micron,daily,2026-11-07,2026-11-06,18,18,0,available
+TSMC,daily,2026-11-07,2026-11-06,6,6,0,available
+SpaceX,daily,2026-11-07,2026-11-06,7,7,0,available
+Saudi Aramco,daily,2026-11-07,2026-11-06,,,,missing_both
+Samsung Electronics,daily,2026-11-07,2026-11-06,15,15,0,available
+Berkshire Hathaway Class B,daily,2026-11-07,2026-11-06,13,13,0,available
+JPMorgan,daily,2026-11-07,2026-11-06,16,16,0,available
+Visa,daily,2026-11-07,2026-11-06,17,17,0,available
+Bitcoin,wtd,2026-11-07,2026-11-01,10,10,0,available
+Switzerland M0,wtd,2026-11-07,2026-11-01,19,19,0,available
+UK M0,wtd,2026-11-07,2026-11-01,14,15,1,available
+US M0,wtd,2026-11-07,2026-11-01,2,2,0,available
+Total Silver Market,wtd,2026-11-07,2026-11-01,8,12,4,available
+Total Gold Market,wtd,2026-11-07,2026-11-01,1,1,0,available
+Apple,wtd,2026-11-07,2026-11-01,3,3,0,available
+Amazon,wtd,2026-11-07,2026-11-01,5,5,0,available
+Meta,wtd,2026-11-07,2026-11-01,9,9,0,available
+NVIDIA,wtd,2026-11-07,2026-11-01,4,4,0,available
+Broadcom,wtd,2026-11-07,2026-11-01,12,11,-1,available
+Tesla,wtd,2026-11-07,2026-11-01,11,8,-3,available
+Micron,wtd,2026-11-07,2026-11-01,18,16,-2,available
+TSMC,wtd,2026-11-07,2026-11-01,6,6,0,available
+SpaceX,wtd,2026-11-07,2026-11-01,7,7,0,available
+Saudi Aramco,wtd,2026-11-07,2026-11-01,,,,missing_both
+Samsung Electronics,wtd,2026-11-07,2026-11-01,15,14,-1,available
+Berkshire Hathaway Class B,wtd,2026-11-07,2026-11-01,13,13,0,available
+JPMorgan,wtd,2026-11-07,2026-11-01,16,17,1,available
+Visa,wtd,2026-11-07,2026-11-01,17,18,1,available
+Bitcoin,qtd,2026-11-07,2026-09-30,10,12,2,available
+Switzerland M0,qtd,2026-11-07,2026-09-30,19,20,1,available
+UK M0,qtd,2026-11-07,2026-09-30,14,16,2,available
+US M0,qtd,2026-11-07,2026-09-30,2,2,0,available
+Total Silver Market,qtd,2026-11-07,2026-09-30,8,8,0,available
+Total Gold Market,qtd,2026-11-07,2026-09-30,1,1,0,available
+Apple,qtd,2026-11-07,2026-09-30,3,4,1,available
+Amazon,qtd,2026-11-07,2026-09-30,5,5,0,available
+Meta,qtd,2026-11-07,2026-09-30,9,9,0,available
+NVIDIA,qtd,2026-11-07,2026-09-30,4,3,-1,available
+Broadcom,qtd,2026-11-07,2026-09-30,12,10,-2,available
+Tesla,qtd,2026-11-07,2026-09-30,11,13,2,available
+Micron,qtd,2026-11-07,2026-09-30,18,15,-3,available
+TSMC,qtd,2026-11-07,2026-09-30,6,6,0,available
+SpaceX,qtd,2026-11-07,2026-09-30,7,7,0,available
+Saudi Aramco,qtd,2026-11-07,2026-09-30,,11,,missing_current
+Samsung Electronics,qtd,2026-11-07,2026-09-30,15,14,-1,available
+Berkshire Hathaway Class B,qtd,2026-11-07,2026-09-30,13,17,4,available
+JPMorgan,qtd,2026-11-07,2026-09-30,16,18,2,available
+Visa,qtd,2026-11-07,2026-09-30,17,19,2,available
+Bitcoin,ytd,2026-11-07,2025-12-31,10,7,-3,available
+Switzerland M0,ytd,2026-11-07,2025-12-31,19,17,-2,available
+UK M0,ytd,2026-11-07,2025-12-31,14,13,-1,available
+US M0,ytd,2026-11-07,2025-12-31,2,2,0,available
+Total Silver Market,ytd,2026-11-07,2025-12-31,8,6,-2,available
+Total Gold Market,ytd,2026-11-07,2025-12-31,1,1,0,available
+Apple,ytd,2026-11-07,2025-12-31,3,4,1,available
+Amazon,ytd,2026-11-07,2025-12-31,5,5,0,available
+Meta,ytd,2026-11-07,2025-12-31,9,8,-1,available
+NVIDIA,ytd,2026-11-07,2025-12-31,4,3,-1,available
+Broadcom,ytd,2026-11-07,2025-12-31,12,9,-3,available
+Tesla,ytd,2026-11-07,2025-12-31,11,12,1,available
+Micron,ytd,2026-11-07,2025-12-31,18,19,1,available
+TSMC,ytd,2026-11-07,2025-12-31,6,10,4,available
+SpaceX,ytd,2026-11-07,2025-12-31,7,,,missing_baseline
+Saudi Aramco,ytd,2026-11-07,2025-12-31,,11,,missing_current
+Samsung Electronics,ytd,2026-11-07,2025-12-31,15,18,3,available
+Berkshire Hathaway Class B,ytd,2026-11-07,2025-12-31,13,14,1,available
+JPMorgan,ytd,2026-11-07,2025-12-31,16,15,-1,available
+Visa,ytd,2026-11-07,2025-12-31,17,16,-1,available
+Bitcoin,7d,2026-11-07,2026-10-31,10,10,0,available
+Switzerland M0,7d,2026-11-07,2026-10-31,19,19,0,available
+UK M0,7d,2026-11-07,2026-10-31,14,15,1,available
+US M0,7d,2026-11-07,2026-10-31,2,2,0,available
+Total Silver Market,7d,2026-11-07,2026-10-31,8,12,4,available
+Total Gold Market,7d,2026-11-07,2026-10-31,1,1,0,available
+Apple,7d,2026-11-07,2026-10-31,3,3,0,available
+Amazon,7d,2026-11-07,2026-10-31,5,5,0,available
+Meta,7d,2026-11-07,2026-10-31,9,9,0,available
+NVIDIA,7d,2026-11-07,2026-10-31,4,4,0,available
+Broadcom,7d,2026-11-07,2026-10-31,12,11,-1,available
+Tesla,7d,2026-11-07,2026-10-31,11,8,-3,available
+Micron,7d,2026-11-07,2026-10-31,18,16,-2,available
+TSMC,7d,2026-11-07,2026-10-31,6,6,0,available
+SpaceX,7d,2026-11-07,2026-10-31,7,7,0,available
+Saudi Aramco,7d,2026-11-07,2026-10-31,,,,missing_both
+Samsung Electronics,7d,2026-11-07,2026-10-31,15,14,-1,available
+Berkshire Hathaway Class B,7d,2026-11-07,2026-10-31,13,13,0,available
+JPMorgan,7d,2026-11-07,2026-10-31,16,17,1,available
+Visa,7d,2026-11-07,2026-10-31,17,18,1,available
+Bitcoin,30d,2026-11-07,2026-10-08,10,12,2,available
+Switzerland M0,30d,2026-11-07,2026-10-08,19,20,1,available
+UK M0,30d,2026-11-07,2026-10-08,14,17,3,available
+US M0,30d,2026-11-07,2026-10-08,2,2,0,available
+Total Silver Market,30d,2026-11-07,2026-10-08,8,9,1,available
+Total Gold Market,30d,2026-11-07,2026-10-08,1,1,0,available
+Apple,30d,2026-11-07,2026-10-08,3,4,1,available
+Amazon,30d,2026-11-07,2026-10-08,5,5,0,available
+Meta,30d,2026-11-07,2026-10-08,9,8,-1,available
+NVIDIA,30d,2026-11-07,2026-10-08,4,3,-1,available
+Broadcom,30d,2026-11-07,2026-10-08,12,10,-2,available
+Tesla,30d,2026-11-07,2026-10-08,11,13,2,available
+Micron,30d,2026-11-07,2026-10-08,18,15,-3,available
+TSMC,30d,2026-11-07,2026-10-08,6,6,0,available
+SpaceX,30d,2026-11-07,2026-10-08,7,7,0,available
+Saudi Aramco,30d,2026-11-07,2026-10-08,,11,,missing_current
+Samsung Electronics,30d,2026-11-07,2026-10-08,15,14,-1,available
+Berkshire Hathaway Class B,30d,2026-11-07,2026-10-08,13,16,3,available
+JPMorgan,30d,2026-11-07,2026-10-08,16,18,2,available
+Visa,30d,2026-11-07,2026-10-08,17,19,2,available
+Bitcoin,90d,2026-11-07,2026-08-09,10,12,2,available
+Switzerland M0,90d,2026-11-07,2026-08-09,19,20,1,available
+UK M0,90d,2026-11-07,2026-08-09,14,15,1,available
+US M0,90d,2026-11-07,2026-08-09,2,2,0,available
+Total Silver Market,90d,2026-11-07,2026-08-09,8,8,0,available
+Total Gold Market,90d,2026-11-07,2026-08-09,1,1,0,available
+Apple,90d,2026-11-07,2026-08-09,3,4,1,available
+Amazon,90d,2026-11-07,2026-08-09,5,5,0,available
+Meta,90d,2026-11-07,2026-08-09,9,11,2,available
+NVIDIA,90d,2026-11-07,2026-08-09,4,3,-1,available
+Broadcom,90d,2026-11-07,2026-08-09,12,7,-5,available
+Tesla,90d,2026-11-07,2026-08-09,11,13,2,available
+Micron,90d,2026-11-07,2026-08-09,18,17,-1,available
+TSMC,90d,2026-11-07,2026-08-09,6,6,0,available
+SpaceX,90d,2026-11-07,2026-08-09,7,10,3,available
+Saudi Aramco,90d,2026-11-07,2026-08-09,,9,,missing_current
+Samsung Electronics,90d,2026-11-07,2026-08-09,15,16,1,available
+Berkshire Hathaway Class B,90d,2026-11-07,2026-08-09,13,14,1,available
+JPMorgan,90d,2026-11-07,2026-08-09,16,18,2,available
+Visa,90d,2026-11-07,2026-08-09,17,19,2,available
+Bitcoin,365d,2026-11-07,2025-11-07,10,6,-4,available
+Switzerland M0,365d,2026-11-07,2025-11-07,19,17,-2,available
+UK M0,365d,2026-11-07,2025-11-07,14,13,-1,available
+US M0,365d,2026-11-07,2025-11-07,2,2,0,available
+Total Silver Market,365d,2026-11-07,2025-11-07,8,11,3,available
+Total Gold Market,365d,2026-11-07,2025-11-07,1,1,0,available
+Apple,365d,2026-11-07,2025-11-07,3,4,1,available
+Amazon,365d,2026-11-07,2025-11-07,5,5,0,available
+Meta,365d,2026-11-07,2025-11-07,9,9,0,available
+NVIDIA,365d,2026-11-07,2025-11-07,4,3,-1,available
+Broadcom,365d,2026-11-07,2025-11-07,12,8,-4,available
+Tesla,365d,2026-11-07,2025-11-07,11,12,1,available
+Micron,365d,2026-11-07,2025-11-07,18,19,1,available
+TSMC,365d,2026-11-07,2025-11-07,6,10,4,available
+SpaceX,365d,2026-11-07,2025-11-07,7,,,missing_baseline
+Saudi Aramco,365d,2026-11-07,2025-11-07,,7,,missing_current
+Samsung Electronics,365d,2026-11-07,2025-11-07,15,18,3,available
+Berkshire Hathaway Class B,365d,2026-11-07,2025-11-07,13,14,1,available
+JPMorgan,365d,2026-11-07,2025-11-07,16,15,-1,available
+Visa,365d,2026-11-07,2025-11-07,17,16,-1,available
