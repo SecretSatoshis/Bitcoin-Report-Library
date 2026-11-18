@@ -110,7 +110,7 @@ test("the new matrix is loaded only from its release manifest and hash checked",
   }
 });
 
-test("frozen release: all seven price series, ranges, events and candle payloads agree with the reference", () => {
+test("frozen release: all eight price series, ranges, events and candle payloads agree with the reference", () => {
   const p = data().charts[0];
   for (const key of [
     "x",

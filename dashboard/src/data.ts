@@ -383,6 +383,7 @@ const fields: Record<string, { required: string[]; numeric: string[] }> = {
       "STH Realized Price",
       "3x Realized Price",
       "3-month MA",
+      "200-day MA",
       "1-year MA",
       "200-week MA",
     ],
@@ -392,6 +393,7 @@ const fields: Record<string, { required: string[]; numeric: string[] }> = {
       "STH Realized Price",
       "3x Realized Price",
       "3-month MA",
+      "200-day MA",
       "1-year MA",
       "200-week MA",
     ],
@@ -532,6 +534,7 @@ export function pricePayload(
     ["sth_realized_price", "STH Realized Price", "STH Realized Price"],
     ["realizedcap_multiple_3", "3x Realized Price", "3× Realized Price"],
     ["90_day_ma_price_close", "3-month MA", "3-month MA"],
+    ["200_day_ma_price_close", "200-day MA", "200-day MA"],
     ["365_day_ma_price_close", "1-year MA", "1-year MA"],
     ["200_week_ma_price_close", "200-week MA", "200-week MA"],
   ];

@@ -65,7 +65,7 @@ ONCHAIN_PRICE_MODEL_COLUMNS = {
     "lth_realized_price": "LTH Realized Price",
     "realized_price": "Realized Price",
     # The master release's price moving averages, so every chart reads one
-    # calculation (metrics.py). The dashboard draws 3-month, 1-year and 200-week.
+    # calculation (metrics.py). The dashboard draws 3-month, 200-day, 1-year and 200-week.
     "50_day_ma_price_close": "50-day MA",
     "90_day_ma_price_close": "3-month MA",
     "200_day_ma_price_close": "200-day MA",
