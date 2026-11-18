@@ -71,6 +71,18 @@ class CustomOnchainContractTests(unittest.TestCase):
             )
             self.assertGreater(result[f"volatility_{window}d"].iloc[-1], 30)
 
+    def test_price_moving_averages_cover_each_full_window(self):
+        frame = self.source_frame()
+        frame["price_close"] = np.arange(len(frame), dtype=float)
+        result = metrics.calculate_custom_on_chain_metrics(frame)
+        for days in (7, 50, 90, 200, 365):
+            column = result[f"{days}_day_ma_price_close"]
+            self.assertTrue(pd.isna(column.iloc[days - 2]))
+            self.assertEqual(column.iloc[days - 1], np.arange(days).mean())
+            self.assertEqual(
+                column.iloc[-1], np.arange(len(frame) - days, len(frame)).mean()
+            )
+
 
 class AverageCapNetworkAgeTests(unittest.TestCase):
     """Average Cap divides by the network's age, not a row counter."""

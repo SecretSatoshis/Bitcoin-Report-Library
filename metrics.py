@@ -141,7 +141,10 @@ def calculate_custom_on_chain_metrics(data: pd.DataFrame) -> pd.DataFrame:
         **calculate_nvt_price_models(data),
         "7_day_ma_price_close": price_close.rolling(window=7).mean(),
         "50_day_ma_price_close": price_close.rolling(window=50).mean(),
+        # The 3 Month and 1 Year lines on Agent 21's Bitcoin chart.
+        "90_day_ma_price_close": price_close.rolling(window=90).mean(),
         "200_day_ma_price_close": ma_200_day,
+        "365_day_ma_price_close": price_close.rolling(window=365).mean(),
         "200_week_ma_price_close": price_close.rolling(window=200 * 7).mean(),
         "200_day_multiple": price_close / ma_200_day,
         "thermocap_price": rev_all_time / supply,
