@@ -45,17 +45,6 @@ def _last_positive_before(price_series, boundary):
     return prior.iloc[-1] if not prior.empty else np.nan
 
 
-# Simple moving averages over calendar-day windows; a window missing any close stays
-# empty. The dashboard draws the 3-month, 1-year and 200-week lines.
-PRICE_MOVING_AVERAGES = {
-    "50-day MA": 50,
-    "3-month MA": 90,
-    "200-day MA": 200,
-    "1-year MA": 364,
-    "200-week MA": 1400,
-}
-
-
 # Daily series published in summary_history.csv, by label.
 HEADLINE_METRICS = {
     "Bitcoin Price USD": "price_close",
@@ -75,28 +64,29 @@ ONCHAIN_PRICE_MODEL_COLUMNS = {
     "sth_realized_price": "STH Realized Price",
     "lth_realized_price": "LTH Realized Price",
     "realized_price": "Realized Price",
+    # The master release's price moving averages, so every chart reads one
+    # calculation (metrics.py). The dashboard draws 3-month, 1-year and 200-week.
+    "50_day_ma_price_close": "50-day MA",
+    "90_day_ma_price_close": "3-month MA",
+    "200_day_ma_price_close": "200-day MA",
+    "365_day_ma_price_close": "1-year MA",
+    "200_week_ma_price_close": "200-week MA",
 }
 
 
 def create_onchain_price_models(report_data, report_date):
-    """Daily BTC price, valuation models, 3x realized price and price moving averages."""
+    """Daily BTC price, valuation models, 3x realized price and the master release's
+    price moving averages."""
     models = report_data.loc[:report_date, list(ONCHAIN_PRICE_MODEL_COLUMNS)].dropna(
         subset=["price_close"]
     )
     models["3x Realized Price"] = models["realized_price"] * 3
-    models = add_price_moving_averages(models.rename(columns=ONCHAIN_PRICE_MODEL_COLUMNS))
+    models = models.rename(columns=ONCHAIN_PRICE_MODEL_COLUMNS)
+    # Columns in their published order: the models, 3x realized price, the averages.
+    averages = [c for c in models.columns if c.endswith(" MA")]
+    models = models[[c for c in models.columns if c not in averages] + averages]
     models.index.name = "date"
     return models
-
-
-def add_price_moving_averages(frame, price_column="BTC Price"):
-    """Return a copy of a date-indexed frame with the published price moving averages."""
-    result = frame.copy()
-    prices = pd.to_numeric(result[price_column], errors="coerce")
-    for column, days in PRICE_MOVING_AVERAGES.items():
-        window = prices.rolling(f"{days}D")
-        result[column] = window.mean().where(window.count() == days)
-    return result
 
 
 def create_price_paths(

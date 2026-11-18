@@ -559,12 +559,12 @@ def _validate_cycle_contracts(
                 )
 
 
-# Kept separate from report_tables.PRICE_MOVING_AVERAGES so the check is independent.
+# The published price moving averages (metrics.py), recomputed independently here.
 PRICE_MOVING_AVERAGE_DAYS = {
     "50-day MA": 50,
     "3-month MA": 90,
     "200-day MA": 200,
-    "1-year MA": 364,
+    "1-year MA": 365,
     "200-week MA": 1400,
 }
 

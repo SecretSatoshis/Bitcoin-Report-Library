@@ -268,31 +268,33 @@ class ReturnAndSummaryTableTests(unittest.TestCase):
         # Common-calendar days plus the explicit prior-year-close anchor at row 0.
         self.assertEqual(result["2020"].notna().sum(), 366)
 
-    def test_price_moving_averages_use_complete_calendar_windows(self):
-        dates = pd.date_range("2024-01-01", periods=1_500, freq="D")
-        prices = pd.Series(np.arange(1.0, 1_501.0), index=dates)
-        frame = pd.DataFrame({"BTC Price": prices})
-        # A missing close leaves every window that spans it empty, as on the chart.
-        gap = dates[1_450]
-        frame = frame.drop(gap)
-
-        result = report_tables.add_price_moving_averages(frame)
-
-        self.assertTrue(np.isnan(result.loc[dates[48], "50-day MA"]))
-        self.assertEqual(result.loc[dates[49], "50-day MA"], prices.iloc[:50].mean())
-        self.assertTrue(np.isnan(result.loc[dates[198], "200-day MA"]))
-        self.assertEqual(result.loc[dates[199], "200-day MA"], prices.iloc[:200].mean())
-        self.assertTrue(np.isnan(result.loc[dates[88], "3-month MA"]))
-        self.assertEqual(result.loc[dates[89], "3-month MA"], prices.iloc[:90].mean())
-        self.assertTrue(np.isnan(result.loc[dates[362], "1-year MA"]))
-        self.assertEqual(result.loc[dates[363], "1-year MA"], prices.iloc[:364].mean())
-        self.assertTrue(np.isnan(result.loc[dates[1_398], "200-week MA"]))
-        self.assertEqual(
-            result.loc[dates[1_399], "200-week MA"], prices.iloc[:1_400].mean()
+    def test_price_models_publish_the_master_releases_moving_averages(self):
+        dates = pd.date_range("2024-01-01", periods=3, freq="D")
+        data = pd.DataFrame(
+            {column: 1.0 for column in report_tables.ONCHAIN_PRICE_MODEL_COLUMNS},
+            index=dates,
         )
-        self.assertTrue(np.isnan(result.loc[dates[1_451], "3-month MA"]))
-        self.assertTrue(np.isnan(result.loc[dates[-1], "1-year MA"]))
-        self.assertNotIn("3-month MA", frame.columns)
+        data["realized_price"] = 2.0
+        data["365_day_ma_price_close"] = [np.nan, 5.0, 6.0]
+        data.loc[dates[0], "price_close"] = np.nan
+
+        models = report_tables.create_onchain_price_models(data, dates[-1])
+
+        # Rows without a price are left out; the averages are copied, not recomputed.
+        self.assertEqual(list(models.index), list(dates[1:]))
+        self.assertEqual(list(models["1-year MA"]), [5.0, 6.0])
+        self.assertEqual(list(models["3x Realized Price"]), [6.0, 6.0])
+        self.assertEqual(
+            list(models.columns[-6:]),
+            [
+                "3x Realized Price",
+                "50-day MA",
+                "3-month MA",
+                "200-day MA",
+                "1-year MA",
+                "200-week MA",
+            ],
+        )
 
     def test_summary_history_has_both_30_day_endpoints(self):
         dates = pd.date_range("2024-02-20", "2024-04-01", freq="D")

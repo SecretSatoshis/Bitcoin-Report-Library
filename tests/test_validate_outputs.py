@@ -233,8 +233,12 @@ class OutputValidationTests(unittest.TestCase):
                 },
                 index=pd.Index(dates, name="date"),
             )
+            # The averages as the master release computes them (metrics.py): the
+            # validator's calendar windows must agree with them.
+            for column, days in validator.PRICE_MOVING_AVERAGE_DAYS.items():
+                frame[column] = frame["BTC Price"].rolling(window=days).mean()
             path = directory / "onchain_price_models.csv"
-            report_tables.add_price_moving_averages(frame).to_csv(path)
+            frame.to_csv(path)
 
             self.assertEqual(
                 validate_outputs(directory, "2024-02-15", rules=rules), []
