@@ -5,12 +5,12 @@
       "size_bytes": 19129
     },
     "bitcoin_candles.csv.gz": {
-      "sha256": "19c0dd750dedc30d34dc736fadebbed254005209dbb5054780dbd106d29d8353",
+      "sha256": "82555eb8244e0d63f98d06e837e558e1ffdf2d93f0f0f96b8439c9999266efd5",
       "size_bytes": 135320
     },
     "correlation_matrix.csv": {
-      "sha256": "3a8041041dd4d2023f48c5669611a4c93720d25498b442654c7841eda2308066",
-      "size_bytes": 14373
+      "sha256": "552454573ae5aba6b8f1f16f1e5cc42cd162237cdac19a55954098b3ab75abc7",
+      "size_bytes": 14379
     },
     "cycle_low_data.csv": {
       "sha256": "8e1dbc7a39c0acb736110e26a316b31f35a57fe7733dec2e3def3d71c9ced2fe",
@@ -21,8 +21,8 @@
       "size_bytes": 140879
     },
     "etf_daily.csv": {
-      "sha256": "77b42437da0f375a85ce9824cf755338c73341e2c66d07813b904fdcc8ba4506",
-      "size_bytes": 1297139
+      "sha256": "fed407542fe4ea11eabe7a366e869febca490a2cb23059b48cf706932312837c",
+      "size_bytes": 1297233
     },
     "etf_filing_counts.csv": {
       "sha256": "c0a18f1f6d37a908597ece80a509282d33f92f7f13ee96c5e5b1ee1261bad684",
@@ -37,12 +37,12 @@
       "size_bytes": 25159
     },
     "etf_snapshots.csv": {
-      "sha256": "cb61d76af44f79f770d375cd32ef492a6e467f577b12fd762333a8fd5692ae9f",
-      "size_bytes": 60844
+      "sha256": "0050db1ccec28e316885c49f2665ef580de84d22b159f33b5e7449605b91a290",
+      "size_bytes": 61386
     },
     "etf_totals_daily.csv": {
-      "sha256": "d370e03154b5a5d147fbf263dc7072093df204d0595362e00619fb01e5860aaa",
-      "size_bytes": 70816
+      "sha256": "823439251f28e61b75a6fab10968c22a3ed1bdc1079a44d325dea9303d740a8a",
+      "size_bytes": 70817
     },
     "fundamentals_table.csv": {
       "sha256": "130706e15c5b409c7260524cb2039995a7b7fe4f6385c23bf16810d203ee3f05",
@@ -53,16 +53,16 @@
       "size_bytes": 122863
     },
     "master_metrics_data.csv.gz": {
-      "sha256": "948ec7c3d1f24e5551f76b5655f3a0ec335a88030ec5d0535f9e7a42820f4ffb",
-      "size_bytes": 10477941
+      "sha256": "8115640be59b8dabf11dbe7c9428301cef288560545e4afff5f613bb63bae408",
+      "size_bytes": 10477889
     },
     "monthly_heatmap_data.csv": {
       "sha256": "9f38a058356401feb98fccc4f5d16d19432fd78c479191c092ca6b3b57eda933",
       "size_bytes": 3028
     },
     "monthly_metrics_data.csv.gz": {
-      "sha256": "e96537e0bf10df8674ba409d11370ffad020ee123f818db7ef882efb2fc8febf",
-      "size_bytes": 378039
+      "sha256": "e1a56d0ed2b248913241e4e44fc54c64df4984041008e4fa4e2f027d6e644a73",
+      "size_bytes": 378178
     },
     "mtd_price_paths.csv": {
       "sha256": "db63475575c9a8abe02339b4b9723b98e1198f792816d5002dd5ba8414a37cab",
@@ -77,7 +77,7 @@
       "size_bytes": 806004
     },
     "performance_table.csv": {
-      "sha256": "a037c0de3dd9f783ae395fb852a8bc9d5d1984682bf3553db5f66d8a3c9c21b2",
+      "sha256": "0bd6afc78504b6d44fa85c71d045451174ca3177df898df0ebc1850f0043f1df",
       "size_bytes": 3702
     },
     "price_outlook.csv": {
@@ -85,7 +85,7 @@
       "size_bytes": 772
     },
     "relative_value_comparison.csv": {
-      "sha256": "2cdc873e8fab96b34b78087df0d2992f81b65636db0a94289472a0108c0fe2c0",
+      "sha256": "9eafb81febce31a35ad0d876ae4f249780cc8520663e3c8002dcb224f67d4650",
       "size_bytes": 978
     },
     "relative_value_rank_changes.csv": {
@@ -109,8 +109,8 @@
       "size_bytes": 468
     },
     "weekly_metrics_data.csv.gz": {
-      "sha256": "e4e91ef2b9b9555acc9ddf1e1d76d8e3c4d969d432d20077de0058509a79864f",
-      "size_bytes": 1604481
+      "sha256": "43876b823a88e913559c96e9cb622ab19cba5f0de918b999fa44b70e85d12677",
+      "size_bytes": 1604368
     },
     "ytd_price_paths.csv": {
       "sha256": "532cebc24091bfc9ff23fa3c5a4e9fb941beb031026de968f647ba36691843b9",
@@ -121,11 +121,11 @@
       "size_bytes": 179
     }
   },
-  "generated_at": "2026-11-19T00:27:37+00:00",
+  "generated_at": "2026-11-19T07:47:38+00:00",
   "model_parameters": {
     "metcalfe_scale": 0.00028520240953541824,
     "power_law_exponent": 5.613764487911364,
-    "power_law_scale": 5.558758149018012e-17
+    "power_law_scale": 5.55875814901801e-17
   },
   "release_id": "2026-11-18",
   "report_date": "2026-11-18",
