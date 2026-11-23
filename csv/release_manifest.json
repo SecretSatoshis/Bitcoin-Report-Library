@@ -5,12 +5,12 @@
       "size_bytes": 19129
     },
     "bitcoin_candles.csv.gz": {
-      "sha256": "ad8560dd65fc1de51e478b877634fb30861fafc7ff73b25e7ac637654c6e892b",
+      "sha256": "fe68bb5c3c0d35a42650d2a85a666984a763eec9fbf2c11f06fcfc94e7ad0da0",
       "size_bytes": 136335
     },
     "correlation_matrix.csv": {
-      "sha256": "e63fa2e221970a938c4246c8e71137283e6f8262a146c95b8919c27ba8e64741",
-      "size_bytes": 14335
+      "sha256": "48e49e428f783a9453ca7ba162f3daf1929eacadb06e1b83ce280bc9aad1fcd5",
+      "size_bytes": 14341
     },
     "cycle_low_data.csv": {
       "sha256": "3fd5c9005369eaa05b02e7849e80f5fa41e905841a4ea1d1267200aa2b92c4a7",
@@ -21,8 +21,8 @@
       "size_bytes": 141039
     },
     "etf_daily.csv": {
-      "sha256": "335800726af13462c758e259d589f69b8df7828c58cd852149f79f285e8e437d",
-      "size_bytes": 1301062
+      "sha256": "9018d2552009e6f25d4984a34f3bc305473c0de42a13392fc580cc90c3a74255",
+      "size_bytes": 1301052
     },
     "etf_filing_counts.csv": {
       "sha256": "c0a18f1f6d37a908597ece80a509282d33f92f7f13ee96c5e5b1ee1261bad684",
@@ -37,11 +37,11 @@
       "size_bytes": 25203
     },
     "etf_snapshots.csv": {
-      "sha256": "74c408b32595870a1966fbe10a05b7b229ca4391c9e43e762ed3464ef5864688",
-      "size_bytes": 64453
+      "sha256": "44e0e3e6dff606462f4b8939cf2d0e8b1524c2c1c6247133528bebe7bb02c326",
+      "size_bytes": 64656
     },
     "etf_totals_daily.csv": {
-      "sha256": "6c4c58352bd3156a4b79294c194c1fe9a1771a1edaa85b33460092f5d5b34f84",
+      "sha256": "18c204b5a35e3b7724509fa0886fdad93fcc994a1fbf5093c60c9d3d8a6c109c",
       "size_bytes": 70991
     },
     "fundamentals_table.csv": {
@@ -53,16 +53,16 @@
       "size_bytes": 122961
     },
     "master_metrics_data.csv.gz": {
-      "sha256": "701f80cfeccac2fb626cf25277fbe60cc8d430ed54baa63a4907eb008814a99c",
-      "size_bytes": 10487750
+      "sha256": "7149d3d16e7b409c8c234e7cfbac20ca96bfad4bf0d2ac3662332634dccd642d",
+      "size_bytes": 10486783
     },
     "monthly_heatmap_data.csv": {
       "sha256": "f4e7ece1ffd6ce97907f6964a53ffe16890d9442c0a5c14a0e49a238259a045f",
       "size_bytes": 3028
     },
     "monthly_metrics_data.csv.gz": {
-      "sha256": "b246ce233f549b9eb08d5bff1dc647a0c0a9194f9e38f63ec5986cb54156204b",
-      "size_bytes": 378024
+      "sha256": "3a202034cb9d5b0e22dfe192d6c8faa78e87c6c9f41d9c103f3d84f26dc340b2",
+      "size_bytes": 378050
     },
     "mtd_price_paths.csv": {
       "sha256": "d962c3a02b5b1da64c9109aa4a033f8dbb19c8d2622c69e114bfae1b597c6111",
@@ -77,16 +77,16 @@
       "size_bytes": 806701
     },
     "performance_table.csv": {
-      "sha256": "36fde39c095b3511332da46b6f90b1421b649034a47d043f76b2bd2365db11f5",
-      "size_bytes": 3696
+      "sha256": "e3923b82b61d44a1443fd8975e6416d557dc22316e96a8d1b4ed9960704dc12a",
+      "size_bytes": 3691
     },
     "price_outlook.csv": {
       "sha256": "d55116c14110f651ab94131716060e74250fdd2f0b986039ce02a83f94324416",
       "size_bytes": 772
     },
     "relative_value_comparison.csv": {
-      "sha256": "b4465c3e3aa4a68c1a522e0226a89898f6c2599e28bdd26231ebb4d049adce0b",
-      "size_bytes": 981
+      "sha256": "92535004d63c0132e95199424ba11d3abf39bb35d2955f966c520357de8cd0c6",
+      "size_bytes": 982
     },
     "relative_value_rank_changes.csv": {
       "sha256": "df29ce4501d421c97e6fad7148932b71dfa0028153e88a2d60210b0022b48807",
@@ -109,8 +109,8 @@
       "size_bytes": 467
     },
     "weekly_metrics_data.csv.gz": {
-      "sha256": "1b09b4ca067ae1f71df5635a0813d0d690c20a1ec685c7f8a32fb2fff2514ea1",
-      "size_bytes": 1604399
+      "sha256": "006c33c0605207f3932d04e3e40780ed4e52b7da15d1b9319be03fee2910afae",
+      "size_bytes": 1604320
     },
     "ytd_price_paths.csv": {
       "sha256": "0b0a09d91fcc975e5fdd9374f07a05eddab2fcfae30808c11dbbe8cf92a59d03",
@@ -121,7 +121,7 @@
       "size_bytes": 180
     }
   },
-  "generated_at": "2026-11-23T00:27:08+00:00",
+  "generated_at": "2026-11-23T08:02:28+00:00",
   "model_parameters": {
     "metcalfe_scale": 0.0002853684058789227,
     "power_law_exponent": 5.611032079959579,
