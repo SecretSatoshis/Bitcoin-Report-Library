@@ -13,6 +13,9 @@ if __name__ != "__main__":
         "Import the pipeline modules instead, or run `python main.py`."
     )
 
+import argparse
+from concurrent.futures import ThreadPoolExecutor
+
 import pandas as pd
 
 import agent21_examples
@@ -37,10 +40,10 @@ from data_definitions import (
     MOVING_AVERAGE_METRICS,
     PRICE_OUTLOOK_LEVELS,
     PRICE_OUTLOOK_YEAR,
-    REPORT_DATE,
     STOCK_TICKERS,
     TICKERS,
     YOY_COLUMNS,
+    default_report_date,
 )
 from data_validation import assert_ohlc_usable
 
@@ -48,26 +51,52 @@ from data_validation import assert_ohlc_usable
 DAILY_OHLC_START = "2009-01-03"
 
 
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Build the daily Bitcoin Report Library release.")
+    parser.add_argument(
+        "--report-date",
+        help="Completed UTC report date (YYYY-MM-DD); defaults to yesterday UTC.",
+    )
+    return parser.parse_args()
+
+
+# Resolve the report date once so a run crossing UTC midnight uses one consistent cutoff.
+_args = _parse_args()
+report_date = (
+    pd.to_datetime(_args.report_date).normalize()
+    if _args.report_date
+    else default_report_date()
+)
+
+
 # --- Fetch and check sources ---
 
-data = sources.get_data(TICKERS, MARKET_DATA_START_DATE)
-annual_reference = annual_data.get_annual_reference_data(REPORT_DATE)
-etf_files = etf.get_etf_files(REPORT_DATE)
+with ThreadPoolExecutor(max_workers=4) as _executor:
+    _data_future = _executor.submit(
+        sources.get_data, TICKERS, MARKET_DATA_START_DATE, report_date=report_date
+    )
+    _ohlc_future = _executor.submit(sources.get_brk_ohlc, start=DAILY_OHLC_START)
+    _annual_future = _executor.submit(annual_data.get_annual_reference_data, report_date)
+    _etf_future = _executor.submit(etf.get_etf_release, report_date)
 
-freshness.warn_on_stale_market_data(data, REPORT_DATE)
+    data = _data_future.result()
+    daily_ohlc = _ohlc_future.result()
+    annual_reference = _annual_future.result()
+    etf_files, etf_health = _etf_future.result()
+
+freshness.warn_on_stale_market_data(data, report_date)
 # Correlations need each asset's real trading days, so capture them before the fill.
 correlation_input = metrics.observed_market_values(data, report_tables.CORRELATION_COLUMNS)
 # Market data is filled within a bounded budget; on-chain data is never filled, so a
 # missing or malformed BRK response fails the checks below.
 data = freshness.forward_fill_market_data(data)
-freshness.assert_onchain_freshness(data, REPORT_DATE)
-freshness.assert_no_internal_onchain_gaps(data, REPORT_DATE)
-freshness.assert_reference_data_fresh(REPORT_DATE)
-freshness.assert_price_outlook_current(REPORT_DATE)
-freshness.warn_on_stale_miner_efficiency(data, REPORT_DATE)
+freshness.assert_onchain_freshness(data, report_date)
+freshness.assert_no_internal_onchain_gaps(data, report_date)
+freshness.assert_reference_data_fresh(report_date)
+freshness.assert_price_outlook_current(report_date)
+freshness.warn_on_stale_miner_efficiency(data, report_date)
 
 # Daily BRK candles are the only OHLC source; weekly and monthly candles are built from them.
-daily_ohlc = sources.get_brk_ohlc(start=DAILY_OHLC_START)
 assert_ohlc_usable(daily_ohlc, label="Daily BRK OHLC")
 
 
@@ -79,7 +108,7 @@ data = metrics.calculate_btc_price_to_surpass_fiat(data, FIAT_MONEY_SUPPLY)
 data = metrics.calculate_metal_market_caps(data, GOLD_SILVER_SUPPLY)
 data = metrics.calculate_btc_price_to_surpass_metal_categories(data, GOLD_SUPPLY_BREAKDOWN)
 data = metrics.calculate_btc_price_to_surpass_stocks(data, STOCK_TICKERS)
-data, model_parameters = metrics.calculate_network_model_metrics(data, REPORT_DATE)
+data, model_parameters = metrics.calculate_network_model_metrics(data, report_date)
 data = metrics.electric_price_models(data)
 
 # Period changes for CHANGE_COLUMNS, Bitcoin's YoY change and the 4-year CAGRs.
@@ -95,10 +124,10 @@ report_data = report_data.merge(
 )
 # One set of 30/90/365-day matrices feeds both the matrix file and the performance
 # table's 90-day Bitcoin correlation column.
-correlation_matrices = report_tables.create_correlation_matrices(correlation_input, REPORT_DATE)
+correlation_matrices = report_tables.create_correlation_matrices(correlation_input, report_date)
 
 # Sources include the partial current UTC day. Cut it here so no export includes it.
-report_data = report_data.loc[:REPORT_DATE]
+report_data = report_data.loc[:report_date]
 # Round once, before any table is built, so every file derives from the published values.
 report_data = round_for_publication(report_data)
 
@@ -107,33 +136,33 @@ report_data = round_for_publication(report_data)
 
 prices = report_data["price_close"]
 tables = {
-    "summary_table.csv": report_tables.create_summary_table(report_data, REPORT_DATE),
+    "summary_table.csv": report_tables.create_summary_table(report_data, report_date),
     "summary_history.csv": report_tables.create_summary_history(
-        report_data, REPORT_DATE, report_tables.HEADLINE_METRICS, comparison_days=30
+        report_data, report_date, report_tables.HEADLINE_METRICS, comparison_days=30
     ),
     "fundamentals_table.csv": report_tables.create_fundamentals_table(
-        report_data, FUNDAMENTALS_TEMPLATE, REPORT_DATE
+        report_data, FUNDAMENTALS_TEMPLATE, report_date
     ),
     "performance_table.csv": report_tables.create_full_performance_table(
-        report_data, REPORT_DATE, correlation_matrices[90].loc["price_close"]
+        report_data, report_date, correlation_matrices[90].loc["price_close"]
     ),
     "correlation_matrix.csv": report_tables.create_correlation_matrix_table(
-        correlation_matrices, REPORT_DATE
+        correlation_matrices, report_date
     ),
     "relative_value_comparison.csv": report_tables.create_asset_valuation_table(
-        report_data, REPORT_DATE
+        report_data, report_date
     ),
     report_tables.RELATIVE_RANK_FILE: report_tables.create_relative_value_rank_changes(
-        report_data, REPORT_DATE
+        report_data, report_date
     ),
-    "roi_table.csv": report_tables.calculate_roi_table(report_data, REPORT_DATE),
+    "roi_table.csv": report_tables.calculate_roi_table(report_data, report_date),
     "mtd_return_comparison.csv": report_tables.create_period_returns_table(
-        report_data, REPORT_DATE, "mtd"
+        report_data, report_date, "mtd"
     ),
     "ytd_return_comparison.csv": report_tables.create_period_returns_table(
-        report_data, REPORT_DATE, "ytd"
+        report_data, report_date, "ytd"
     ),
-    "report_ohlc_summary.csv": report_tables.create_report_ohlc_summary(daily_ohlc, REPORT_DATE),
+    "report_ohlc_summary.csv": report_tables.create_report_ohlc_summary(daily_ohlc, report_date),
     # Published with the levels so consumers can check they show the current forecast.
     "price_outlook.csv": PRICE_OUTLOOK_LEVELS.assign(outlook_year=PRICE_OUTLOOK_YEAR),
     "drawdown_data.csv": cycles.compute_drawdowns(report_data),
@@ -144,18 +173,18 @@ tables = {
 }
 # Published with their date index.
 indexed_tables = {
-    "monthly_heatmap_data.csv": report_tables.monthly_heatmap(report_data, REPORT_DATE),
-    "mtd_price_paths.csv": report_tables.create_price_paths(prices, REPORT_DATE, "mtd"),
-    "ytd_price_paths.csv": report_tables.create_price_paths(prices, REPORT_DATE, "ytd"),
+    "monthly_heatmap_data.csv": report_tables.monthly_heatmap(report_data, report_date),
+    "mtd_price_paths.csv": report_tables.create_price_paths(prices, report_date, "mtd"),
+    "ytd_price_paths.csv": report_tables.create_price_paths(prices, report_date, "ytd"),
     "onchain_price_models.csv": report_tables.create_onchain_price_models(
-        report_data, REPORT_DATE
+        report_data, report_date
     ),
 }
 # Daily, weekly and monthly candles, checked against the master prices.
-candle_tables = build_candle_tables(daily_ohlc, report_data, REPORT_DATE)
+candle_tables = build_candle_tables(daily_ohlc, report_data, report_date)
 # Figures for the example answers on the Agent 21 landing page.
 examples = agent21_examples.build_agent21_examples(
-    report_data, candle_tables[CANDLE_FILES[0]], PRICE_OUTLOOK_LEVELS, PRICE_OUTLOOK_YEAR, REPORT_DATE
+    report_data, candle_tables[CANDLE_FILES[0]], PRICE_OUTLOOK_LEVELS, PRICE_OUTLOOK_YEAR, report_date
 )
 
 
@@ -170,13 +199,14 @@ report_data.to_csv(
     "csv/master_metrics_data.csv.gz", compression="gzip", float_format=format_float
 )
 write_candle_tables(candle_tables)
-# Beside the release, not in its manifest: a view of released values for one page.
+# Beside the release, not in its manifest: a view of released values for one page and ETF health.
 agent21_examples.write_agent21_examples(examples)
+etf.write_etf_health(etf_health)
 
 # Consumers verify files against the manifest before using them.
 write_release_manifest(
     "csv",
-    REPORT_DATE,
+    report_date,
     [*tables, *indexed_tables, "master_metrics_data.csv.gz", *candle_tables],
     model_parameters,
 )

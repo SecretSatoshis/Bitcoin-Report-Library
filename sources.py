@@ -12,6 +12,7 @@ Market fetchers keep each value's real observation date in a temporary column so
 freshness checks measure true source age, not the age of a carried-forward value.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 import csv
 import io
 import time
@@ -62,6 +63,8 @@ MINER_EFFICIENCY_COLUMNS = [
 
 BRK_BULK_MAX_ATTEMPTS = 3
 BRK_BULK_INITIAL_BACKOFF_SECONDS = 1.0
+HTTP_RETRY_MAX_ATTEMPTS = 3
+HTTP_RETRY_INITIAL_BACKOFF_SECONDS = 1.0
 # Errors that retrying the same request cannot fix: the request is split or the series
 # reported missing instead.
 BRK_SEMANTIC_ERROR_CODES = {
@@ -69,6 +72,39 @@ BRK_SEMANTIC_ERROR_CODES = {
     "series_not_found",
     "metric_not_found",
 }
+
+
+def _http_get_with_retries(
+    url: str,
+    *,
+    params: Optional[dict] = None,
+    timeout: float = API_TIMEOUT,
+    max_attempts: int = HTTP_RETRY_MAX_ATTEMPTS,
+    initial_backoff_seconds: float = HTTP_RETRY_INITIAL_BACKOFF_SECONDS,
+) -> requests.Response:
+    """GET a URL with exponential backoff on connection errors, 429s, and 5xx statuses."""
+    response = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            if params is None:
+                response = requests.get(url, timeout=timeout)
+            else:
+                response = requests.get(url, params=params, timeout=timeout)
+        except requests.RequestException:
+            if attempt >= max_attempts:
+                raise
+            time.sleep(initial_backoff_seconds * (2 ** (attempt - 1)))
+            continue
+
+        transient = response.status_code == 429 or 500 <= response.status_code <= 599
+        if transient and attempt < max_attempts:
+            time.sleep(initial_backoff_seconds * (2 ** (attempt - 1)))
+            continue
+        break
+
+    assert response is not None
+    response.raise_for_status()
+    return response
 
 # Prefix of the temporary per-column observation dates on market data. They survive the
 # merge, drive the freshness checks, and are dropped by `forward_fill_market_data`.
@@ -102,15 +138,12 @@ def get_brk_ohlc(start: str = "2009-01-03") -> pd.DataFrame:
     params = {"start": start}
 
     try:
-        date_response = requests.get(
+        date_response = _http_get_with_retries(
             f"{base_url}/date/{index}", params=params, timeout=API_TIMEOUT
         )
-        date_response.raise_for_status()
-
-        ohlc_response = requests.get(
+        ohlc_response = _http_get_with_retries(
             f"{base_url}/price_ohlc/{index}", params=params, timeout=API_TIMEOUT
         )
-        ohlc_response.raise_for_status()
 
         date_payload, candle_payload = date_response.json(), ohlc_response.json()
         dates, ohlc_rows = date_payload["data"], candle_payload["data"]
@@ -185,7 +218,9 @@ def _retry_yahoo_close(ticker: str, start_date: str, end_date: str) -> Optional[
     return None
 
 
-def get_price(tickers: dict, start_date: str) -> pd.DataFrame:
+def get_price(
+    tickers: dict, start_date: str, end_date: Optional[str] = None
+) -> pd.DataFrame:
     """Daily closes for every ticker in `tickers`, from one batched Yahoo download.
 
     A ticker the batch returns without prices is downloaded again on its own. Raises
@@ -195,10 +230,13 @@ def get_price(tickers: dict, start_date: str) -> pd.DataFrame:
     each with its observation-date marker.
     """
     # Use the UTC date so local and CI runs request the same window. `end` is exclusive,
-    # so this requests everything before the current UTC day.
-    end_date = pd.Timestamp.now(tz="UTC").normalize().tz_localize(None).strftime(
-        "%Y-%m-%d"
-    )
+    # so the default requests everything before the current UTC day.
+    if end_date is None:
+        end_date = pd.Timestamp.now(tz="UTC").normalize().tz_localize(None).strftime(
+            "%Y-%m-%d"
+        )
+    else:
+        end_date = pd.to_datetime(end_date).normalize().strftime("%Y-%m-%d")
     fetch_tickers = [ticker for ticker_list in tickers.values() for ticker in ticker_list]
 
     if not fetch_tickers:
@@ -230,6 +268,12 @@ def get_price(tickers: dict, start_date: str) -> pd.DataFrame:
         if close_series is None:
             missing.append(ticker)
             continue
+        close_index = pd.DatetimeIndex(pd.to_datetime(close_series.index))
+        if close_index.tz is not None:
+            close_index = close_index.tz_localize(None)
+        close_series = close_series.copy()
+        close_series.index = close_index.normalize()
+        close_series = close_series.groupby(level=0, sort=True).last()
         value_column = f"{ticker}_close"
         col = close_series.rename(value_column).to_frame()
         col[_source_observation_column(value_column)] = pd.Series(
@@ -294,20 +338,43 @@ def _select_yahoo_share_observations(
     return pd.Series(selected, dtype="float64").sort_index()
 
 
-def _drop_isolated_yahoo_share_outliers(shares: pd.Series) -> pd.Series:
-    """Remove a one-observation share spike/dip when both neighbors agree closely."""
-    if len(shares) < 3:
+def _drop_isolated_yahoo_share_outliers(
+    shares: pd.Series, window: int = 7
+) -> pd.Series:
+    """Remove isolated single- and multi-day share spikes/dips via a rolling median Hampel filter.
+
+    Only observations bracketed on both sides of the window by points near the local
+    median are dropped, so genuine step-change stock splits are never mistaken for outliers.
+    """
+    n = len(shares)
+    if n < 3:
         return shares
 
-    log_shares = np.log(shares)
-    previous = log_shares.shift(1)
-    following = log_shares.shift(-1)
-    isolated = (
-        ((log_shares - previous).abs() > np.log(1.20))
-        & ((log_shares - following).abs() > np.log(1.20))
-        & ((following - previous).abs() < np.log(1.10))
-    )
-    return shares[~isolated]
+    half = window // 2
+    log_values = np.log(shares.to_numpy(dtype=float))
+    floor_delta = np.log(1.20)
+    keep = np.ones(n, dtype=bool)
+
+    for i in range(n):
+        lo = max(0, i - half)
+        hi = min(n, i + half + 1)
+        win = log_values[lo:hi]
+        med = float(np.median(win))
+        mad = float(np.median(np.abs(win - med)))
+        threshold = max(floor_delta, 3.0 * 1.4826 * mad)
+        if abs(log_values[i] - med) <= threshold:
+            continue
+        left = log_values[lo:i]
+        right = log_values[i + 1 : hi]
+        if (
+            left.size > 0
+            and right.size > 0
+            and float(np.min(np.abs(left - med))) <= floor_delta
+            and float(np.min(np.abs(right - med))) <= floor_delta
+        ):
+            keep[i] = False
+
+    return shares.iloc[keep]
 
 
 def _split_adjust_yahoo_shares(
@@ -323,7 +390,9 @@ def _split_adjust_yahoo_shares(
         return shares
 
     adjusted = shares.copy()
-    for split_date, split_ratio in split_events.items():
+    split_items = list(split_events.items())
+    for idx, (split_date, split_ratio) in enumerate(split_items):
+        ratio_value = float(split_ratio)
         ratios = shares / shares.shift(1)
         window = ratios[
             (ratios.index >= split_date - pd.Timedelta(days=search_days))
@@ -332,13 +401,29 @@ def _split_adjust_yahoo_shares(
 
         transition_date = split_date
         if not window.empty:
-            distances = np.abs(np.log(window / float(split_ratio)))
+            distances = np.abs(np.log(window / ratio_value))
             candidate_date = distances.idxmin()
             candidate_ratio = float(window.loc[candidate_date])
-            if abs(candidate_ratio / float(split_ratio) - 1.0) <= 0.35:
+            if abs(candidate_ratio / ratio_value - 1.0) <= 0.35:
                 transition_date = candidate_date
 
-        adjusted.loc[adjusted.index < transition_date] *= float(split_ratio)
+        # Check whether Yahoo already reports pre-split shares on the post-split basis
+        # (e.g. Samsung 005930.KS 50:1 split). Compare local pre/post medians bounded by
+        # adjacent split dates; skip multiplying when the observed ratio is already ~1.0.
+        prev_bound = split_items[idx - 1][0] if idx > 0 else pd.Timestamp.min
+        next_bound = split_items[idx + 1][0] if idx + 1 < len(split_items) else pd.Timestamp.max
+        pre_obs = shares.loc[(shares.index > prev_bound) & (shares.index < transition_date)].tail(5)
+        post_obs = shares.loc[(shares.index >= transition_date) & (shares.index < next_bound)].head(5)
+        if not pre_obs.empty and not post_obs.empty:
+            observed_ratio = float(post_obs.median()) / float(pre_obs.median())
+            if (
+                observed_ratio > 0
+                and abs(np.log(observed_ratio)) <= np.log(1.35)
+                and abs(np.log(observed_ratio)) < abs(np.log(observed_ratio / ratio_value))
+            ):
+                continue
+
+        adjusted.loc[adjusted.index < transition_date] *= ratio_value
 
     return adjusted
 
@@ -466,8 +551,16 @@ def _historical_market_cap(stock, ticker: str, fetch_start: str, fetch_end: str,
 def _live_market_cap_fallback(stock, ticker: str, fx_close, requested_end: pd.Timestamp):
     """Yahoo's live scalar market cap for the final date only, in USD, or None."""
     current = _current_yahoo_market_cap(stock)
-    if current is None or not YAHOO_MARKET_CAP_FX_TICKERS.get(ticker):
+    fx_symbol = YAHOO_MARKET_CAP_FX_TICKERS.get(ticker)
+    if current is None or not fx_symbol:
         return current
+    if fx_close is None or fx_close.empty:
+        try:
+            fx_start = (requested_end - pd.Timedelta(days=14)).strftime("%Y-%m-%d")
+            fx_end = (requested_end + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+            fx_close = _yahoo_fx_close(fx_symbol, fx_start, fx_end)
+        except YAHOO_DATA_ERRORS:
+            return None
     if fx_close is None or fx_close.empty:
         return None
     recent_fx = fx_close.loc[
@@ -524,14 +617,22 @@ def get_market_caps(
                 stacklevel=2,
             )
 
-        if not data[value_column].notna().any():
+        recent_window = data.loc[
+            requested_end - pd.Timedelta(days=MARKET_DATA_MAX_FFILL_DAYS) : requested_end,
+            value_column,
+        ]
+        if pd.isna(data.loc[requested_end, value_column]) and not recent_window.notna().any():
             current_market_cap = _live_market_cap_fallback(stock, ticker, fx_close, requested_end)
             if current_market_cap is not None:
                 # A live quote among settled closes: final row only, and logged.
+                reason = (
+                    "no historical share series was available for this ticker"
+                    if not data[value_column].notna().any()
+                    else "historical share series did not cover the trailing window"
+                )
                 warnings.warn(
                     f"{value_column} on {requested_end.date()} is Yahoo's live scalar "
-                    "market cap, not a settled close: no historical share series was "
-                    "available for this ticker",
+                    f"market cap, not a settled close: {reason}",
                     RuntimeWarning,
                     stacklevel=2,
                 )
@@ -553,8 +654,7 @@ def get_miner_data(google_sheet_url: str = "") -> pd.DataFrame:
     try:
         csv_export_url = google_sheet_url.split("/edit")[0] + "/export?format=csv"
 
-        response = requests.get(csv_export_url, timeout=API_TIMEOUT)
-        response.raise_for_status()
+        response = _http_get_with_retries(csv_export_url, timeout=API_TIMEOUT)
         df = pd.read_csv(io.StringIO(response.text))
         df.columns = [str(col).strip() for col in df.columns]
 
@@ -894,15 +994,39 @@ def _normalized_index(data: pd.DataFrame) -> pd.DatetimeIndex:
 def get_data(
     tickers: dict,
     start_date: str,
+    report_date=None,
 ) -> pd.DataFrame:
     """Fetch every source and left-join it onto the BRK daily calendar.
 
     `tickers` is data_definitions.TICKERS; market caps are built for its `stocks` group.
+    When `report_date` is given, market fetches use it explicitly instead of reading the
+    wall clock mid-run.
     """
-    coindata = get_brk_onchain(start_date)
-    prices = get_price(tickers, start_date)
-    market_caps = get_market_caps(tickers, start_date)
-    miner_data = get_miner_data()
+    price_end_date = None
+    market_cap_end_date = None
+    if report_date is not None:
+        resolved_report_date = pd.to_datetime(report_date).normalize()
+        price_end_date = (resolved_report_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+        market_cap_end_date = resolved_report_date.strftime("%Y-%m-%d")
+
+    def _fetch_yahoo():
+        # Keep yfinance calls on one worker to avoid shared SQLite cache lock contention.
+        if price_end_date is not None:
+            fetched_prices = get_price(tickers, start_date, end_date=price_end_date)
+            fetched_caps = get_market_caps(tickers, start_date, end_date=market_cap_end_date)
+        else:
+            fetched_prices = get_price(tickers, start_date)
+            fetched_caps = get_market_caps(tickers, start_date)
+        return fetched_prices, fetched_caps
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        onchain_future = executor.submit(get_brk_onchain, start_date)
+        yahoo_future = executor.submit(_fetch_yahoo)
+        miner_future = executor.submit(get_miner_data)
+
+        coindata = onchain_future.result()
+        prices, market_caps = yahoo_future.result()
+        miner_data = miner_future.result()
 
     datasets = [
         ("coindata", coindata),

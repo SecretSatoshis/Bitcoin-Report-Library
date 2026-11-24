@@ -430,17 +430,20 @@ def electric_price_models(data):
     daily_electricity_consumption_kwh = data["hash_rate"] / 1e9 * efficiency_j_gh * 24 / 1000
     miner_revenue_btc = data["subsidy_sum_24h"] + data["fees_sum_24h"]
 
+    new_columns = {}
+    positive_revenue = miner_revenue_btc.where(miner_revenue_btc > 0)
     for tariff in ELECTRICITY_TARIFFS_USD_PER_KWH:
         cents = int(round(tariff * 100))
-        data[f"electricity_cost_{cents}c"] = (
+        new_columns[f"electricity_cost_{cents}c"] = (
             daily_electricity_consumption_kwh * tariff
-        ).div(miner_revenue_btc.where(miner_revenue_btc > 0))
+        ).div(positive_revenue)
 
+    positive_difficulty = data["difficulty"].where(data["difficulty"] > 0)
     btc_per_day_network_expected = (
         data["hash_rate"]
         * SECONDS_PER_DAY
         * block_reward
-        / (data["difficulty"] * SHA_256_CONSTANT)
+        / (positive_difficulty * SHA_256_CONSTANT)
     )
 
     e_day_network = (
@@ -450,19 +453,18 @@ def electric_price_models(data):
         * hash_rate_th_s
     )
 
-    data["hayes_network_price"] = np.where(
-        btc_per_day_network_expected > 0,
-        e_day_network / btc_per_day_network_expected,
-        np.nan,
+    hayes_network_price = e_day_network.div(
+        btc_per_day_network_expected.where(btc_per_day_network_expected > 0)
     )
-
-    data["hayes_network_price_multiple"] = np.where(
-        data["hayes_network_price"] != 0,
-        data["price_close"] / data["hayes_network_price"],
-        np.nan,
+    hayes_network_price_multiple = data["price_close"].div(
+        hayes_network_price.where(hayes_network_price > 0)
     )
+    new_columns["hayes_network_price"] = hayes_network_price
+    new_columns["hayes_network_price_multiple"] = hayes_network_price_multiple
 
-    return data
+    existing = [column for column in new_columns if column in data.columns]
+    base = data.drop(columns=existing) if existing else data
+    return pd.concat([base, pd.DataFrame(new_columns, index=data.index)], axis=1)
 
 
 def calculate_rolling_cagr_for_all_columns(data, years):

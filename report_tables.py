@@ -550,7 +550,7 @@ def _build_performance_table(
     if isinstance(latest, pd.DataFrame):
         latest = latest.iloc[-1]
 
-    year_ago = actual_report_date - pd.Timedelta(days=365)
+    year_ago = actual_report_date - pd.Timedelta(days=364)
 
     rows = []
     for category, assets in asset_groups.items():
@@ -804,6 +804,8 @@ def asset_valuation_definitions():
         },
         # Mega-cap stocks
         {"name": "Apple", "data": "AAPL_market_cap_btc_price", "market_cap": "AAPL_market_cap"},
+        {"name": "Microsoft", "data": "MSFT_market_cap_btc_price", "market_cap": "MSFT_market_cap"},
+        {"name": "Alphabet", "data": "GOOGL_market_cap_btc_price", "market_cap": "GOOGL_market_cap"},
         {"name": "Amazon", "data": "AMZN_market_cap_btc_price", "market_cap": "AMZN_market_cap"},
         {"name": "Meta", "data": "META_market_cap_btc_price", "market_cap": "META_market_cap"},
         {"name": "NVIDIA", "data": "NVDA_market_cap_btc_price", "market_cap": "NVDA_market_cap"},
@@ -813,7 +815,6 @@ def asset_valuation_definitions():
         {"name": "TSMC", "data": "TSM_market_cap_btc_price", "market_cap": "TSM_market_cap"},
         {"name": "SpaceX", "data": "SPCX_market_cap_btc_price", "market_cap": "SPCX_market_cap"},
         {"name": "Saudi Aramco", "data": "2222.SR_market_cap_btc_price", "market_cap": "2222.SR_market_cap"},
-        {"name": "Samsung Electronics", "data": "005930.KS_market_cap_btc_price", "market_cap": "005930.KS_market_cap"},
         {"name": "Berkshire Hathaway Class B", "data": "BRK-B_market_cap_btc_price", "market_cap": "BRK-B_market_cap"},
         # Financials
         {"name": "JPMorgan", "data": "JPM_market_cap_btc_price", "market_cap": "JPM_market_cap"},

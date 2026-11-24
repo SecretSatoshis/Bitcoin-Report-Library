@@ -398,5 +398,110 @@ class ManifestReportDateTests(unittest.TestCase):
             self.assertIsNone(validator._manifest_report_date(directory, '2026-09-27')[0])
 
 
+class StrictInvariantTests(unittest.TestCase):
+    def test_relative_value_comparison_rejects_missing_or_non_positive_values(self):
+        good = pd.DataFrame(
+            [{"Asset": "Bitcoin", "Market Cap (USD)": 1.5e12, "BTC Price at Market Cap": 75_000.0}]
+        )
+        errors = []
+        validator._validate_relative_value_comparison({"relative_value_comparison.csv": good}, errors)
+        self.assertEqual(errors, [])
+
+        bad = pd.DataFrame(
+            [
+                {"Asset": "Bitcoin", "Market Cap (USD)": 1.5e12, "BTC Price at Market Cap": 75_000.0},
+                {"Asset": "Saudi Aramco", "Market Cap (USD)": np.nan, "BTC Price at Market Cap": np.nan},
+            ]
+        )
+        errors = []
+        validator._validate_relative_value_comparison({"relative_value_comparison.csv": bad}, errors)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("Saudi Aramco", errors[0])
+
+    def test_stock_market_cap_guards_reject_15t_cap_and_200pct_single_day_jump(self):
+        dates = pd.date_range("2024-01-01", periods=3, freq="D")
+        clean = pd.DataFrame({"AAPL_market_cap": [3.0e12, 3.1e12, 3.05e12]}, index=dates)
+        errors = []
+        validator._validate_stock_market_caps(clean, errors)
+        self.assertEqual(errors, [])
+
+        bad = pd.DataFrame(
+            {
+                "MSFT_market_cap": [0.3e12, 16.0e12, 16.0e12],
+                "AAPL_market_cap": [1.0e12, 4.0e12, 4.0e12],
+            },
+            index=dates,
+        )
+        errors = []
+        validator._validate_stock_market_caps(bad, errors)
+        self.assertTrue(any("$15T cap guard" in e for e in errors))
+        self.assertTrue(any(">200% single-day jump" in e for e in errors))
+
+    def test_etf_invariants_reject_large_other_change_and_low_aum_coverage(self):
+        daily = pd.DataFrame(
+            [
+                {"fund": "IBIT", "date": "2026-10-16", "btc_held": 800_000.0, "btc_source": "exact",
+                 "flow_btc": -892.0, "flow_usd": -60e6, "other_change_btc": 9_020.0, "market_share_pct": 80.0},
+                {"fund": "FBTC", "date": "2026-10-16", "btc_held": 200_000.0, "btc_source": "carried forward",
+                 "flow_btc": 0.0, "flow_usd": 0.0, "other_change_btc": 0.0, "market_share_pct": 20.0},
+            ]
+        )
+        totals = pd.DataFrame(
+            [{"date": "2026-10-16", "total_btc": 1_000_000.0, "total_flow_btc": -892.0,
+              "cumulative_flow_usd": 50e9, "flow_weighted_entry_price": 60_000.0}]
+        )
+        errors = []
+        validator._validate_etf({"etf_daily.csv": daily, "etf_totals_daily.csv": totals}, errors)
+        self.assertTrue(any("other_change_btc" in e for e in errors))
+
+        low_cov_daily = daily.copy()
+        low_cov_daily.loc[0, "other_change_btc"] = -5.0
+        low_cov_daily.loc[0, "btc_source"] = "carried forward"
+        errors = []
+        validator._validate_etf({"etf_daily.csv": low_cov_daily, "etf_totals_daily.csv": totals}, errors)
+        self.assertTrue(any("AUM coverage" in e for e in errors))
+
+    def test_master_metrics_is_loaded_once_across_all_sub_validators(self):
+        from data_definitions import FUNDAMENTALS_TEMPLATE
+
+        dates = pd.date_range("2024-01-01", periods=370, freq="D")
+        cols = {item[0] for group in FUNDAMENTALS_TEMPLATE.values() for item in group.values()}
+        cols |= {"price_close", "market_cap", "metcalfe_value", "power_law_price",
+                 "60_day_ma_hash_rate", "hash_ribbon_capitulation", "price_close_4y_cagr",
+                 "nupl", "supply_in_profit", "supply", "power_law_price_multiple"}
+        master = pd.DataFrame(10.0, index=dates, columns=sorted(cols))
+        master["nupl"] = 0.3
+        master["power_law_price_multiple"] = 0.9
+        master["supply_in_profit"] = 7.0
+        master["hash_ribbon_capitulation"] = False
+        master.index.name = "date"
+        fundamentals = report_tables.create_fundamentals_table(master, FUNDAMENTALS_TEMPLATE, dates[-1])
+        ranks = report_tables.create_relative_value_rank_changes(master, dates[-1])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            master.to_csv(directory / "master_metrics_data.csv.gz", compression="gzip")
+            fundamentals.to_csv(directory / "fundamentals_table.csv", index=False)
+            ranks.to_csv(directory / report_tables.RELATIVE_RANK_FILE, index=False)
+            rules = {
+                "master_metrics_data.csv.gz": RowBounds(1, 10_000),
+                "fundamentals_table.csv": RowBounds(1, 1_000),
+                report_tables.RELATIVE_RANK_FILE: RowBounds(1, 10_000),
+            }
+            real_read_csv = pd.read_csv
+            master_reads = []
+
+            def counting_read_csv(path, *args, **kwargs):
+                if str(path).endswith("master_metrics_data.csv.gz"):
+                    master_reads.append(str(path))
+                return real_read_csv(path, *args, **kwargs)
+
+            with patch.object(validator.pd, "read_csv", side_effect=counting_read_csv):
+                errors = validate_outputs(directory, dates[-1], rules=rules)
+
+        self.assertEqual(errors, [])
+        self.assertEqual(len(master_reads), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -73,6 +73,27 @@ class AnnualReferenceTests(unittest.TestCase):
               self.assertRaises(requests.RequestException)):
             annual_data._fred_median_income()
 
+    def test_fred_and_world_bank_retry_transient_http_errors(self):
+        busy = requests.Response()
+        busy.status_code, busy._content = 503, b"unavailable"
+        fred_ok = requests.Response()
+        fred_ok.status_code, fred_ok._content = 200, b"observation_date,MEHOINUSA646N\n2024-01-01,80000\n"
+        with patch.object(annual_data.requests, "get", side_effect=[busy, fred_ok]) as get_mock, \
+             patch.object(annual_data.time, "sleep") as sleep_mock:
+            df = annual_data._fred_median_income()
+        self.assertEqual(len(df), 1)
+        self.assertEqual(get_mock.call_count, 2)
+        sleep_mock.assert_called_once_with(1.0)
+
+        wb_ok = requests.Response()
+        wb_ok.status_code, wb_ok._content = 200, b'[{"pages": 1}, [{"date": "2024", "value": 8000000000}]]'
+        with patch.object(
+            annual_data.requests, "get", side_effect=[requests.ConnectionError("reset"), wb_ok]
+        ), patch.object(annual_data.time, "sleep") as sleep_mock:
+            wb = annual_data._world_bank("SP.POP.TOTL")
+        self.assertEqual(len(wb), 1)
+        sleep_mock.assert_called_once_with(1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

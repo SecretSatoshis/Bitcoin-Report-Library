@@ -39,15 +39,15 @@ def _build_period_bounds(boundaries, data_end, label_func):
     return periods
 
 
-# Approximate cycle-low dates. Each bounds a search window; the export starts at the
-# lowest price actually inside it.
+# Approximate cycle-low dates. Each anchors a ±PEAK_SEARCH_DAYS search window; the
+# export starts at the lowest price inside that window.
 BITCOIN_CYCLE_LOW_DATES = [
     "2010-07-25",
     "2011-11-18",
     "2015-01-15",
     "2018-12-16",
     "2022-11-20",
-    "2026-02-06",
+    "2026-06-30",
 ]
 
 
@@ -95,6 +95,17 @@ def compute_drawdowns(data: pd.DataFrame) -> pd.DataFrame:
         if period.empty:
             continue
 
+        # Cap an open drawdown cycle once price reclaims its starting ATH so it does not
+        # silently roll into a subsequent drawdown.
+        if end_date is None:
+            starting_ath = period["price_close"].iloc[0]
+            if pd.notna(starting_ath) and starting_ath > 0:
+                reclaimed = period.index[
+                    (period.index > start_dt) & (period["price_close"] >= starting_ath)
+                ]
+                if len(reclaimed) > 0:
+                    period = period.loc[: reclaimed[0]].copy()
+
         period["ath"] = period["price_close"].cummax()
         period["drawdown_pct"] = (period["price_close"] / period["ath"] - 1.0) * 100.0
         period["days_since_ath"] = (period.index - start_dt).days
@@ -127,20 +138,30 @@ def compute_cycle_lows(data: pd.DataFrame) -> pd.DataFrame:
     )
 
     out = []
+    search = pd.Timedelta(days=PEAK_SEARCH_DAYS)
     for cycle_name, start_dt, end_dt in cycle_periods:
-        period = df.loc[(df.index >= start_dt) & (df.index < end_dt)].copy()
+        window_end = min(start_dt + search, end_dt - pd.Timedelta(days=1))
+        nearby = df["price_close"].loc[start_dt - search : window_end].dropna()
+        nearby = nearby[nearby > 0]
+        if not nearby.empty:
+            low_date = nearby.idxmin()
+            low_px = float(nearby.loc[low_date])
+            period = df.loc[(df.index >= low_date) & (df.index < end_dt)].copy()
+        else:
+            period = df.loc[(df.index >= start_dt) & (df.index < end_dt)].copy()
+            if period.empty:
+                continue
+            valid_prices = period["price_close"].dropna()
+            valid_prices = valid_prices[valid_prices > 0]
+            if valid_prices.empty:
+                continue
+            # Fallback when listed date predates available price history (e.g. Cycle 1).
+            low_date = valid_prices.idxmin()
+            low_px = float(valid_prices.loc[low_date])
+            period = period.loc[period.index >= low_date].copy()
+
         if period.empty:
             continue
-
-        valid_prices = period["price_close"].dropna()
-        valid_prices = valid_prices[valid_prices > 0]
-        if valid_prices.empty:
-            continue
-
-        # Start at the real low so the series never drops below 1.0.
-        low_date = valid_prices.idxmin()
-        low_px = float(valid_prices.loc[low_date])
-        period = period.loc[period.index >= low_date].copy()
 
         period["days_since_cycle_low"] = (period.index - low_date).days
         period["index_value"] = period["price_close"] / low_px

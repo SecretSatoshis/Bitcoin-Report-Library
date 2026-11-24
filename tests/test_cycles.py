@@ -42,8 +42,25 @@ class CycleSeriesTests(unittest.TestCase):
 
 
 
+    def test_cycle_lows_anchor_within_peak_search_days(self):
+        dates = pd.date_range("2015-01-01", "2016-01-01", freq="D")
+        prices = pd.Series(250.0, index=dates)
+        # Actual low is 1 day before listed 2015-01-15 (within ±PEAK_SEARCH_DAYS).
+        prices.loc["2015-01-14"] = 175.0
+        prices.loc["2015-01-15"] = 200.0
+        # A dip months later is outside ±PEAK_SEARCH_DAYS and does not shift day 0.
+        prices.loc["2015-08-01"] = 180.0
+        with patch.object(cycles, "BITCOIN_CYCLE_LOW_DATES", ["2015-01-15"]):
+            result = cycles.compute_cycle_lows(pd.DataFrame({"price_close": prices}))
+
+        self.assertEqual(result["days_since_cycle_low"].iloc[0], 0)
+        self.assertEqual(result["index_value"].iloc[0], 1.0)
+        self.assertEqual(len(result), (pd.Timestamp("2016-01-01") - pd.Timestamp("2015-01-14")).days + 1)
+        self.assertAlmostEqual(result["index_value"].iloc[1], 200.0 / 175.0)
+
+
 class DrawdownTests(unittest.TestCase):
-    def test_each_cycle_runs_from_its_high_and_the_open_cycle_to_the_latest_day(self):
+    def test_open_cycle_caps_when_starting_ath_is_reclaimed_and_otherwise_runs_to_end(self):
         dates = pd.date_range("2024-01-01", "2024-01-20")
         prices = pd.Series(100.0, index=dates)
         prices.loc["2024-01-03"] = 80.0
@@ -58,10 +75,19 @@ class DrawdownTests(unittest.TestCase):
         self.assertEqual(first["days_since_ath"].tolist(), [0, 1, 2, 3, 4])
         self.assertTrue(np.allclose(first["drawdown_pct"], [0.0, 0.0, -20.0, 0.0, 0.0]))
         second = result[result["Cycle"] == "Cycle 2"]
-        self.assertEqual(second["days_since_ath"].iloc[-1], 5)
-        self.assertAlmostEqual(second["drawdown_pct"].iloc[3], 0.0)  # new high on day 3
-        self.assertAlmostEqual(second["drawdown_pct"].iloc[-1], (140 / 160 - 1) * 100)
+        # Cycle 2 reclaims 150 on day 3 (160) and stops there instead of starting a new drawdown.
+        self.assertEqual(second["days_since_ath"].tolist(), [0, 1, 2, 3])
+        self.assertAlmostEqual(second["drawdown_pct"].iloc[-1], 0.0)
         self.assertEqual(list(result.columns), ["days_since_ath", "drawdown_pct", "Cycle"])
+
+        # An open cycle that has not reclaimed its starting ATH still runs to the latest day.
+        prices.loc["2024-01-18":] = [130.0, 125.0, 120.0]
+        with patch.object(cycles, "BITCOIN_DRAWDOWN_CYCLES", [("Cycle 2", "2024-01-15", None)]), patch.object(
+            cycles, "PEAK_SEARCH_DAYS", 0
+        ):
+            open_result = cycles.compute_drawdowns(pd.DataFrame({"price_close": prices}))
+        self.assertEqual(open_result["days_since_ath"].iloc[-1], 5)
+        self.assertAlmostEqual(open_result["drawdown_pct"].iloc[-1], (120 / 150 - 1) * 100)
 
     def test_a_listed_ath_date_a_day_off_still_starts_at_the_highest_close(self):
         # The 2021 case: the highest close was Nov 9, listed as Nov 10.

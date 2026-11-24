@@ -30,7 +30,7 @@
           // Keep every line; nearby labels remain available in the event list.
           if (this.labels && x-lastLabel>22 && x<mediaSize.width-18) {
             ctx.translate(x+7,this.labelOffset);ctx.rotate(Math.PI/2);
-            ctx.globalAlpha=.4;ctx.font='9px "JetBrains Mono"';ctx.fillStyle=THEME.dim;
+            ctx.globalAlpha=.6;ctx.font='10px "JetBrains Mono"';ctx.fillStyle=THEME.dim;
             ctx.fillText(event.name,0,0);lastLabel=x;
           }
           ctx.restore();

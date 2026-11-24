@@ -396,6 +396,41 @@ class RelativeValueTableTests(unittest.TestCase):
         caps = table["Market Cap (USD)"].dropna()
         self.assertTrue(caps.is_monotonic_decreasing)
 
+    def test_microsoft_alphabet_and_true_live_fundamental_labels(self):
+        from data_definitions import FUNDAMENTALS_TEMPLATE
+
+        names = {asset["name"] for asset in report_tables.asset_valuation_definitions()}
+        self.assertIn("Microsoft", names)
+        self.assertIn("Alphabet", names)
+
+        perf_labels = set(FUNDAMENTALS_TEMPLATE["Network Performance"].keys())
+        self.assertIn("Active Addresses / Block (24h Avg)", perf_labels)
+        self.assertIn("Addresses ≥ 10k Sats", perf_labels)
+        self.assertNotIn("Active Addresses", perf_labels)
+        self.assertNotIn("Address Count > $10", perf_labels)
+
+    def test_52w_high_low_uses_365_inclusive_days_in_performance_and_fundamentals(self):
+        dates = pd.date_range("2024-01-01", periods=366, freq="D")
+        prices = pd.Series(100.0, index=dates)
+        # Day 0 is 365 days before the last day (366th inclusive day) and must be excluded.
+        prices.iloc[0] = 999.0
+        prices.iloc[1] = 200.0
+        frame = pd.DataFrame(
+            {
+                "price_close": prices,
+                **{f"price_close_{s}_change": 0.0 for s in report_tables.PERFORMANCE_RETURN_FIELDS.values()},
+            },
+            index=dates,
+        )
+        perf = report_tables._build_performance_table(
+            frame, dates[-1], pd.Series(dtype=float), {"Bitcoin": [("Bitcoin - [BTC]", "price_close")]}
+        ).iloc[0]
+        fund = report_tables.create_fundamentals_table(
+            frame, {"Valuation": {"Bitcoin Price": ("price_close", "currency")}}, dates[-1]
+        ).iloc[0]
+        self.assertEqual(perf["52 Week High"], 200.0)
+        self.assertEqual(fund["52W High"], "$200")
+
 
 if __name__ == "__main__":
     unittest.main()

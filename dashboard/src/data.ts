@@ -68,8 +68,8 @@ export interface ChartPayload {
     string,
     {
       x: string[];
-      series: Series[];
-      candles: Candle[];
+      series?: Series[];
+      candles?: Candle[];
       events: ChartPayload["events"];
       readingPoint: string;
       interval: string;
@@ -79,6 +79,33 @@ export interface ChartPayload {
   >;
   xAxisLabel?: string;
   seriesOrder?: string[];
+}
+export interface EtfFundRow {
+  fund: string;
+  btcHeld: number;
+  netAssetsUsd: number | null;
+  marketSharePct: number | null;
+  flowBtc: number | null;
+  flowUsd: number | null;
+  flow7dUsd: number | null;
+  btcSource: string;
+}
+export interface EtfSummary {
+  asOf: string;
+  asOfLabel: string;
+  fundCount: number;
+  totalBtc: number;
+  supplySharePct: number | null;
+  totalAumUsd: number | null;
+  latestFlowBtc: number | null;
+  latestFlowUsd: number | null;
+  flow7dBtc: number | null;
+  flow7dUsd: number | null;
+  flow30dBtc: number | null;
+  flow30dUsd: number | null;
+  cumulativeFlowUsd: number | null;
+  entryPrice: number | null;
+  funds: EtfFundRow[];
 }
 export interface Metric {
   name: string;
@@ -95,12 +122,15 @@ export interface DashboardData {
   dateLabel: string;
   month: string;
   year: string;
+  regimeSummary: string[];
   metrics: Metric[];
   sentiment: {
     supplyInProfit: number | null;
     sentiment: string;
+    nupl7d: number | null;
     valuation: string;
   };
+  etf: EtfSummary | null;
   performance: { id: string; title: string; rows: Row[] }[];
   correlations: CorrelationMatrices | null;
   heatmap: { reference: Row[]; years: Row[] };
@@ -130,6 +160,8 @@ export const CORRELATION_FILE = "correlation_matrix.csv";
 export const correlationPeriods = [30, 90, 365];
 export type CorrelationMatrices = Record<number, Row[]>;
 export const RELATIVE_RANK_FILE = "relative_value_rank_changes.csv";
+export const ETF_TOTALS_FILE = "etf_totals_daily.csv";
+export const ETF_DAILY_FILE = "etf_daily.csv";
 export const relativeRankRollingPeriods = ["7d", "30d", "90d", "365d"] as const;
 export const relativeRankPeriods = ["daily", "wtd", "qtd", "ytd", ...relativeRankRollingPeriods] as const;
 export type RelativeRankPeriod = typeof relativeRankPeriods[number];
@@ -203,9 +235,14 @@ export function readRelativeRankChanges(t: Tables, date: string): RelativeRankCh
   }
   return result;
 }
-// Older releases remain readable; new pipeline runs always export the matrix.
+// Older releases remain readable; new pipeline runs export correlations, rank changes, and ETF tables.
 export function releaseInputFiles(release: ReleaseManifest): string[] {
-  return [...inputFiles, ...[CORRELATION_FILE, RELATIVE_RANK_FILE].filter((file) => release.files[file])];
+  return [
+    ...inputFiles,
+    ...[CORRELATION_FILE, RELATIVE_RANK_FILE, ETF_TOTALS_FILE, ETF_DAILY_FILE].filter(
+      (file) => release.files[file],
+    ),
+  ];
 }
 export const correlationGroups = [
   { category: "Bitcoin", title: "Bitcoin", tickers: ["BTC"] },
@@ -648,32 +685,37 @@ export function pricePayload(
     )
       throw new Error("Candle and model prices disagree");
     const dates = candles.map((c) => c.time);
-    p.candleViews[interval] = {
-      x: [...dates, ...futureCalendar(dates.at(-1)!, end, interval)],
-      candles,
-      series: p.series.map((s) => ({
-        ...s,
-        values: candles.map(
-          (c) => s.values[byDate.get(c.observationDate)!] ?? null,
-        ),
-      })),
-      events: p.events.flatMap((e) => {
-        const c = candles.find(
-          (c) => c.time <= e.date && c.observationDate >= e.date,
-        );
-        return c ? [{ ...e, date: c.time, originalDate: e.date }] : [];
-      }),
-      readingPoint: dates.at(-1)!,
-      interval,
-    };
+    const viewEvents = p.events.flatMap((e) => {
+      const c = candles.find(
+        (c) => c.time <= e.date && c.observationDate >= e.date,
+      );
+      return c ? [{ ...e, date: c.time, originalDate: e.date }] : [];
+    });
     if (interval === "daily") {
-      p.candleViews[interval].offset = x.indexOf(dates[0]);
-      p.candleViews[interval].ohlc = candles.map((c) => [
-        c.open,
-        c.high,
-        c.low,
-        c.close,
-      ]);
+      // The shared renderer reconstructs daily series from top-level `series` + `offset`
+      // and daily candles from `ohlc` + `x`, avoiding 2x payload duplication.
+      p.candleViews[interval] = {
+        x: [...dates, ...futureCalendar(dates.at(-1)!, end, interval)],
+        events: viewEvents,
+        readingPoint: dates.at(-1)!,
+        interval,
+        offset: x.indexOf(dates[0]),
+        ohlc: candles.map((c) => [c.open, c.high, c.low, c.close]),
+      };
+    } else {
+      p.candleViews[interval] = {
+        x: [...dates, ...futureCalendar(dates.at(-1)!, end, interval)],
+        candles,
+        series: p.series.map((s) => ({
+          ...s,
+          values: candles.map(
+            (c) => s.values[byDate.get(c.observationDate)!] ?? null,
+          ),
+        })),
+        events: viewEvents,
+        readingPoint: dates.at(-1)!,
+        interval,
+      };
     }
   }
   return p;
@@ -777,6 +819,180 @@ export function seasonalPayload(
     `Historical paths are rebased comparisons. Average and Median exclude ${HIDDEN_SEASONAL_YEARS.join(", ")} and the current year. YTD removes February 29.`;
   p.coverage = `2014/${date}`;
   return p;
+}
+export function readEtfSummary(t: Tables, supply: number | null): EtfSummary | null {
+  const totalsRows = t[ETF_TOTALS_FILE];
+  const dailyRows = t[ETF_DAILY_FILE];
+  if (!totalsRows?.length || !dailyRows?.length) return null;
+
+  const totals = totalsRows
+    .map((r) => ({
+      date: iso(r.date),
+      totalBtc: num(r.total_btc),
+      flowBtc: num(r.total_flow_btc),
+      flowUsd: num(r.total_flow_usd),
+      aumUsd: num(r.total_net_assets_usd),
+      funds: num(r.funds),
+      cumFlowUsd: num(r.cumulative_flow_usd),
+      entryPrice: num(r.flow_weighted_entry_price),
+    }))
+    .filter((r): r is typeof r & { totalBtc: number } => r.totalBtc !== null)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (!totals.length) return null;
+
+  const latest = totals.at(-1)!;
+  const asOfMs = Date.parse(latest.date + "T00:00:00Z");
+  const cutoffIso = (days: number) =>
+    new Date(asOfMs - days * 86400000).toISOString().slice(0, 10);
+  const sumWindow = (days: number, pick: (r: typeof latest) => number | null) => {
+    const start = cutoffIso(days);
+    const values = totals
+      .filter((r) => r.date > start && r.date <= latest.date)
+      .map(pick)
+      .filter((v): v is number => v !== null);
+    return values.length ? values.reduce((a, b) => a + b, 0) : null;
+  };
+
+  const start7d = cutoffIso(7);
+  const flow7dByFund = new Map<string, number>();
+  for (const r of dailyRows) {
+    const d = iso(r.date);
+    if (d <= start7d || d > latest.date) continue;
+    const f = num(r.flow_usd);
+    if (f !== null) flow7dByFund.set(r.fund, (flow7dByFund.get(r.fund) ?? 0) + f);
+  }
+
+  const latestFunds: EtfFundRow[] = dailyRows
+    .filter((r) => iso(r.date) === latest.date)
+    .map((r) => {
+      const btcHeld = num(r.btc_held);
+      if (btcHeld === null) return null;
+      return {
+        fund: r.fund,
+        btcHeld,
+        netAssetsUsd: num(r.net_assets_usd),
+        marketSharePct: num(r.market_share_pct),
+        flowBtc: num(r.flow_btc),
+        flowUsd: num(r.flow_usd),
+        flow7dUsd: flow7dByFund.has(r.fund) ? flow7dByFund.get(r.fund)! : null,
+        btcSource: r.btc_source || "",
+      };
+    })
+    .filter((r): r is EtfFundRow => r !== null)
+    .sort((a, b) => b.btcHeld - a.btcHeld);
+
+  const asOfLabel = new Date(asOfMs).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+
+  return {
+    asOf: latest.date,
+    asOfLabel,
+    fundCount: latest.funds ?? latestFunds.length,
+    totalBtc: latest.totalBtc,
+    supplySharePct:
+      supply !== null && supply > 0 ? (latest.totalBtc / supply) * 100 : null,
+    totalAumUsd: latest.aumUsd,
+    latestFlowBtc: latest.flowBtc,
+    latestFlowUsd: latest.flowUsd,
+    flow7dBtc: sumWindow(7, (r) => r.flowBtc),
+    flow7dUsd: sumWindow(7, (r) => r.flowUsd),
+    flow30dBtc: sumWindow(30, (r) => r.flowBtc),
+    flow30dUsd: sumWindow(30, (r) => r.flowUsd),
+    cumulativeFlowUsd: latest.cumFlowUsd,
+    entryPrice: latest.entryPrice,
+    funds: latestFunds,
+  };
+}
+
+function computeNupl7d(modelRows: Row[]): number | null {
+  const recent = modelRows.slice(-7).map((r) => {
+    const price = num(r["BTC Price"]);
+    const realized = num(r["Realized Price"]);
+    if (price === null || realized === null || price <= 0) return null;
+    return (price - realized) / price;
+  });
+  if (recent.length < 7 || recent.some((v) => v === null)) return null;
+  return (recent as number[]).reduce((a, b) => a + b, 0) / recent.length;
+}
+
+function formatCompactFlowUsd(value: number): string {
+  const abs = Math.abs(value);
+  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(1)}M`;
+  return `${sign}$${Math.round(abs).toLocaleString("en-US")}`;
+}
+
+function buildRegimeSummary(params: {
+  dateLabel: string;
+  modelRows: Row[];
+  supplyInProfit: number | null;
+  sentiment: string;
+  nupl7d: number | null;
+  valuation: string;
+  etf: EtfSummary | null;
+}): string[] {
+  const { dateLabel, modelRows, supplyInProfit, sentiment, nupl7d, valuation, etf } = params;
+  const latest = modelRows.at(-1);
+  const price = num(latest?.["BTC Price"]);
+  const ma200 = num(latest?.["200-day MA"]);
+  const powerLaw = num(latest?.["Power Law Price"]);
+  const allPrices = modelRows
+    .map((r) => num(r["BTC Price"]))
+    .filter((v): v is number => v !== null && v > 0);
+  const ath = allPrices.length ? Math.max(...allPrices) : null;
+
+  const usd = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
+  const sentences: string[] = [];
+
+  if (price !== null) {
+    const parts = [`Bitcoin closed at ${usd(price)} on ${dateLabel}`];
+    if (ma200 !== null && ma200 > 0) {
+      const maDiffPct = ((price - ma200) / ma200) * 100;
+      const dir = maDiffPct >= 0 ? "above" : "below";
+      parts.push(`trading ${Math.abs(maDiffPct).toFixed(1)}% ${dir} its 200-day moving average (${usd(ma200)})`);
+    }
+    if (ath !== null && ath > 0) {
+      const ddPct = ((price - ath) / ath) * 100;
+      parts.push(
+        ddPct >= -0.05
+          ? `at a new daily closing all-time high`
+          : `${Math.abs(ddPct).toFixed(1)}% below its ${usd(ath)} closing ATH`,
+      );
+    }
+    sentences.push(
+      parts.length === 1
+        ? `${parts[0]}.`
+        : parts.length === 2
+          ? `${parts[0]}, ${parts[1]}.`
+          : `${parts[0]}, ${parts[1]} and ${parts[2]}.`,
+    );
+  }
+
+  const nuplDetail =
+    nupl7d !== null ? ` (7-day NUPL ${nupl7d.toFixed(2)}` : "";
+  const profitDetail =
+    supplyInProfit !== null
+      ? nuplDetail
+        ? `, ${supplyInProfit.toFixed(1)}% of supply in profit)`
+        : ` (${supplyInProfit.toFixed(1)}% of supply in profit)`
+      : nuplDetail
+        ? ")"
+        : "";
+  const plMultiple =
+    price !== null && powerLaw !== null && powerLaw > 0
+      ? ` (${(price / powerLaw).toFixed(2)}× fair value)`
+      : "";
+  let second = `On-chain sentiment reads ${sentiment}${nuplDetail}${profitDetail} with Power Law valuation ${valuation}${plMultiple}`;
+  if (etf && etf.flow7dUsd !== null) {
+    second += `, while US spot ETFs saw ${formatCompactFlowUsd(etf.flow7dUsd)} in 7-day net flows (${(etf.totalBtc / 1e6).toFixed(2)}M BTC held)`;
+  }
+  sentences.push(`${second}.`);
+  return sentences;
 }
 export function createDashboard(
   t: Tables,
@@ -924,22 +1140,42 @@ export function createDashboard(
       "Market Cap (USD)"
     ],
   );
+  const modelRows = t["onchain_price_models.csv"].filter((r) => iso(r.date) <= date);
+  const nupl7d = computeNupl7d(modelRows);
+  const supplyValue = num(summary("Bitcoin Supply")?.Value);
+  const etf = readEtfSummary(t, supplyValue);
+  const dateLabel = d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  const supplyInProfit = num(summary("Bitcoin Supply in Profit (%)")?.Value);
+  const sentimentLabel = summary("Bitcoin Market Sentiment")?.Label || "Unavailable";
+  const valuationLabel = summary("Bitcoin Valuation")?.Label || "Unavailable";
+  const regimeSummary = buildRegimeSummary({
+    dateLabel,
+    modelRows,
+    supplyInProfit,
+    sentiment: sentimentLabel,
+    nupl7d,
+    valuation: valuationLabel,
+    etf,
+  });
   return {
     reportDate: date,
     year,
     month: d.toLocaleDateString("en-US", { month: "long", timeZone: "UTC" }),
-    dateLabel: d.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      timeZone: "UTC",
-    }),
+    dateLabel,
+    regimeSummary,
     metrics,
     sentiment: {
-      supplyInProfit: num(summary("Bitcoin Supply in Profit (%)")?.Value),
-      sentiment: summary("Bitcoin Market Sentiment")?.Label || "Unavailable",
-      valuation: summary("Bitcoin Valuation")?.Label || "Unavailable",
+      supplyInProfit,
+      sentiment: sentimentLabel,
+      nupl7d,
+      valuation: valuationLabel,
     },
+    etf,
     performance,
     correlations: readCorrelationMatrix(t, date),
     heatmap: {

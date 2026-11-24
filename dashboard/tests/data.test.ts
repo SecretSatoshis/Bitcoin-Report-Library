@@ -133,11 +133,36 @@ test("frozen release: all eight price series, ranges, events and candle payloads
     assert.equal(hash(JSON.stringify(s.values)), expected.valuesHash, s.id);
     assert.equal(s.values.length, expected.valuesLength);
   }
+  // Daily view omits redundant series/candles (reconstructed by renderer.js from offset + ohlc).
+  assert.equal(p.candleViews!.daily.series, undefined);
+  assert.equal(p.candleViews!.daily.candles, undefined);
   // Key order is part of the frozen payload fingerprint.
   for (const [interval, view] of Object.entries(p.candleViews!)) {
+    const reconstructedCandles =
+      view.candles ??
+      view.ohlc!.map(([open, high, low, close], i) => ({
+        time: view.x[i],
+        periodEnd: view.x[i],
+        observationDate: view.x[i],
+        complete: true,
+        open,
+        high,
+        low,
+        close,
+      }));
+    const reconstructedSeries =
+      view.series ??
+      p.series.map((s) => ({
+        ...s,
+        start: 0,
+        values: Array.from(
+          { length: reconstructedCandles.length },
+          (_, i) => s.values[view.offset! + i - s.start] ?? null,
+        ),
+      }));
     const ordered = {
       x: view.x,
-      series: view.series.map((s) => ({
+      series: reconstructedSeries.map((s) => ({
         id: s.id,
         name: s.name,
         axis: s.axis,
@@ -150,7 +175,7 @@ test("frozen release: all eight price series, ranges, events and candle payloads
         start: s.start,
         values: s.values,
       })),
-      candles: view.candles,
+      candles: reconstructedCandles,
       events: view.events,
       readingPoint: view.readingPoint,
       interval: view.interval,
@@ -174,11 +199,15 @@ test("price view anchors history to the data date and reserves a year without fu
   assert.equal(p.x.at(-1), p.rangeEndDate);
   for (const s of p.series)
     assert.ok(p.x[s.start + s.values.length - 1] <= p.reportDate);
-  for (const view of Object.values(p.candleViews!)) {
-    assert.equal(view.candles.at(-1)!.observationDate, p.reportDate);
+  for (const [interval, view] of Object.entries(p.candleViews!)) {
     assert.ok(view.x.at(-1)! > p.reportDate);
     assert.ok(view.x.at(-1)! <= p.rangeEndDate!);
-    assert.ok(view.series.every(s => s.values.length === view.candles.length));
+    if (interval === "daily") {
+      assert.equal(view.x[view.ohlc!.length - 1], p.reportDate);
+    } else {
+      assert.equal(view.candles!.at(-1)!.observationDate, p.reportDate);
+      assert.ok(view.series!.every(s => s.values.length === view.candles!.length));
+    }
   }
 });
 
@@ -388,4 +417,56 @@ test("semantic HTML includes every section, all rows, null labels, and escaped d
   assert.ok(html.includes("2026 (YTD)"));
   d.reportDate = "2026-12-31";
   assert.ok(!renderDashboard(d).includes("2026 (YTD)"));
+});
+test("D2.2/D2.4 upgrades: NUPL label, regime summary, Dataset JSON-LD, lazy seasonal iframes, CTAs, and optional ETF section", () => {
+  const d = data();
+  assert.equal(d.etf, null);
+  assert.equal(d.regimeSummary.length, 2);
+  assert.equal(typeof d.sentiment.nupl7d, "number");
+  const html = renderDashboard(d);
+  assert.ok(html.includes("On-Chain Sentiment (NUPL)"));
+  assert.ok(!html.includes("Fear &amp; Greed"));
+  assert.ok(html.includes(`7d avg NUPL: ${d.sentiment.nupl7d!.toFixed(2)}`));
+  assert.ok(html.includes('class="regime-banner"'));
+  assert.ok(html.includes('id="staleness-banner"'));
+  assert.ok(html.includes('"@type":"Dataset"'));
+  assert.ok(html.includes(`"dateModified":"${d.reportDate}"`));
+  assert.ok(html.includes('src="/shared-chart/frame.html"') && html.includes('loading="eager"'));
+  assert.ok(html.includes('src="/shared-chart/seasonal-mtd.html"') && html.includes('loading="lazy"'));
+  assert.ok(html.includes("https://agent21.secretsatoshis.com/"));
+  assert.ok(!html.includes('id="etf-flows"'));
+
+  const withEtf = structuredClone(tables);
+  withEtf["etf_totals_daily.csv"] = [
+    {
+      date: "2026-09-28", total_btc: "1200000", total_flow_btc: "1000", total_flow_usd: "80000000",
+      total_net_assets_usd: "96000000000", funds: "2", cumulative_flow_btc: "600000",
+      cumulative_flow_usd: "50000000000", flow_weighted_entry_price: "80000",
+    },
+    {
+      date: "2026-09-29", total_btc: "1202000", total_flow_btc: "2000", total_flow_usd: "160000000",
+      total_net_assets_usd: "97000000000", funds: "2", cumulative_flow_btc: "602000",
+      cumulative_flow_usd: "50160000000", flow_weighted_entry_price: "80010",
+    },
+  ];
+  withEtf["etf_daily.csv"] = [
+    {
+      fund: "IBIT", date: "2026-09-29", btc_held: "800000", btc_source: "exact",
+      net_assets_usd: "64000000000", flow_btc: "1500", flow_usd: "120000000", market_share_pct: "66.6",
+    },
+    {
+      fund: "FBTC", date: "2026-09-29", btc_held: "402000", btc_source: "exact",
+      net_assets_usd: "33000000000", flow_btc: "500", flow_usd: "40000000", market_share_pct: "33.4",
+    },
+  ];
+  const etfDash = createDashboard(withEtf, release, colors, events);
+  assert.ok(etfDash.etf !== null);
+  assert.equal(etfDash.etf!.totalBtc, 1_202_000);
+  assert.equal(etfDash.etf!.flow7dUsd, 240_000_000);
+  assert.equal(etfDash.etf!.funds[0].fund, "IBIT");
+  const etfHtml = renderDashboard(etfDash);
+  assert.ok(etfHtml.includes('id="etf-flows"'));
+  assert.ok(etfHtml.includes("Spot Bitcoin ETF Flows"));
+  assert.ok(etfHtml.includes("IBIT"));
+  assert.ok(etfHtml.includes("+$240.0M"));
 });

@@ -15,7 +15,9 @@ release. A series that changes its format, or whose newest year is more than
 MAX_AGE_YEARS behind the report date, fails the run.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 import io
+import time
 import warnings
 
 import pandas as pd
@@ -73,9 +75,38 @@ def _checked(frame: pd.DataFrame, series: str) -> pd.DataFrame:
     return frame.sort_values("year")
 
 
-def _fred_median_income() -> pd.DataFrame:
-    response = requests.get(FRED_MEDIAN_INCOME_URL, timeout=API_TIMEOUT)
+HTTP_RETRY_MAX_ATTEMPTS = 3
+HTTP_RETRY_INITIAL_BACKOFF_SECONDS = 1.0
+
+
+def _get_with_retries(url: str, *, params=None, timeout: float = API_TIMEOUT) -> requests.Response:
+    """GET a URL with exponential backoff on connection errors, 429s, and 5xx responses."""
+    response = None
+    for attempt in range(1, HTTP_RETRY_MAX_ATTEMPTS + 1):
+        try:
+            if params is None:
+                response = requests.get(url, timeout=timeout)
+            else:
+                response = requests.get(url, params=params, timeout=timeout)
+        except requests.RequestException:
+            if attempt >= HTTP_RETRY_MAX_ATTEMPTS:
+                raise
+            time.sleep(HTTP_RETRY_INITIAL_BACKOFF_SECONDS * (2 ** (attempt - 1)))
+            continue
+
+        transient = response.status_code == 429 or 500 <= response.status_code <= 599
+        if transient and attempt < HTTP_RETRY_MAX_ATTEMPTS:
+            time.sleep(HTTP_RETRY_INITIAL_BACKOFF_SECONDS * (2 ** (attempt - 1)))
+            continue
+        break
+
+    assert response is not None
     response.raise_for_status()
+    return response
+
+
+def _fred_median_income() -> pd.DataFrame:
+    response = _get_with_retries(FRED_MEDIAN_INCOME_URL, timeout=API_TIMEOUT)
     # FRED serves an HTML page during maintenance: an outage, not a format change.
     if response.text.lstrip().startswith("<"):
         raise requests.RequestException("FRED returned a web page instead of CSV")
@@ -90,12 +121,11 @@ def _fred_median_income() -> pd.DataFrame:
 
 
 def _world_bank(code: str) -> pd.DataFrame:
-    response = requests.get(
+    response = _get_with_retries(
         WORLD_BANK_INDICATOR_URL.format(code=code),
         params={"format": "json", "per_page": 20000},
         timeout=API_TIMEOUT,
     )
-    response.raise_for_status()
     payload = response.json()
     if not isinstance(payload, list) or len(payload) < 2 or not isinstance(payload[1], list):
         raise SourceFormatError(f"World Bank {code}: unexpected response {str(payload)[:200]}")
@@ -132,32 +162,45 @@ def _rows(series: str, frame: pd.DataFrame, retrieved_date: str) -> pd.DataFrame
     )
 
 
-def get_annual_reference_data(report_date, previous_release=_previous_release) -> pd.DataFrame:
+def get_annual_reference_data(
+    report_date, previous_release=_previous_release, retrieved_date=None
+) -> pd.DataFrame:
     """Every annual series in long format; see the module docstring."""
-    report_date = pd.Timestamp(report_date)
-    today = pd.Timestamp.now(tz="UTC").date().isoformat()
+    report_date = pd.Timestamp(report_date).normalize()
+    today = (
+        pd.Timestamp(retrieved_date).date().isoformat()
+        if retrieved_date is not None
+        else (report_date + pd.Timedelta(days=1)).date().isoformat()
+    )
     previous = None
     parts = []
-    for series, fetch in FETCHED_SERIES.items():
-        try:
-            part = _rows(series, fetch(), today)
-        except SourceFormatError:
-            raise
-        except (requests.RequestException, ValueError) as error:
-            if previous is None:
-                previous = previous_release()
-            part = previous[previous["series"] == series]
-            if part.empty:
-                raise RuntimeError(f"{series}: fetch failed ({error}) and the last release has no copy") from error
-            warnings.warn(
-                f"{series}: fetch failed ({error}); reusing the last release's rows, "
-                f"retrieved {part['retrieved_date'].iloc[0]}",
-                RuntimeWarning, stacklevel=2,
-            )
-        newest = int(part["year"].max())
-        if report_date.year - newest > MAX_AGE_YEARS:
-            raise RuntimeError(f"{series}: newest year {newest} is more than {MAX_AGE_YEARS} years old")
-        parts.append(part)
+    with ThreadPoolExecutor(max_workers=len(FETCHED_SERIES)) as executor:
+        futures = {
+            series: executor.submit(fetch)
+            for series, fetch in FETCHED_SERIES.items()
+        }
+        for series, future in futures.items():
+            try:
+                part = _rows(series, future.result(), today)
+            except SourceFormatError:
+                raise
+            except (requests.RequestException, ValueError) as error:
+                if previous is None:
+                    previous = previous_release()
+                part = previous[previous["series"] == series]
+                if part.empty:
+                    raise RuntimeError(
+                        f"{series}: fetch failed ({error}) and the last release has no copy"
+                    ) from error
+                warnings.warn(
+                    f"{series}: fetch failed ({error}); reusing the last release's rows, "
+                    f"retrieved {part['retrieved_date'].iloc[0]}",
+                    RuntimeWarning, stacklevel=2,
+                )
+            newest = int(part["year"].max())
+            if report_date.year - newest > MAX_AGE_YEARS:
+                raise RuntimeError(f"{series}: newest year {newest} is more than {MAX_AGE_YEARS} years old")
+            parts.append(part)
 
     parts.append(_rows("bitcoin_owners_millions", BITCOIN_OWNER_ESTIMATES,
                        BITCOIN_OWNERS_AS_OF.date().isoformat()))

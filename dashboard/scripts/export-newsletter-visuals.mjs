@@ -63,6 +63,7 @@ const VISUALS = [
       "Realized",
       "3× Realized",
       "3-month MA",
+      "200-day MA",
       "1-year MA",
       "200-week MA",
     ],
@@ -206,6 +207,7 @@ function mimeType(path) {
       ".svg": "image/svg+xml",
       ".wasm": "application/wasm",
       ".webmanifest": "application/manifest+json",
+      ".woff2": "font/woff2",
     }[extname(path).toLowerCase()] || "application/octet-stream"
   );
 }
@@ -332,7 +334,19 @@ async function main() {
       content:
         "*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;transition:none!important;caret-color:transparent!important}",
     });
-    await page.waitForTimeout(1500);
+    // Scroll each chart frame into view so loading="lazy" seasonal iframes initialize deterministically.
+    for (const frameElement of await page
+      .locator("[data-chart-frame]")
+      .elementHandles()) {
+      await frameElement.scrollIntoViewIfNeeded();
+    }
+    await page.waitForFunction(
+      () => document.querySelectorAll('[data-chart-ready="true"]').length === 3,
+      { timeout: 60_000 },
+    );
+    await page.evaluate(
+      () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+    );
 
     const dashboardDate = await page
       .locator("[data-dashboard-date]")
@@ -433,14 +447,19 @@ async function main() {
           frameId,
           { timeout: 10_000 },
         );
-        // Let the resized frame repaint before the capture.
-        await embedded.evaluate(
+        // Let the resized frame repaint deterministically before the capture.
+        await embedded.evaluate(async () => {
+          await document.fonts.ready;
+          await new Promise((r) =>
+            requestAnimationFrame(() => requestAnimationFrame(r)),
+          );
+        });
+        await page.evaluate(
           () =>
             new Promise((r) =>
               requestAnimationFrame(() => requestAnimationFrame(r)),
             ),
         );
-        await page.waitForTimeout(500);
         text += " " + (await embedded.locator("body").innerText());
       }
       text = text.replace(/\s+/g, " ").trim();

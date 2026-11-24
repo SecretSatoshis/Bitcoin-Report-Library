@@ -245,8 +245,13 @@ async function waitForRemoteRelease(minimum) {
 }
 
 async function downloadRemote(file, manifest) {
-  // Key the request to the release so a CDN copy of an older file cannot be served.
-  const url = `${REMOTE_BASE_URL}/${file}?release=${encodeURIComponent(manifest.release_id)}`;
+  // Key the request to the file's content hash / generation timestamp so a same-day
+  // rerun cannot serve an older CDN copy from earlier on the same release_id.
+  const cacheKey =
+    manifest.files[file]?.sha256?.slice(0, 12) ||
+    manifest.generated_at ||
+    manifest.release_id;
+  const url = `${REMOTE_BASE_URL}/${file}?v=${encodeURIComponent(cacheKey)}`;
   const dst = path.join(STAGING_DIR, file);
   const tmp = `${dst}.part`;
 

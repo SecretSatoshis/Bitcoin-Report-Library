@@ -82,9 +82,20 @@ try {
   await page.clock.setFixedTime(new Date("2032-01-01T00:00:00Z"));
   await page.goto(base);
   await page.evaluate(() => document.fonts.ready);
+  // Scroll lazy seasonal iframes into view so all three chart frames initialize cleanly.
+  for (const frameEl of await page.locator("[data-chart-frame]").elementHandles()) {
+    await frameEl.scrollIntoViewIfNeeded();
+  }
+  await page.evaluate(() => scrollTo(0, 0));
   await page.waitForFunction(
     () => document.querySelectorAll('[data-chart-ready="true"]').length === 3,
   );
+  assert.equal(
+    await page.locator("#staleness-banner").isVisible(),
+    true,
+    "Staleness banner appears when dashboard data is >48h old",
+  );
+  assert.equal(await page.locator(".regime-banner").count(), 1);
   assert.equal(
     await page
       .locator("[data-dashboard-date]")
@@ -126,7 +137,7 @@ try {
   }
   if (data.reportDate === reference.date) {
     const tables = await page
-      .locator("table:not(.correlation-matrix)")
+      .locator("table:not(.correlation-matrix):not(.etf-table)")
       .evaluateAll((tables) =>
         tables.map((t) =>
           [...t.querySelectorAll("tbody tr")].map((r) =>
@@ -642,7 +653,10 @@ try {
     staticPage = await disabled.newPage();
   await staticPage.goto(base);
   assert.equal(await staticPage.locator(".metric-card").count(), 9);
-  assert.equal(await staticPage.locator("table").count(), 9 + (data.correlations ? 3 : 0));
+  assert.equal(
+    await staticPage.locator("table").count(),
+    9 + (data.correlations ? 3 : 0) + (data.etf ? 1 : 0),
+  );
   assert.equal(await staticPage.locator('[data-rank-period="7d"]:visible').count(), data.relative.length);
   assert.equal(await staticPage.locator('[data-rank-period="wtd"]:visible').count(), 0);
   assert.equal(await staticPage.locator('[data-rank-period="daily"]:visible').count(), 0);

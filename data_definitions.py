@@ -23,7 +23,6 @@ TICKERS = {
         "TSM",
         "SPCX",
         "2222.SR",
-        "005930.KS",
         "V",
         "JPM",
     ],
@@ -72,14 +71,18 @@ YAHOO_SHARE_TICKER_ALIASES = {
 # FX pairs that convert non-USD listings to USD market caps. TSM is a USD-traded ADR.
 YAHOO_MARKET_CAP_FX_TICKERS = {
     "2222.SR": "SARUSD=X",
-    "005930.KS": "KRWUSD=X",
 }
 
+def default_report_date() -> pd.Timestamp:
+    """The last completed UTC day, whatever the machine's timezone."""
+    return (
+        pd.Timestamp.now(tz="UTC").normalize().tz_localize(None)
+        - pd.Timedelta(days=1)
+    )
+
+
 # The last completed UTC day, whatever the machine's timezone.
-REPORT_DATE = (
-    pd.Timestamp.now(tz="UTC").normalize().tz_localize(None)
-    - pd.Timedelta(days=1)
-)
+REPORT_DATE = default_report_date()
 
 
 # =============================================================================
@@ -329,8 +332,8 @@ YOY_COLUMNS = ["price_close"]
 FUNDAMENTALS_TEMPLATE = {
     "Network Performance": {
         "Total Address Count": ("addrs_over_1sat_addr_count", "number"),
-        "Address Count > $10": ("addrs_over_10k_sats_addr_count", "number"),
-        "Active Addresses": ("daily_active_addresses_sending", "number"),
+        "Addresses ≥ 10k Sats": ("addrs_over_10k_sats_addr_count", "number"),
+        "Active Addresses / Block (24h Avg)": ("daily_active_addresses_sending", "number"),
         "Supply Held 1+ Year %": ("supply_pct_1_year_plus", "percent_point"),
         "Transaction Count": ("tx_count_sum_24h", "number"),
         "Transaction Volume": ("transfer_volume_sum_24h_usd", "currency"),

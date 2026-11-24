@@ -479,5 +479,33 @@ class PowerLawBandTests(unittest.TestCase):
         self.assertTrue(np.allclose(bands["power_law_price_band_300"], [300.0, 600.0]))
 
 
+class ElectricPriceModelTests(unittest.TestCase):
+    def test_does_not_mutate_input_and_guards_divide_by_zero(self):
+        import warnings
+
+        dates = pd.date_range("2024-01-01", periods=3, freq="D")
+        raw = pd.DataFrame(
+            {
+                "hash_rate": [5e20, 0.0, 5e20],
+                "cm_efficiency_j_gh": [0.025, 0.025, 0.025],
+                "subsidy_sum_24h": [900.0, 0.0, 900.0],
+                "fees_sum_24h": [50.0, 0.0, 50.0],
+                "difficulty": [7e13, 0.0, 7e13],
+                "price_close": [45_000.0, 45_000.0, 45_000.0],
+            },
+            index=dates,
+        )
+        original_columns = list(raw.columns)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            result = metrics.electric_price_models(raw)
+
+        self.assertEqual(list(raw.columns), original_columns)
+        self.assertEqual([w for w in caught if issubclass(w.category, RuntimeWarning)], [])
+        self.assertTrue(pd.isna(result.loc["2024-01-02", "hayes_network_price"]))
+        self.assertTrue(pd.isna(result.loc["2024-01-02", "hayes_network_price_multiple"]))
+        self.assertGreater(result.loc["2024-01-01", "hayes_network_price"], 0.0)
+
+
 if __name__ == "__main__":
     unittest.main()

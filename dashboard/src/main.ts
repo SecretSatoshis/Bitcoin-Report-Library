@@ -219,7 +219,39 @@ window.addEventListener("message", (event) => {
   }
   if (message.type === "ss-chart-error") fail(message.id, message.message);
 });
+// Reveal a subtle staleness warning if the published report date is >48h behind now.
+const heroEl = document.querySelector<HTMLElement>("[data-dashboard-date]");
+const stalenessBanner = document.querySelector<HTMLElement>("#staleness-banner");
+const stalenessText = document.querySelector<HTMLElement>("#staleness-text");
+if (heroEl && stalenessBanner && stalenessText) {
+  const reportDate = heroEl.dataset.dashboardDate;
+  const dateLabel = heroEl.dataset.dashboardDateLabel || reportDate || "";
+  if (reportDate) {
+    const closeMs = Date.parse(`${reportDate}T23:59:59Z`);
+    const ageMs = Date.now() - closeMs;
+    if (Number.isFinite(ageMs) && ageMs > 48 * 3600 * 1000) {
+      const days = Math.max(2, Math.floor(ageMs / 86400000));
+      stalenessText.textContent = `Data notice: Published figures are through ${dateLabel} (${days} days old). Daily updates publish shortly after the UTC close.`;
+      stalenessBanner.hidden = false;
+    }
+  }
+}
+
+function isFrameReady(frame: HTMLIFrameElement): boolean {
+  try {
+    const doc = frame.contentDocument;
+    return (
+      doc?.readyState === "complete" &&
+      doc.URL !== "about:blank" &&
+      doc.body?.dataset.chartId === frame.dataset.chartFrame
+    );
+  } catch {
+    return false;
+  }
+}
 frames.forEach((frame) => {
-  frame.addEventListener("load", () => initialize(frame));
-  if (frame.contentDocument?.readyState === "complete") initialize(frame);
+  frame.addEventListener("load", () => {
+    if (isFrameReady(frame)) initialize(frame);
+  });
+  if (isFrameReady(frame)) initialize(frame);
 });

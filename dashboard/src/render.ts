@@ -1,26 +1,51 @@
-import { relativeRankBaselines, relativeRankRollingPeriods, type RelativeRankPeriod, type RelativeRankChange, correlationGroups, correlationLabel, correlationName, correlationPeriods, num, type DashboardData, type Row, type Metric } from "./data";
+import { relativeRankBaselines, relativeRankRollingPeriods, type RelativeRankPeriod, type RelativeRankChange, correlationGroups, correlationLabel, correlationName, correlationPeriods, num, type DashboardData, type EtfSummary, type Row, type Metric } from "./data";
 import { PAGE_TITLE, PAGE_DESCRIPTION, PAGE_URL } from "./site";
 const SOCIAL_IMAGE = "https://secretsatoshis.com/assets/images/dashboard-social-card.jpg";
 const SOCIAL_IMAGE_ALT = "The Bitcoin Market Dashboard: Bitcoin's market performance, on-chain conditions, valuation, and network activity, updated daily";
-const STRUCTURED_DATA = {
-  "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "Organization",
-      "@id": "https://secretsatoshis.com/#organization",
-      name: "Secret Satoshis",
-      url: "https://secretsatoshis.com/",
-    },
-    {
-      "@type": "WebPage",
-      "@id": `${PAGE_URL}#webpage`,
-      name: PAGE_TITLE,
-      description: PAGE_DESCRIPTION,
-      url: PAGE_URL,
-      publisher: { "@id": "https://secretsatoshis.com/#organization" },
-    },
-  ],
-};
+function structuredData(d: DashboardData) {
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://secretsatoshis.com/#organization",
+        name: "Secret Satoshis",
+        url: "https://secretsatoshis.com/",
+      },
+      {
+        "@type": "WebPage",
+        "@id": `${PAGE_URL}#webpage`,
+        name: PAGE_TITLE,
+        description: PAGE_DESCRIPTION,
+        url: PAGE_URL,
+        dateModified: d.reportDate,
+        publisher: { "@id": "https://secretsatoshis.com/#organization" },
+      },
+      {
+        "@type": "Dataset",
+        "@id": `${PAGE_URL}#dataset`,
+        name: "Secret Satoshis Bitcoin Market Dashboard Dataset",
+        description: PAGE_DESCRIPTION,
+        url: PAGE_URL,
+        dateModified: d.reportDate,
+        isAccessibleForFree: true,
+        creator: { "@id": "https://secretsatoshis.com/#organization" },
+        distribution: [
+          {
+            "@type": "DataDownload",
+            encodingFormat: "application/json",
+            contentUrl: `${PAGE_URL}data/dashboard.json`,
+          },
+          {
+            "@type": "DataDownload",
+            encodingFormat: "text/csv",
+            contentUrl: "https://secretsatoshis.github.io/Bitcoin-Report-Library/csv/release_manifest.json",
+          },
+        ],
+      },
+    ],
+  };
+}
 export const escape = (v: unknown) =>
   String(v ?? "").replace(
     /[&<>"']/g,
@@ -166,13 +191,14 @@ function heatmap(rows: Row[], d: DashboardData, reference = false): string {
   return `<div class="table-scroll" role="region" aria-label="${reference ? "Statistical reference" : "Historical monthly returns"}" tabindex="0"><table class="heatmap"><thead><tr><th scope="col">${reference ? "Period" : "Year"}</th>${MONTHS.map((c) => `<th scope="col">${c}</th>`).join("")}</tr></thead><tbody>${body.join("")}</tbody></table></div>`;
 }
 function chart(id: string, title: string): string {
-  const file =
-    id === "dashboard-price-outlook"
-      ? "frame.html"
-      : id.endsWith("mtd")
-        ? "seasonal-mtd.html"
-        : "seasonal-ytd.html";
-  return `<div class="chart-container"><p class="chart-error" role="alert" data-chart-error="${id}" hidden></p><iframe src="/shared-chart/${file}" title="${escape(title)}" data-chart-frame="${id}" data-chart-src="/data/charts/${id}.json" ${id === "dashboard-price-outlook" ? "data-price-outlook-frame" : ""} class="shared-chart" loading="eager"></iframe><noscript><p>Interactive charts require JavaScript. <a href="https://secretsatoshis.github.io/Bitcoin-Report-Library/">Download the source data.</a></p></noscript></div>`;
+  const isPrice = id === "dashboard-price-outlook";
+  const file = isPrice
+    ? "frame.html"
+    : id.endsWith("mtd")
+      ? "seasonal-mtd.html"
+      : "seasonal-ytd.html";
+  const loading = isPrice ? "eager" : "lazy";
+  return `<div class="chart-container"><p class="chart-error" role="alert" data-chart-error="${id}" hidden></p><iframe src="/shared-chart/${file}" title="${escape(title)}" data-chart-frame="${id}" data-chart-src="/data/charts/${id}.json" ${isPrice ? "data-price-outlook-frame" : ""} class="shared-chart" loading="${loading}"></iframe><noscript><p>Interactive charts require JavaScript. <a href="https://secretsatoshis.github.io/Bitcoin-Report-Library/">Download the source data.</a></p></noscript></div>`;
 }
 function sectionHeading(title: string, subtitle: string): string {
   return `<div class="section-heading"><h2>${title}</h2><p>${subtitle}</p></div>`;
@@ -266,6 +292,84 @@ function relativeTable(d: DashboardData): string {
     : "—"}</td></tr>`).join("");
   return `${controls}<div class="table-scroll" role="region" aria-label="Relative valuation" tabindex="0"><table class="relative" id="relative-value-table" aria-describedby="relative-rank-methodology"><thead><tr>${headings.map((h) => `<th scope="col">${escape(h)}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div><div id="relative-rank-tooltip" class="rank-tooltip" role="tooltip" hidden></div><p id="relative-rank-methodology" class="relative-methodology">Ranks cover the assets listed here; new entrants can shift other positions. M0 amounts are fixed reference values. Historical metal values use estimated supply. Comparisons use completed UTC-day data.${d.relativeRankChanges ? "" : " Rank history is unavailable for this release."}</p>`;
 }
+function formatSignedFlowUsd(value: number | null): string {
+  if (value === null) return "Unavailable";
+  const abs = Math.abs(value);
+  if (abs < 0.5) return "$0";
+  const sign = value > 0 ? "+" : "-";
+  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(1)}M`;
+  return `${sign}$${Math.round(abs).toLocaleString("en-US")}`;
+}
+function formatSignedBtc(value: number | null): string {
+  if (value === null) return "Unavailable";
+  const rounded = Math.round(Math.abs(value));
+  if (rounded === 0) return "0 BTC";
+  const sign = value > 0 ? "+" : "-";
+  return `${sign}${rounded.toLocaleString("en-US")} BTC`;
+}
+function flowChip(value: number | null, text: string): string {
+  if (value === null) return '<span class="muted">Unavailable</span>';
+  const normalized = text === "$0" || text === "0" ? 0 : value;
+  const cls = normalized > 0 ? "positive" : normalized < 0 ? "negative" : "flat";
+  return `<span class="delta ${cls}">${escape(text)}</span>`;
+}
+function etfSection(etf: EtfSummary): string {
+  const flowCls = (v: number | null) =>
+    v === null ? "muted" : v > 0 ? "positive" : v < 0 ? "negative" : "muted";
+  const cards = [
+    {
+      label: "Total BTC Held",
+      value: `${format(etf.totalBtc, "number", 0)} BTC`,
+      sub:
+        etf.supplySharePct !== null
+          ? `${etf.supplySharePct.toFixed(2)}% of circulating supply`
+          : `${etf.fundCount} US spot ETFs`,
+      cls: "",
+    },
+    {
+      label: "Total AUM",
+      value: format(etf.totalAumUsd, "billion", 2),
+      sub: `${etf.fundCount} US spot ETFs · ${etf.asOfLabel}`,
+      cls: "",
+    },
+    {
+      label: "Latest Daily Net Flow",
+      value: formatSignedFlowUsd(etf.latestFlowUsd),
+      sub: formatSignedBtc(etf.latestFlowBtc),
+      cls: flowCls(etf.latestFlowUsd),
+    },
+    {
+      label: "7D / 30D Net Flows",
+      value: formatSignedFlowUsd(etf.flow7dUsd),
+      sub: `7D flow · 30D: ${formatSignedFlowUsd(etf.flow30dUsd)}`,
+      cls: flowCls(etf.flow7dUsd),
+    },
+  ]
+    .map(
+      (c) =>
+        `<article class="etf-card"><div class="metric-label">${escape(c.label)}</div><strong class="etf-value ${c.cls}">${escape(c.value)}</strong><p class="metric-comparison muted">${escape(c.sub)}</p></article>`,
+    )
+    .join("");
+  const rows = etf.funds.map((f) => [
+    `<span class="etf-ticker">${escape(f.fund)}</span>`,
+    format(f.btcHeld, "number", 0),
+    format(f.netAssetsUsd, "billion", 2),
+    f.marketSharePct !== null ? `${f.marketSharePct.toFixed(1)}%` : "—",
+    flowChip(f.flowBtc, formatSignedBtc(f.flowBtc).replace(" BTC", "")),
+    flowChip(f.flowUsd, formatSignedFlowUsd(f.flowUsd)),
+    flowChip(f.flow7dUsd, formatSignedFlowUsd(f.flow7dUsd)),
+  ]);
+  return `<section id="etf-flows" class="dashboard-section">${sectionHeading(
+    "Spot Bitcoin ETF Flows",
+    `US spot Bitcoin ETF holdings, assets under management, and net creations/redemptions through ${escape(etf.asOfLabel)}.`,
+  )}<div class="etf-grid">${cards}</div><h3 id="etf-fund-breakdown">Holdings &amp; Flows by Fund</h3>${table(
+    ["Fund", "BTC Held", "AUM (USD)", "Share", "Daily Flow (BTC)", "Daily Flow (USD)", "7D Flow (USD)"],
+    rows,
+    "US spot Bitcoin ETF holdings and flows",
+    "etf-table",
+  )}<p class="methodology">Holdings and daily net flows reflect US trading-day filings and issuer disclosures through ${escape(etf.asOfLabel)}${etf.entryPrice !== null ? ` · Flow-weighted entry price: ${format(etf.entryPrice, "usd")}` : ""}.</p><div class="section-cta"><a href="https://charts.secretsatoshis.com/">Explore full ETF holdings &amp; flow charts →</a><a href="https://agent21.secretsatoshis.com/">Ask Agent 21 about today’s ETF flows →</a></div></section>`;
+}
 export function renderDashboard(d: DashboardData): string {
   const cases = d.cases
     .map(
@@ -274,15 +378,23 @@ export function renderDashboard(d: DashboardData): string {
     )
     .join("");
   const sentiment = [
-    ["Supply in Profit", format(d.sentiment.supplyInProfit, "percent", 1), "Share of bitcoin whose current price exceeds its last-moved price."],
-    ["Fear & Greed", d.sentiment.sentiment, "NUPL zone of the trailing seven-day average; derived from holder unrealized profits and losses."],
-    ["Bitcoin Valuation", d.sentiment.valuation, "Bitcoin price divided by fitted power-law fair value."],
+    ["Supply in Profit", format(d.sentiment.supplyInProfit, "percent", 1), "Share of bitcoin whose current price exceeds its last-moved price.", ""],
+    [
+      "On-Chain Sentiment (NUPL)",
+      d.sentiment.sentiment,
+      "NUPL zone of the trailing seven-day average; derived from holder unrealized profits and losses.",
+      d.sentiment.nupl7d !== null ? `7d avg NUPL: ${d.sentiment.nupl7d.toFixed(2)}` : "",
+    ],
+    ["Bitcoin Valuation", d.sentiment.valuation, "Bitcoin price divided by fitted power-law fair value.", ""],
   ]
     .map(
-      ([label, value, description]) =>
-        `<article class="metric-card"><div class="metric-label">${label}${tooltip(description)}</div><strong class="sentiment-value">${escape(value)}</strong></article>`,
+      ([label, value, description, sub]) =>
+        `<article class="metric-card"><div class="metric-label">${label}${tooltip(description)}</div><div class="sentiment-reading"><strong class="sentiment-value">${escape(value)}</strong>${sub ? `<span class="sentiment-sub muted">${escape(sub)}</span>` : ""}</div></article>`,
     )
     .join("");
+  const sectionLinks = d.etf
+    ? [...SECTIONS.slice(0, 2), ["etf-flows", "ETF Flows"], ...SECTIONS.slice(2)]
+    : SECTIONS;
   const footerGroup = (title: string, links: string[][]) =>
     `<div><h2>${title}</h2><ul>${links.map(([url, label]) => `<li><a href="${url}">${label}</a></li>`).join("")}</ul></div>`;
   return `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -292,15 +404,18 @@ export function renderDashboard(d: DashboardData): string {
 <meta property="og:image" content="${SOCIAL_IMAGE}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="${escape(SOCIAL_IMAGE_ALT)}">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@SecretSatoshis"><meta name="twitter:creator" content="@SecretSatoshis">
 <meta name="twitter:title" content="${escape(PAGE_TITLE)}"><meta name="twitter:description" content="${escape(PAGE_DESCRIPTION)}"><meta name="twitter:image" content="${SOCIAL_IMAGE}"><meta name="twitter:image:alt" content="${escape(SOCIAL_IMAGE_ALT)}">
-<script type="application/ld+json">${JSON.stringify(STRUCTURED_DATA).replace(/</g, "\\u003c")}</script>
+<script type="application/ld+json">${JSON.stringify(structuredData(d)).replace(/</g, "\\u003c")}</script>
 <script defer src="/analytics.js?v=1"></script>
 <link rel="icon" href="/favicon.ico"><link rel="stylesheet" href="../src/styles.css"><script type="module" src="../src/main.ts"></script></head><body>
 <a class="skip-link" href="#bitcoin-snapshot">Skip to dashboard</a><header class="site-nav"><a href="https://secretsatoshis.com/" class="brand"><span class="accent">//</span> SECRET SATOSHIS</a><button id="nav-toggle" type="button" aria-label="Open menu" aria-controls="site-links" aria-expanded="false">≡</button><nav id="site-links" aria-label="Primary navigation">${NAV_LINKS.map(([url, label]) => `<a href="${url}" ${label === "Dashboard" ? 'aria-current="page"' : ""}>${label}</a>`).join("")}</nav></header>
-<section class="hero" data-dashboard-date="${d.reportDate}" aria-labelledby="dashboard-title"><div class="hero-grid"><div><h1 id="dashboard-title">Bitcoin Market Dashboard<span class="accent">.</span></h1><p class="hero-description">Track Bitcoin’s market performance, on-chain conditions, valuation, and network activity, updated daily.</p><p class="hero-source">Explore the data and models behind the dashboard. <a href="https://secretsatoshis.github.io/Bitcoin-Report-Library/">View the source data.</a></p></div><dl class="release-status" aria-label="Dashboard status"><div><dt>Latest data</dt><dd>${d.dateLabel}</dd></div><div><dt>Refresh cadence</dt><dd>Daily</dd></div></dl></div></section>
-<nav class="section-nav" aria-label="Dashboard sections"><div>${SECTIONS.map(([id, label]) => `<a href="#${id}">${label}</a>`).join("")}</div></nav>
+<section class="hero" data-dashboard-date="${d.reportDate}" data-dashboard-date-label="${escape(d.dateLabel)}" aria-labelledby="dashboard-title"><div class="hero-grid"><div><h1 id="dashboard-title">Bitcoin Market Dashboard<span class="accent">.</span></h1><p class="hero-description">Track Bitcoin’s market performance, on-chain conditions, valuation, and network activity, updated daily.</p><p class="hero-source">Explore the data and models behind the dashboard. <a href="https://secretsatoshis.github.io/Bitcoin-Report-Library/">View the source data.</a></p></div><dl class="release-status" aria-label="Dashboard status"><div><dt>Latest data</dt><dd>${d.dateLabel}</dd></div><div><dt>Refresh cadence</dt><dd>Daily</dd></div></dl></div></section>
+<div id="staleness-banner" class="staleness-banner" role="status" hidden><div class="staleness-inner"><span class="staleness-dot" aria-hidden="true"></span><span id="staleness-text"></span></div></div>
+<nav class="section-nav" aria-label="Dashboard sections"><div>${sectionLinks.map(([id, label]) => `<a href="#${id}">${label}</a>`).join("")}</div></nav>
 <main>
+${d.regimeSummary.length ? `<aside class="regime-banner" aria-label="Market regime summary"><div class="regime-header"><span class="regime-kicker">Market Regime</span><span class="regime-date">${escape(d.dateLabel)}</span></div><p class="regime-text">${d.regimeSummary.map(escape).join(" ")}</p></aside>` : ""}
 <section id="bitcoin-snapshot" class="dashboard-section">${sectionHeading("Bitcoin Snapshot", "Headline metrics — market, on-chain, and sentiment.")}<div class="visual-block" data-newsletter-visual="bitcoin-snapshot-market-data"><h3 id="market-data">Market Data</h3><div class="metric-grid">${d.metrics.slice(0, 3).map(card).join("")}</div></div><h3 id="on-chain-data">On-chain Data</h3><div class="metric-grid">${d.metrics.slice(3).map(card).join("")}</div><h3 id="investor-sentiment">Investor Sentiment</h3><div class="metric-grid sentiment-grid">${sentiment}</div></section>
-<section id="bitcoin-price" class="dashboard-section" data-newsletter-visual="bitcoin-price">${sectionHeading("Bitcoin Price", "Price vs on-chain valuation models and moving averages.")}<h3 id="price-outlook">Secret Satoshis ${d.year} Price Outlook</h3><div class="case-grid">${cases}</div>${chart(d.charts[0].id, d.charts[0].title)}</section>
+<section id="bitcoin-price" class="dashboard-section" data-newsletter-visual="bitcoin-price">${sectionHeading("Bitcoin Price", "Price vs on-chain valuation models and moving averages.")}<h3 id="price-outlook">Secret Satoshis ${d.year} Price Outlook</h3><div class="case-grid">${cases}</div>${chart(d.charts[0].id, d.charts[0].title)}<div class="section-cta"><a href="https://charts.secretsatoshis.com/">Explore all 54 full-screen charts on Charts →</a><a href="https://newsletter.secretsatoshis.com/">Read the ${d.year} Bitcoin Outlook on Substack →</a><a href="https://agent21.secretsatoshis.com/">Ask Agent 21 about today’s market →</a></div></section>
+${d.etf ? etfSection(d.etf) : ""}
 <section id="performance" class="dashboard-section">${sectionHeading("Performance", "Compare Bitcoin and other assets’ returns across the same periods.")}${performanceSection(d)}</section>
 <section id="correlation" class="dashboard-section">${sectionHeading("Correlation", "Return correlations across Bitcoin and major markets.")}${correlationSection(d)}</section>
 <section id="monthly-bitcoin-price-return-heatmap" class="dashboard-section" data-newsletter-visual="monthly-return-heatmap">${sectionHeading("Monthly Bitcoin Price Return Heatmap", "Monthly returns by year, measured from the previous period’s close.")}<h3 id="statistical-reference">Statistical Reference</h3>${heatmap(d.heatmap.reference, d, true)}<h3 id="historical-returns-by-year">Historical Returns by Year</h3>${heatmap(d.heatmap.years, d)}</section>
@@ -312,7 +427,7 @@ export function renderDashboard(d: DashboardData): string {
     )
     .join("")}</section>
 <section id="relative-valuation" class="dashboard-section" data-quarterly-visual="relative-valuation">${sectionHeading("Relative Valuation", "Bitcoin’s hypothetical price if its market cap matched each reference asset. These are comparison scenarios, not forecasts.")}${relativeTable(d)}</section>
-<section id="network-fundamentals" class="dashboard-section">${sectionHeading("Network Fundamentals", "Network health, security &amp; on-chain economics.")}${fundamentalsTable(d)}</section>
+<section id="network-fundamentals" class="dashboard-section">${sectionHeading("Network Fundamentals", "Network health, security &amp; on-chain economics.")}${fundamentalsTable(d)}<div class="section-cta"><a href="https://charts.secretsatoshis.com/">View on-chain &amp; mining charts →</a><a href="https://newsletter.secretsatoshis.com/">Subscribe to the weekly Market Outlook →</a><a href="https://agent21.secretsatoshis.com/">Ask Agent 21 about today’s market →</a></div></section>
 <section id="bitcoin-roi-by-time-frame" class="dashboard-section">${sectionHeading("Bitcoin ROI by Time Frame", "Returns by holding period.")}${table(
     ["Period", "ROI", "Start Price"],
     d.roi.map((r) => [escape(r["Time Frame"]), delta(r["ROI (%)"], 1), format(r["Start Price"], "usd")]),

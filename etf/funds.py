@@ -14,19 +14,48 @@ import os
 import re
 import subprocess
 import tempfile
+import threading
 import zipfile
-from functools import cache
+from functools import wraps
 from pathlib import Path
 
 import pandas as pd
-import requests
 
 from .common import (
     CHROME_HEADERS, Snapshot, excel_date, get, iso_date, json_after, number, post_json,
-    spreadsheet2003_rows, xlsx_rows,
+    previous_us_trading_day, spreadsheet2003_rows, xlsx_rows,
 )
 
 HERE = Path(__file__).resolve().parent
+
+_CACHED_FUNCTIONS: list = []
+
+
+def _per_run_cache(fn):
+    """Thread-safe per-run cache so current + history readers share one HTTP download."""
+    lock = threading.Lock()
+    store: dict = {}
+
+    @wraps(fn)
+    def wrapper(*args):
+        with lock:
+            if args not in store:
+                store[args] = fn(*args)
+            return store[args]
+
+    def cache_clear():
+        with lock:
+            store.clear()
+
+    wrapper.cache_clear = cache_clear
+    _CACHED_FUNCTIONS.append(wrapper)
+    return wrapper
+
+
+def clear_caches() -> None:
+    """Clear all per-run ETF download caches (called at the start of each collect run)."""
+    for fn in _CACHED_FUNCTIONS:
+        fn.cache_clear()
 
 # Provisional per-fund daily flows in USD: TFTC's open dataset (CC BY 4.0, attribution "TFTC —
 # tftc.io/bitcoin-etf-flows"), which takes them from SoSoValue. They fill only the days the
@@ -59,6 +88,7 @@ BTCW_PAGE = "https://www.wisdomtree.com/us/products/crypto/btcw"
 
 # --------------------------------------------------------------------------- IBIT
 
+@_per_run_cache
 def _ibit_historical() -> list[list[str]]:
     return spreadsheet2003_rows(get(IBIT_DOWNLOAD).content, "Historical")
 
@@ -70,9 +100,10 @@ def ibit_current() -> Snapshot:
     columns = rows[header]
     bitcoin = next(dict(zip(columns, row)) for row in rows[header + 1:] if row and row[0] == "BTC")
     as_of = iso_date(meta["Fund Holdings as of"], "%b %d, %Y")
-    nav_row = next(row for row in _ibit_historical()[1:] if row and iso_date(row[0], "%b %d, %Y") == as_of)
+    nav_row = next((row for row in _ibit_historical()[1:] if row and iso_date(row[0], "%b %d, %Y") == as_of), None)
     return Snapshot("IBIT", as_of, number(bitcoin["Quantity"]), IBIT_HOLDINGS,
-                    shares_outstanding=number(meta["Shares Outstanding"]), nav=number(nav_row[1]),
+                    shares_outstanding=number(meta["Shares Outstanding"]),
+                    nav=number(nav_row[1]) if nav_row is not None else None,
                     net_assets=number(bitcoin["Market Value"]))
 
 
@@ -90,6 +121,7 @@ def ibit_history() -> pd.DataFrame:
 
 # --------------------------------------------------------------------------- Grayscale (GBTC, BTC)
 
+@_per_run_cache
 def _grayscale(fund: str) -> tuple[list[list], list[list]]:
     content = get(GRAYSCALE[fund]).content
     return xlsx_rows(content, "Daily Performance"), xlsx_rows(content, "Holdings")
@@ -123,42 +155,142 @@ def grayscale_history(fund: str) -> pd.DataFrame:
 
 # --------------------------------------------------------------------------- FBTC
 
+def _match_first(text: str, patterns: tuple[str, ...], field: str) -> re.Match:
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match is not None:
+            return match
+    snippet = re.sub(r"\s+", " ", text).strip()[:200]
+    raise ValueError(f"FBTC PDF: could not parse {field} (excerpt: {snippet!r})")
+
+
 def fbtc_current() -> Snapshot:
     with tempfile.NamedTemporaryFile(suffix=".pdf") as handle:
         handle.write(get(FBTC_PDF).content)
         handle.flush()
-        text = subprocess.run(["pdftotext", "-layout", handle.name, "-"], capture_output=True, text=True,
-                              check=True).stdout
-    as_of = iso_date(re.search(r"Holding as of:\s*(\S+)", text).group(1).title(), "%d-%b-%y")
-    shares = number(re.search(r"Current Shares Outstanding:\s*([\d,]+)", text).group(1))
-    bitcoin = re.search(r"BITCOIN\s+Crypto Asset\s+US Dollar\s+([\d.,]+)\s+\$\s*([\d.,]+)", text)
-    total = number(re.search(r"Total:\s+\$\s*([\d.,]+)", text).group(1))
-    return Snapshot("FBTC", as_of, number(bitcoin.group(1)), FBTC_PDF, shares_outstanding=shares,
-                    nav=total / shares, net_assets=total)
+        proc = subprocess.run(["pdftotext", "-layout", handle.name, "-"], capture_output=True, text=True)
+        if proc.returncode != 0:
+            raise RuntimeError(f"FBTC pdftotext failed (exit {proc.returncode}): {proc.stderr.strip()[:200]}")
+        text = proc.stdout
+    if not text.strip():
+        raise ValueError("FBTC PDF: pdftotext produced empty output")
+    date_match = _match_first(
+        text,
+        (
+            r"Holding\s+as\s+of[:\s]+(\S+)",
+            r"As\s+of[:\s]+(\d{1,2}-[A-Za-z]{3}-\d{2,4}|\d{1,2}/\d{1,2}/\d{2,4})",
+        ),
+        "as-of date",
+    )
+    raw_date = date_match.group(1).strip().rstrip(",.")
+    as_of = iso_date(raw_date.title(), "%d-%b-%y", "%d-%b-%Y", "%m/%d/%Y", "%Y-%m-%d")
+
+    shares_match = _match_first(
+        text,
+        (
+            r"Current\s+Shares\s+Outstanding[:\s]+([\d,]+(?:\.\d+)?)",
+            r"Shares\s+Outstanding[:\s]+([\d,]+(?:\.\d+)?)",
+        ),
+        "shares outstanding",
+    )
+    shares = number(shares_match.group(1))
+
+    bitcoin = _match_first(
+        text,
+        (
+            r"BITCOIN\s+Crypto\s+Asset\s+US\s+Dollar\s+([\d.,]+)\s+\$\s*([\d.,]+)",
+            r"BITCOIN\b[^\n]*?\b([\d,]+\.\d+)\s+\$?\s*([\d,]+\.\d+)",
+        ),
+        "bitcoin holding",
+    )
+    btc_qty = number(bitcoin.group(1))
+    btc_mv = number(bitcoin.group(2))
+
+    total_match = re.search(r"Total[:\s]+\$\s*([\d.,]+)", text, re.IGNORECASE)
+    total = number(total_match.group(1)) if total_match is not None else btc_mv
+    return Snapshot("FBTC", as_of, btc_qty, FBTC_PDF, shares_outstanding=shares,
+                    nav=total / shares if shares > 0 else None, net_assets=total)
 
 
 # --------------------------------------------------------------------------- BITB
 
+def _bitb_json(page: str, *keys: str, expect: type | tuple[type, ...] | None = None):
+    """Extract a JSON field from either raw HTML or Next.js RSC-escaped script payloads."""
+    candidates = [page]
+    if '\\"' in page:
+        candidates.append(page.replace('\\\\"', '"').replace('\\"', '"'))
+    decoder = json.JSONDecoder()
+    for text in candidates:
+        for key in keys:
+            marker = f'"{key}":'
+            pos = 0
+            while True:
+                start = text.find(marker, pos)
+                if start < 0:
+                    break
+                pos = start + len(marker)
+                try:
+                    value, _ = decoder.raw_decode(text, pos)
+                except json.JSONDecodeError:
+                    continue
+                if expect is None or isinstance(value, expect):
+                    return value
+    raise ValueError(f"page data has no {keys[0]!r}")
+
+
+@_per_run_cache
+def _bitb_page() -> str:
+    return get(BITB_PAGE, headers={"User-Agent": CHROME_HEADERS["User-Agent"]}).text
+
+
 def bitb_current() -> tuple[Snapshot, list[dict]]:
-    page = get(BITB_PAGE, headers={"User-Agent": CHROME_HEADERS["User-Agent"]}).text
-    holdings = json_after(page, "holdings")
-    bitcoin = next(item for item in holdings["basket"] if item["companyName"] == "BITCOIN")
-    wallets = json_after(page, "walletBalances")
-    snapshot = Snapshot("BITB", holdings["asOfDate"], float(bitcoin["shares"]), BITB_PAGE,
-                        shares_outstanding=float(json_after(page, "sharesOutstanding")),
-                        nav=float(json_after(page, "navAndMarketPrice")["nav"]),
-                        net_assets=float(bitcoin["marketValue"]))
+    page = _bitb_page()
+    holdings = _bitb_json(page, "holdings", expect=dict)
+    bitcoin = next(
+        item for item in holdings["basket"]
+        if (item.get("name") or item.get("companyName")) == "BITCOIN"
+    )
+    wallets = _bitb_json(page, "walletBalances", expect=list)
+    as_of = holdings["asOfDate"]
+    btc_held = float(bitcoin["assetInTrust"] if "assetInTrust" in bitcoin else bitcoin["shares"])
+    btc_per_share = float(bitcoin["assetPerShare"]) if bitcoin.get("assetPerShare") else None
+    net_assets = float(bitcoin["marketValue"])
+    shares = (
+        round(btc_held / btc_per_share)
+        if btc_per_share and btc_per_share > 0
+        else float(_bitb_json(page, "sharesOutstanding", expect=(int, float)))
+    )
+    nav_obj = _bitb_json(page, "navMarketPrice", "navAndMarketPrice", expect=dict)
+    raw_nav = nav_obj.get("nav")
+    nav_val = float(raw_nav["value"]) if isinstance(raw_nav, dict) else float(raw_nav)
+    nav_date = nav_obj.get("asOfDate")
+    nav = nav_val if nav_date in (None, as_of) else (net_assets / shares if shares > 0 else None)
+    snapshot = Snapshot(
+        "BITB",
+        as_of,
+        btc_held,
+        BITB_PAGE,
+        shares_outstanding=float(shares),
+        btc_per_share=btc_per_share,
+        nav=nav,
+        net_assets=net_assets,
+    )
     wallet_total = sum(w["balance"] for w in wallets if w.get("active"))
     snapshot.note = f"{len(wallets)} custody addresses holding {wallet_total:,.8f} BTC"
     return snapshot, wallets
 
 
 def bitb_nav_history() -> pd.DataFrame:
-    """Daily NAV from the page's chart data, stamped at 4pm New York time in milliseconds."""
-    points = json_after(get(BITB_PAGE, headers={"User-Agent": CHROME_HEADERS["User-Agent"]}).text,
-                        "navAndMarketPrice")["chart"]["nav"]
-    stamps = pd.to_datetime([point[0] for point in points], unit="ms", utc=True).tz_convert("America/New_York")
-    return pd.DataFrame({"date": stamps.strftime("%Y-%m-%d"), "nav": [float(point[1]) for point in points]})
+    """Daily NAV from the page's chart data (handles both RSC UTC objects and legacy NY arrays)."""
+    nav_obj = _bitb_json(_bitb_page(), "navMarketPrice", "navAndMarketPrice", expect=dict)
+    points = nav_obj["chart"]["nav"]
+    if points and isinstance(points[0], dict):
+        stamps = pd.to_datetime([point["t"] for point in points], unit="ms", utc=True)
+        navs = [float(point["v"]) for point in points]
+    else:
+        stamps = pd.to_datetime([point[0] for point in points], unit="ms", utc=True).tz_convert("America/New_York")
+        navs = [float(point[1]) for point in points]
+    return pd.DataFrame({"date": stamps.strftime("%Y-%m-%d"), "nav": navs})
 
 
 # --------------------------------------------------------------------------- ARKB
@@ -167,8 +299,8 @@ def arkb_current() -> Snapshot:
     rows = list(csv.DictReader(io.StringIO(get(ARKB_CSV).text)))
     bitcoin = next(row for row in rows if (row.get("company") or "").upper() == "BITCOIN")
     published = pd.Timestamp(iso_date(bitcoin["date"], "%m/%d/%Y"))
-    # ARK stamps the file with the next business day; the position is the prior close.
-    as_of = (published - pd.offsets.BDay(1)).date().isoformat()
+    # ARK stamps the file with the next trading day; the position is the prior close.
+    as_of = previous_us_trading_day(published).date().isoformat()
     return Snapshot("ARKB", as_of, number(bitcoin["shares"]), ARKB_CSV, net_assets=number(bitcoin["market value ($)"]),
                     note=f"file dated {published.date()}; whole coins only")
 
@@ -188,22 +320,15 @@ def arkb_history() -> pd.DataFrame:
 
 # --------------------------------------------------------------------------- HODL
 
-def _vaneck_session() -> requests.Session:
-    session = requests.Session()
-    session.headers["User-Agent"] = CHROME_HEADERS["User-Agent"]
-    return session
-
-
 def hodl_current() -> Snapshot:
-    data = _vaneck_session().get(HODL_HOLDINGS, timeout=60).json()
+    data = get(HODL_HOLDINGS, headers={"User-Agent": CHROME_HEADERS["User-Agent"]}).json()
     bitcoin = next(h for h in data["Holdings"] if h["HoldingName"] == "Bitcoin")
     return Snapshot("HODL", data["AsOfDate"][:10], number(bitcoin["Shares"]), HODL_HOLDINGS,
                     net_assets=number(bitcoin["MV"]), note="custody quantity, whole coins")
 
 
 def hodl_history() -> pd.DataFrame:
-    response = _vaneck_session().get(HODL_HISTORY, timeout=60)
-    response.raise_for_status()
+    response = get(HODL_HISTORY, headers={"User-Agent": CHROME_HEADERS["User-Agent"]})
     sheet = xlsx_rows(response.content, _first_sheet(response.content))
     head = next(i for i, row in enumerate(sheet) if row and row[0] == "Date")
     records = [dict(zip(sheet[head], row)) for row in sheet[head + 1:] if row and row[0]]
@@ -220,29 +345,73 @@ def hodl_history() -> pd.DataFrame:
 
 def _first_sheet(content: bytes) -> str:
     workbook = zipfile.ZipFile(io.BytesIO(content)).read("xl/workbook.xml").decode()
-    return re.search(r'<(?:\w+:)?sheet\b[^>]*\bname="([^"]+)"', workbook).group(1)
+    match = re.search(r'<(?:\w+:)?sheet\b[^>]*\bname="([^"]+)"', workbook)
+    if match is None:
+        raise ValueError("xlsx workbook has no named sheet")
+    return match.group(1)
 
 
 # --------------------------------------------------------------------------- MSBT
 
+def _msbt_unwrap(payload: dict, label: str) -> dict:
+    if not isinstance(payload, dict):
+        raise ValueError(f"MSBT {label}: expected JSON object, got {type(payload).__name__}")
+    return payload.get("en") if isinstance(payload.get("en"), dict) else payload
+
+
 def msbt_current() -> Snapshot:
     headers = {**CHROME_HEADERS, "Referer": "https://www.morganstanley.com/"}
-    holdings = get(MSBT_DATA + "chart/etfTradeDateHoldingsCurrent.json", headers=headers).json()["en"]
-    pricing = get(MSBT_DATA + "detail/en-pricing.json", headers=headers).json()["en"]
-    net_assets = get(MSBT_DATA + "detail/en-netAsset.json", headers=headers).json()["en"]["netAsset"]
-    bitcoin = next(h for h in holdings["holdings"] if h["securityDescription"] == "BITCOIN")
-    nav = number(pricing["shareClasses"][0]["currencies"][0]["pricings"]["nav6f"])
-    total = number(net_assets["value2f"]) * 1e6
-    return Snapshot("MSBT", iso_date(holdings["effectiveDate"], "%m/%d/%Y"), number(bitcoin["quantity"]),
-                    MSBT_DATA + "chart/etfTradeDateHoldingsCurrent.json", shares_outstanding=total / nav,
+    holdings_url = MSBT_DATA + "chart/etfTradeDateHoldingsCurrent.json"
+    holdings = _msbt_unwrap(get(holdings_url, headers=headers).json(), "holdings")
+    pricing = _msbt_unwrap(get(MSBT_DATA + "detail/en-pricing.json", headers=headers).json(), "pricing")
+    net_assets_doc = _msbt_unwrap(get(MSBT_DATA + "detail/en-netAsset.json", headers=headers).json(), "netAsset")
+    net_assets = net_assets_doc.get("netAsset") if isinstance(net_assets_doc.get("netAsset"), dict) else net_assets_doc
+
+    holding_rows = holdings.get("holdings")
+    if not isinstance(holding_rows, list) or not holding_rows:
+        raise ValueError("MSBT holdings payload contains no holdings list")
+    bitcoin = next(
+        (
+            h for h in holding_rows
+            if isinstance(h, dict) and "BITCOIN" in str(
+                h.get("securityDescription") or h.get("securityName") or h.get("ticker") or ""
+            ).upper()
+        ),
+        None,
+    )
+    if bitcoin is None:
+        raise ValueError("MSBT holdings payload contains no BITCOIN row")
+
+    raw_date = holdings.get("effectiveDate") or holdings.get("asOfDate")
+    if not raw_date:
+        raise ValueError("MSBT holdings payload missing effectiveDate")
+    as_of = iso_date(raw_date, "%m/%d/%Y", "%Y-%m-%d", "%b %d, %Y")
+
+    raw_qty = bitcoin.get("quantity") if bitcoin.get("quantity") is not None else bitcoin.get("shares")
+    if raw_qty is None:
+        raise ValueError("MSBT bitcoin holding missing quantity")
+
+    share_classes = pricing.get("shareClasses") or []
+    currencies = (share_classes[0].get("currencies") or []) if share_classes else []
+    pricings = (currencies[0].get("pricings") or {}) if currencies else {}
+    raw_nav = pricings.get("nav6f") or pricings.get("nav2f") or pricings.get("nav")
+    nav = number(raw_nav) if raw_nav is not None else None
+
+    raw_total = net_assets.get("value2f") if isinstance(net_assets, dict) else None
+    if raw_total is None and isinstance(net_assets, dict):
+        raw_total = net_assets.get("value")
+    total = number(raw_total) * 1e6 if raw_total is not None else None
+    shares = total / nav if total is not None and nav and nav > 0 else None
+
+    return Snapshot("MSBT", as_of, number(raw_qty), holdings_url, shares_outstanding=shares,
                     nav=nav, net_assets=total, note="shares = net assets (to $10k) / NAV")
 
 
 def msbt_nav_history() -> pd.DataFrame:
     headers = {**CHROME_HEADERS, "Referer": "https://www.morganstanley.com/"}
-    series = get(MSBT_DATA + "chart/historicalNav.json", headers=headers).json()["en"]["shareClasses"][0][
-        "currencies"][0]["series"]
-    return pd.DataFrame({"date": [iso_date(d, "%m/%d/%Y") for d in series["category"]],
+    doc = _msbt_unwrap(get(MSBT_DATA + "chart/historicalNav.json", headers=headers).json(), "historicalNav")
+    series = doc["shareClasses"][0]["currencies"][0]["series"]
+    return pd.DataFrame({"date": [iso_date(d, "%m/%d/%Y", "%Y-%m-%d") for d in series["category"]],
                          "nav": [number(v) for v in series["data"]]})
 
 
@@ -272,6 +441,7 @@ EZBC_PRICES = ("query PricingDetails($productId: String!, $countryCode: String!,
                "totalnetassets } } }")
 
 
+@_per_run_cache
 def _ezbc_prices() -> list[dict]:
     data = post_json(f"{EZBC_API}?op=PricingDetails&id=4", {"query": EZBC_PRICES, "variables": EZBC_VARIABLES,
                                                             "operationName": "PricingDetails"})["data"]
@@ -326,7 +496,7 @@ def btco_nav_history() -> pd.DataFrame:
 
 # --------------------------------------------------------------------------- BTCW
 
-@cache
+@_per_run_cache
 def _btcw_page() -> dict:
     """WisdomTree's fund data loads only inside its web page, so BTCW is read in a headless
     browser, once per run for both today's holdings and the NAV history.
@@ -428,6 +598,11 @@ NAV_HISTORY = {"BITB": bitb_nav_history, "MSBT": msbt_nav_history, "BTCO": btco_
 # back one trading day, their daily flows match trade-date flow tables and their quarter ends
 # match the SEC exactly. Their figure for a day is the trade-date position of the previous trading day.
 SETTLEMENT_DATED = {"IBIT", "BTCW", "GBTC", "BTC", "HODL", "EZBC"}
+# Subset whose published holdings snapshots are ALSO settlement-dated (T+1).
+# IBIT (latest-holdings.csv) and EZBC (FundFact BITCOIN_IN_FUND) already stamp holdings on
+# trade date T while stamping shares outstanding on settlement date T+1.
+SETTLEMENT_DATED_HOLDINGS = {"BTCW", "GBTC", "BTC", "HODL"}
+TOP5_FUNDS = ("IBIT", "FBTC", "GBTC", "BTC", "BITB")
 SEC_CIK = {
     "IBIT": 1980994, "FBTC": 1852317, "GBTC": 1588489, "BTC": 2015034, "BITB": 1763415, "ARKB": 1869699,
     "HODL": 1838028, "MSBT": 2103612, "BRRR": 1841175, "EZBC": 1992870, "BTCO": 1855781, "BTCW": 1850391,

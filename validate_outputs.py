@@ -15,7 +15,8 @@ import pandas as pd
 from annual_data import ANNUAL_REFERENCE_FILE, ANNUAL_SERIES
 from candle_data import CANDLE_FILES, validate_candle_exports
 from etf import ETF_FILES
-from data_definitions import FUNDAMENTALS_TEMPLATE
+from etf.build import MIN_AUM_COVERAGE_FOR_FLOWS
+from data_definitions import FUNDAMENTALS_TEMPLATE, STOCK_TICKERS
 from data_definitions import REPORT_DATE as CLOCK_REPORT_DATE
 from data_validation import validate_calendar, validate_candles
 from report_tables import (
@@ -144,12 +145,14 @@ RETAINED_OUTPUTS = {
     "fundamentals_table.csv",
     "cycle_low_data.csv",
     "halving_data.csv",
+    "master_metrics_data.csv.gz",
     "monthly_heatmap_data.csv",
     "mtd_return_comparison.csv",
     "mtd_price_paths.csv",
     "onchain_price_models.csv",
     "performance_table.csv",
     "price_outlook.csv",
+    "relative_value_comparison.csv",
     "report_ohlc_summary.csv",
     "summary_history.csv",
     "summary_table.csv",
@@ -275,16 +278,20 @@ def _validate_index_cutoff(
     column: str,
     expected_report_date: pd.Timestamp,
     errors: list[str],
+    frame: pd.DataFrame | None = None,
 ) -> None:
     """Assert a large dated export ends exactly on the report date."""
-    path = output_dir / filename
-    if not path.is_file():
-        return
-    try:
-        index = pd.read_csv(path, usecols=[column])[column]
-    except (OSError, UnicodeError, ValueError, pd.errors.ParserError) as exc:
-        errors.append(f"{filename}: cannot read {column!r} ({exc})")
-        return
+    if frame is not None and column in frame.columns:
+        index = frame[column]
+    else:
+        path = output_dir / filename
+        if not path.is_file():
+            return
+        try:
+            index = pd.read_csv(path, usecols=[column])[column]
+        except (OSError, UnicodeError, ValueError, pd.errors.ParserError) as exc:
+            errors.append(f"{filename}: cannot read {column!r} ({exc})")
+            return
 
     parsed = pd.to_datetime(index, errors="coerce")
     if parsed.isna().any():
@@ -664,18 +671,36 @@ def _validate_report_agreement(
     _validate_price_moving_averages(frames, errors)
 
 
-def _validate_investor_sentiment(summary, master_path, report_date, errors):
+def _prepare_master_frame(raw_master: pd.DataFrame | None) -> pd.DataFrame | None:
+    """Index a retained master_metrics_data frame by parsed calendar dates once."""
+    if raw_master is None or "date" not in raw_master.columns:
+        return None
+    dates = pd.to_datetime(raw_master["date"], errors="coerce")
+    if dates.isna().any():
+        return None
+    indexed = raw_master.drop(columns=["date"]).copy()
+    indexed.index = pd.DatetimeIndex(dates, name="date")
+    return indexed
+
+
+def _validate_investor_sentiment(
+    summary, master_path, report_date, errors, master: pd.DataFrame | None = None
+):
     """Recompute the three on-chain Investor Sentiment values from the master file."""
     try:
-        master = pd.read_csv(
-            master_path,
-            usecols=["date", "nupl", "supply_in_profit", "supply", "power_law_price_multiple"],
-            parse_dates=["date"],
-        ).set_index("date").loc[:report_date]
-        latest = master.iloc[-1]
+        if master is not None:
+            needed = ["nupl", "supply_in_profit", "supply", "power_law_price_multiple"]
+            source = master[needed].loc[:report_date]
+        else:
+            source = pd.read_csv(
+                master_path,
+                usecols=["date", "nupl", "supply_in_profit", "supply", "power_law_price_multiple"],
+                parse_dates=["date"],
+            ).set_index("date").loc[:report_date]
+        latest = source.iloc[-1]
         expected = {
             "Bitcoin Supply in Profit (%)": latest["supply_in_profit"] / latest["supply"] * 100,
-            "Bitcoin Market Sentiment": _nupl_sentiment(master, report_date),
+            "Bitcoin Market Sentiment": _nupl_sentiment(source, report_date),
             "Bitcoin Valuation": _power_law_valuation(latest["power_law_price_multiple"]),
         }
         rows = summary.set_index("Metric")
@@ -733,7 +758,9 @@ def _validate_performance_rows(frames, errors):
         errors.append("performance_table.csv: invalid long-horizon returns")
 
 
-def _validate_review_contracts(frames, output_dir, report_date, errors):
+def _validate_review_contracts(
+    frames, output_dir, report_date, errors, master: pd.DataFrame | None = None
+):
     """Recheck OHLC candles, the investor-sentiment rows and the fundamentals table against source data."""
     summary = frames.get("report_ohlc_summary.csv")
     if summary is not None:
@@ -752,15 +779,19 @@ def _validate_review_contracts(frames, output_dir, report_date, errors):
         except (ValueError, KeyError, IndexError) as exc:
             errors.append(f"report_ohlc_summary.csv: {exc}")
     master_path = output_dir / "master_metrics_data.csv.gz"
+    has_master = master is not None or master_path.is_file()
     summary = frames.get("summary_table.csv")
-    if summary is not None and master_path.is_file():
-        _validate_investor_sentiment(summary, master_path, report_date, errors)
+    if summary is not None and has_master:
+        _validate_investor_sentiment(summary, master_path, report_date, errors, master=master)
     fundamentals = frames.get("fundamentals_table.csv")
-    if fundamentals is not None and master_path.is_file():
+    if fundamentals is not None and has_master:
         try:
             columns = list(dict.fromkeys(["date"] + [item[0] for group in FUNDAMENTALS_TEMPLATE.values() for item in group.values()]))
-            master = pd.read_csv(master_path, usecols=columns, parse_dates=["date"]).set_index("date")
-            expected = create_fundamentals_table(master, FUNDAMENTALS_TEMPLATE, report_date)
+            if master is not None:
+                source = master[[c for c in columns if c != "date"]]
+            else:
+                source = pd.read_csv(master_path, usecols=columns, parse_dates=["date"]).set_index("date")
+            expected = create_fundamentals_table(source, FUNDAMENTALS_TEMPLATE, report_date)
             change = "7 Day Change (%)"
             # Published values carry 10 significant digits (publication.py).
             if not np.allclose(pd.to_numeric(fundamentals[change], errors="coerce"),
@@ -773,6 +804,60 @@ def _validate_review_contracts(frames, output_dir, report_date, errors):
                 expected.fillna("").astype(str).reset_index(drop=True), check_dtype=False)
         except (ValueError, KeyError, AssertionError) as exc:
             errors.append(f"fundamentals_table.csv: does not match report-date source values ({str(exc)[:180]})")
+
+
+MAX_STOCK_MARKET_CAP_USD = 15e12
+MAX_STOCK_DAILY_JUMP_RATIO = 2.0
+
+
+def _validate_relative_value_comparison(frames: dict[str, pd.DataFrame], errors: list[str]) -> None:
+    """Require every row in relative_value_comparison.csv to have finite positive cap and BTC price."""
+    table = frames.get("relative_value_comparison.csv")
+    required = {"Asset", "Market Cap (USD)", "BTC Price at Market Cap"}
+    if table is None or not required.issubset(table.columns):
+        return
+    caps = pd.to_numeric(table["Market Cap (USD)"], errors="coerce")
+    prices = pd.to_numeric(table["BTC Price at Market Cap"], errors="coerce")
+    bad_cap = ~(np.isfinite(caps) & caps.gt(0))
+    bad_price = ~(np.isfinite(prices) & prices.gt(0))
+    bad_mask = bad_cap | bad_price
+    if bad_mask.any():
+        assets = table.loc[bad_mask, "Asset"].astype(str).tolist()
+        errors.append(
+            "relative_value_comparison.csv: missing or non-positive market cap / BTC price for "
+            + ", ".join(assets)
+        )
+
+
+def _validate_stock_market_caps(master: pd.DataFrame | None, errors: list[str]) -> None:
+    """Guard against split-adjustment bugs (>200% single-day jump or >$15T cap)."""
+    if master is None or master.empty:
+        return
+    for ticker in STOCK_TICKERS:
+        col = f"{ticker}_market_cap"
+        if col not in master.columns:
+            continue
+        series = pd.to_numeric(master[col], errors="coerce")
+        finite = series[np.isfinite(series)]
+        if finite.empty:
+            continue
+        max_cap = float(finite.max())
+        if max_cap > MAX_STOCK_MARKET_CAP_USD:
+            max_date = finite.idxmax()
+            date_str = max_date.date() if hasattr(max_date, "date") else max_date
+            errors.append(
+                f"master_metrics_data.csv.gz: {col} exceeds $15T cap guard "
+                f"(${max_cap / 1e12:.2f}T on {date_str})"
+            )
+        positive = series.where(series > 0)
+        jumps = positive.pct_change(fill_method=None)
+        if jumps.notna().any() and float(jumps.max()) > MAX_STOCK_DAILY_JUMP_RATIO:
+            jump_date = jumps.idxmax()
+            date_str = jump_date.date() if hasattr(jump_date, "date") else jump_date
+            errors.append(
+                f"master_metrics_data.csv.gz: {col} has >200% single-day jump "
+                f"({float(jumps.max()) * 100:.1f}% on {date_str})"
+            )
 
 
 def validate_outputs(
@@ -822,6 +907,17 @@ def validate_outputs(
         if frame is not None:
             retained_frames[filename] = frame
 
+    raw_master = retained_frames.get("master_metrics_data.csv.gz")
+    master = _prepare_master_frame(raw_master)
+    if master is None and (output_dir / "master_metrics_data.csv.gz").is_file() and (
+        "master_metrics_data.csv.gz" not in rules
+    ):
+        try:
+            raw_master = pd.read_csv(output_dir / "master_metrics_data.csv.gz", low_memory=False)
+            master = _prepare_master_frame(raw_master)
+        except (OSError, UnicodeError, ValueError, pd.errors.ParserError):
+            master = None
+
     for filename, column in INDEX_CUTOFF_OUTPUTS.items():
         _validate_index_cutoff(
             output_dir,
@@ -829,20 +925,27 @@ def validate_outputs(
             column,
             expected_report_date,
             errors,
+            frame=raw_master if filename == "master_metrics_data.csv.gz" else None,
         )
 
     _validate_outlook_levels(retained_frames, expected_report_date, errors)
     _validate_report_agreement(retained_frames, expected_report_date, errors)
-    _validate_review_contracts(retained_frames, output_dir, expected_report_date, errors)
+    _validate_review_contracts(retained_frames, output_dir, expected_report_date, errors, master=master)
     _validate_performance_rows(retained_frames, errors)
+    _validate_relative_value_comparison(retained_frames, errors)
+    _validate_stock_market_caps(master, errors)
     _validate_correlation_matrix(retained_frames, expected_report_date, errors)
-    _validate_relative_rank_changes(retained_frames, output_dir, expected_report_date, errors)
+    _validate_relative_rank_changes(retained_frames, output_dir, expected_report_date, errors, master=master)
     _validate_annual_reference(retained_frames, errors)
     _validate_etf(retained_frames, errors)
     if any((output_dir / name).exists() for name in CANDLE_FILES):
         try:
-            master = pd.read_csv(output_dir / "master_metrics_data.csv.gz", index_col=0, parse_dates=True, low_memory=False)
-            validate_candle_exports(output_dir, master, expected_report_date)
+            candle_master = (
+                master
+                if master is not None
+                else pd.read_csv(output_dir / "master_metrics_data.csv.gz", index_col=0, parse_dates=True, low_memory=False)
+            )
+            validate_candle_exports(output_dir, candle_master, expected_report_date)
         except (ValueError, RuntimeError, KeyError, OSError, AssertionError) as exc:
             errors.append(f"Chart candle exports: {exc}")
     _validate_release_manifest(output_dir, expected_report_date, errors, require_release_manifest)
@@ -862,7 +965,9 @@ def _validate_outlook_levels(frames, report_date, errors):
         errors.append("price_outlook.csv: technical levels need valid ISO start dates on or before the report date")
 
 
-def _validate_relative_rank_changes(frames, output_dir, report_date, errors):
+def _validate_relative_rank_changes(
+    frames, output_dir, report_date, errors, master: pd.DataFrame | None = None
+):
     """Recompute all ranks and availability from the published master series."""
     table = frames.get(RELATIVE_RANK_FILE)
     if table is None or not set(RELATIVE_RANK_COLUMNS).issubset(table.columns):
@@ -872,11 +977,15 @@ def _validate_relative_rank_changes(frames, output_dir, report_date, errors):
             asset["market_cap"] for asset in asset_valuation_definitions()
             if "market_cap" in asset
         }
-        master = pd.read_csv(
-            output_dir / "master_metrics_data.csv.gz", usecols=lambda c: c in columns,
-            parse_dates=["date"], low_memory=False,
-        ).set_index("date")
-        expected = create_relative_value_rank_changes(master, report_date)
+        if master is not None:
+            present = [c for c in columns if c != "date" and c in master.columns]
+            source = master[present]
+        else:
+            source = pd.read_csv(
+                output_dir / "master_metrics_data.csv.gz", usecols=lambda c: c in columns,
+                parse_dates=["date"], low_memory=False,
+            ).set_index("date")
+        expected = create_relative_value_rank_changes(source, report_date)
         actual = table.copy()
         for column in ("Current Rank", "Previous Rank", "Change"):
             actual[column] = pd.to_numeric(actual[column], errors="raise").astype("Int64")
@@ -950,18 +1059,57 @@ def _validate_annual_reference(frames, errors):
 
 
 def _validate_etf(frames, errors):
-    """Holdings are non-negative, each fund appears once a day, and totals equal the funds' sum."""
+    """Holdings are non-negative, each fund appears once a day, totals equal the funds' sum,
+    residual other_change_btc stays bounded, and aggregate flows require >=80% AUM coverage."""
     daily, totals = frames.get("etf_daily.csv"), frames.get("etf_totals_daily.csv")
     if daily is None or totals is None:
         return
     if daily.duplicated(["fund", "date"]).any():
         errors.append("etf_daily.csv: a fund repeats a date")
-    if pd.to_numeric(daily["btc_held"], errors="coerce").lt(0).any():
+    held = pd.to_numeric(daily["btc_held"], errors="coerce")
+    if held.lt(0).any():
         errors.append("etf_daily.csv: negative holdings")
     summed = daily.groupby("date")["btc_held"].sum()
     published = totals.set_index("date")["total_btc"]
     if not np.allclose(summed.reindex(published.index), published, rtol=1e-6):
         errors.append("etf_totals_daily.csv: totals disagree with the funds in etf_daily.csv")
+
+    if "other_change_btc" in daily.columns:
+        other = pd.to_numeric(daily["other_change_btc"], errors="coerce").abs()
+        # Exclude historical rebuilt launch rows and the 2024-07-30 GBTC Mini Trust spin-off.
+        is_spinoff = daily["fund"].eq("GBTC") & daily["date"].astype(str).eq("2024-07-30")
+        is_rebuilt = daily["btc_source"].astype(str).eq("rebuilt")
+        tolerance = np.maximum(250.0, held.fillna(0.0) * 0.0025)
+        bad_other = (~is_spinoff) & (~is_rebuilt) & other.gt(tolerance)
+        if bad_other.any():
+            worst = daily.loc[bad_other].assign(_abs=other[bad_other]).nlargest(3, "_abs")
+            samples = ", ".join(
+                f"{row.fund} {row.date} ({row.other_change_btc:+.1f} BTC)"
+                for row in worst.itertuples()
+            )
+            errors.append(f"etf_daily.csv: excessive |other_change_btc| residual ({samples})")
+
+    if "btc_source" in daily.columns and not totals.empty:
+        pub_btc = held.where(daily["btc_source"].astype(str).ne("carried forward"), 0.0)
+        coverage = (
+            pub_btc.groupby(daily["date"]).sum().reindex(published.index)
+            / published.where(published > 0)
+        )
+        if "total_flow_btc" in totals.columns:
+            has_flow = pd.to_numeric(totals.set_index("date")["total_flow_btc"], errors="coerce").notna()
+            under_covered_flows = has_flow & coverage.lt(MIN_AUM_COVERAGE_FOR_FLOWS - 1e-9)
+            if under_covered_flows.any():
+                bad_dates = [str(d) for d in coverage.index[under_covered_flows][-5:]]
+                errors.append(
+                    f"etf_totals_daily.csv: daily aggregate flows published below "
+                    f"{MIN_AUM_COVERAGE_FOR_FLOWS:.0%} AUM coverage on {bad_dates}"
+                )
+        trailing = coverage.tail(5)
+        if not trailing.empty and not trailing.ge(MIN_AUM_COVERAGE_FOR_FLOWS - 1e-9).any():
+            errors.append(
+                f"etf_daily.csv: trailing {len(trailing)} trading days all below "
+                f"{MIN_AUM_COVERAGE_FOR_FLOWS:.0%} AUM coverage"
+            )
 
 
 # Fitted coefficients published in the manifest instead of as constant columns.

@@ -21,7 +21,7 @@ FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json"
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik:010d}.json"
 ARCHIVE_URL = "https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/{document}"
 # The SEC asks automated clients to identify themselves.
-SEC_HEADERS = {"User-Agent": "Secret Satoshis Bitcoin-Report-Library treybrunson@protonmail.com"}
+SEC_HEADERS = {"User-Agent": "Secret Satoshis Bitcoin-Report-Library data@secretsatoshis.com"}
 FAIR_VALUE_TAGS = ("CryptoAssetFairValue", "InvestmentOwnedAtFairValue",
                    "InvestmentInPhysicalCommoditiesFairValueDisclosure")
 COST_TAGS = ("CryptoAssetCost", "InvestmentOwnedAtCost")
@@ -45,15 +45,19 @@ def _quarter_values(facts: dict, tags) -> dict[str, float]:
     return values
 
 
-def _text_counts(cik: int, cache: dict) -> list[float]:
-    """Every number written as "<n> bitcoin" in the fund's 10-Q and 10-K filings.
+def _text_counts(cik: int, cache: dict) -> dict[str, list[float]]:
+    """Numbers written as "<n> bitcoin" in the fund's 10-Q and 10-K filings, scoped by reportDate.
 
     Each filing is read once; `cache` maps accession numbers to the counts found and gains
-    an entry for every filing read.
+    an entry for every filing read. Returns `{report_date: [counts, ...]}` (with `""` for
+    any filing lacking a reportDate).
     """
     recent = get(SUBMISSIONS_URL.format(cik=cik), headers=SEC_HEADERS).json()["filings"]["recent"]
-    counts = []
-    for form, accession, document in zip(recent["form"], recent["accessionNumber"], recent["primaryDocument"]):
+    report_dates = recent.get("reportDate") or [""] * len(recent["form"])
+    counts_by_date: dict[str, list[float]] = {}
+    for form, accession, document, report_date in zip(
+        recent["form"], recent["accessionNumber"], recent["primaryDocument"], report_dates
+    ):
         if form not in ("10-Q", "10-K"):
             continue
         if accession not in cache:
@@ -62,8 +66,28 @@ def _text_counts(cik: int, cache: dict) -> list[float]:
             text = html.unescape(re.sub(r"<[^>]+>", " ", page))
             cache[accession] = sorted({float(m.group(1).replace(",", "")) for m in TEXT_COUNT.finditer(text)})
             time.sleep(0.15)
-        counts.extend(cache[accession])
-    return counts
+        key = str(report_date or "").strip()
+        counts_by_date.setdefault(key, []).extend(cache[accession])
+    return counts_by_date
+
+
+def _candidate_text_counts(counts_by_date: dict[str, list[float]], quarter_end: str) -> list[float]:
+    """Return text counts from filings whose reportDate matches `quarter_end` (within +-5 days)."""
+    if quarter_end in counts_by_date:
+        return counts_by_date[quarter_end]
+    target = pd.Timestamp(quarter_end)
+    nearby: list[float] = []
+    for filing_date, values in counts_by_date.items():
+        if not filing_date:
+            continue
+        try:
+            if abs((pd.Timestamp(filing_date) - target).days) <= 5:
+                nearby.extend(values)
+        except ValueError:
+            continue
+    if nearby:
+        return nearby
+    return counts_by_date.get("", [])
 
 
 def quarter_ends(ciks: dict[str, int], reference: pd.Series, cache: dict) -> pd.DataFrame:
@@ -96,8 +120,8 @@ def quarter_ends(ciks: dict[str, int], reference: pd.Series, cache: dict) -> pd.
     estimate = frame.fair_value_usd / frame.price_usd
     frame["coin_source"] = frame.reported_btc.notna().map({True: "tagged", False: "fair value / price"})
     for i in frame.index[frame.reported_btc.isna() & (estimate > 0)]:
-        candidates = [c for c in text_counts[frame.at[i, "fund"]]
-                      if abs(c / estimate[i] - 1) <= TEXT_MATCH_TOLERANCE]
+        scoped = _candidate_text_counts(text_counts[frame.at[i, "fund"]], str(frame.at[i, "quarter_end"]))
+        candidates = [c for c in scoped if abs(c / estimate[i] - 1) <= TEXT_MATCH_TOLERANCE]
         if candidates:
             frame.at[i, "reported_btc"] = min(candidates, key=lambda c: abs(c / estimate[i] - 1))
             frame.at[i, "coin_source"] = "filing text"

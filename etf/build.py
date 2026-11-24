@@ -43,6 +43,7 @@ import numpy as np
 import pandas as pd
 
 from . import funds
+from .common import next_us_trading_day
 
 START = pd.Timestamp("2024-01-10")  # the funds' seed NAV day; trading began 2024-01-11
 PER_SHARE_WINDOW = 9
@@ -68,6 +69,39 @@ PROVISIONAL_TOLERANCE_USD = 2_000_000
 STALE_AFTER_DAYS = 2
 
 
+# Minimum fraction of total AUM with non-carried-forward data to publish aggregate daily flows.
+MIN_AUM_COVERAGE_FOR_FLOWS = 0.80
+
+
+def _running_average_cost_basis(flow_btc: pd.Series, flow_usd: pd.Series) -> pd.Series:
+    """Running average cost basis of ETF net holdings across creations and redemptions.
+
+    Creations (`flow_btc > 0`) add coins and USD cost at the creation price. Redemptions
+    (`flow_btc < 0`) reduce position and cost basis proportionally at the current average
+    cost, so outflows below cost never push the entry price upward or divide near zero.
+    """
+    position_btc = 0.0
+    cost_basis_usd = 0.0
+    out = []
+    for fb, fu in zip(flow_btc, flow_usd):
+        if pd.notna(fb) and pd.notna(fu):
+            fb_f = float(fb)
+            fu_f = float(fu)
+            if fb_f > 0:
+                position_btc += fb_f
+                cost_basis_usd += max(fu_f, 0.0)
+            elif fb_f < 0 and position_btc > 0:
+                redeemed = min(-fb_f, position_btc)
+                avg_cost = cost_basis_usd / position_btc
+                position_btc -= redeemed
+                cost_basis_usd -= redeemed * avg_cost
+                if position_btc <= 1e-9:
+                    position_btc = 0.0
+                    cost_basis_usd = 0.0
+        out.append(cost_basis_usd / position_btc if position_btc > 1e-9 and cost_basis_usd > 0 else np.nan)
+    return pd.Series(out, index=flow_btc.index, dtype=float)
+
+
 def _trading_days_behind(sources: pd.Series, days: pd.DatetimeIndex) -> tuple[int, pd.Timestamp | None]:
     """Trading days in `days` after the fund's last day of its own data, and that day."""
     own = sources.index[~sources.isin(UNPUBLISHED + (FILLED,))]
@@ -81,12 +115,14 @@ def _interpolate(dates: pd.DatetimeIndex, anchor_dates, anchor_values) -> np.nda
 
 
 def _trade_date_snapshots(snapshots: pd.DataFrame, calendar: pd.DatetimeIndex) -> pd.DataFrame:
-    """Snapshots on trade-date basis: a settlement-dated fund's figure belongs to the previous trading day."""
+    """Snapshots on trade-date basis: only funds whose holdings snapshots are settlement-dated
+    (T+1) shift back one trading day; trade-date holdings (IBIT, EZBC) keep their as_of date."""
     frame = snapshots.copy()
     frame["date"] = pd.to_datetime(frame["as_of"])
-    shift = frame["fund"].isin(funds.SETTLEMENT_DATED)
-    position = calendar.searchsorted(frame.loc[shift, "date"]) - 1
-    frame.loc[shift, "date"] = calendar[np.clip(position, 0, len(calendar) - 1)]
+    shift = frame["fund"].isin(funds.SETTLEMENT_DATED_HOLDINGS)
+    if shift.any():
+        position = calendar.searchsorted(frame.loc[shift, "date"]) - 1
+        frame.loc[shift, "date"] = calendar[np.clip(position, 0, len(calendar) - 1)]
     return frame
 
 
@@ -125,30 +161,45 @@ def _issuer_fund(fund, history, snapshots, sec, calendar):
         # The next day's share count is this trade date's; the last day has no next day yet.
         # Shift in pre-split units so a split stays on the day NAV splits.
         units = shares / split.cumprod()
-        shares = units.shift(-1).fillna(units) * split.cumprod()
+        shifted_units = units.shift(-1)
+        shares_observed_series = shifted_units * split.cumprod()
+        shares_for_base = shifted_units.fillna(units) * split.cumprod()
+    else:
+        shares_observed_series = shares
+        shares_for_base = shares
     schedule = _fee_schedule_per_share(fund, h, snapshots) if fund in SPONSOR_FEE else None
     if schedule is not None:
-        base = shares * schedule
+        base = shares_for_base * schedule
     else:
         # NAV is net of liabilities that move day to day, and a few published days are wrong,
         # while bitcoin per share falls smoothly by the fee: take a centred 9-day median.
         per_share = (nav / h["reference_price"]).groupby((split > 1).cumsum()).transform(
             lambda part: part.rolling(PER_SHARE_WINDOW, center=True, min_periods=1).median())
-        base = shares * per_share
+        base = shares_for_base * per_share
     base = base.reindex(calendar).ffill()
-    shares = shares.reindex(calendar).ffill()
-    nav = nav.reindex(calendar).ffill()
+    shares_aligned = shares_observed_series.reindex(calendar)
+    nav_aligned = nav.reindex(calendar)
+    shares_observed = shares_aligned.notna()
+    nav_observed = nav_aligned.notna()
 
     anchors = snapshots[snapshots.fund == fund].set_index("date")["btc_held"]
     reported = sec[(sec.fund == fund) & sec.reported_btc.notna()].set_index("trade_date")["reported_btc"]
-    anchors = pd.concat([reported, anchors]).groupby(level=0).last().reindex(calendar).dropna()
+    # Audited SEC 10-Q/10-K reported holdings take precedence over scraped snapshots on quarter ends.
+    anchors = pd.concat([anchors, reported]).groupby(level=0).last().reindex(calendar).dropna()
     anchors = anchors[base.reindex(anchors.index) > 0]
     ratio = _interpolate(calendar, anchors.index, anchors / base[anchors.index]) if len(anchors) else 1.0
     btc = base * ratio
     source = pd.Series("issuer history", index=calendar).where(~calendar.isin(anchors.index), "exact")
     split = split.reindex(calendar).fillna(1.0)
-    return pd.DataFrame({"btc_held": btc, "btc_source": source, "shares_outstanding": shares, "nav": nav,
-                         "split_factor": split})
+    return pd.DataFrame({
+        "btc_held": btc,
+        "btc_source": source,
+        "shares_outstanding": shares_aligned,
+        "nav": nav_aligned,
+        "split_factor": split,
+        "shares_observed": shares_observed,
+        "nav_observed": nav_observed,
+    })
 
 
 def _interpolated_fund(fund, nav_only, snapshots, sec, calendar, start=None):
@@ -157,9 +208,12 @@ def _interpolated_fund(fund, nav_only, snapshots, sec, calendar, start=None):
     nav = nav_only.get(fund, pd.Series(dtype=float))
     launch = nav.index.min() if len(nav) else START
     begin = pd.Series({start[0]: start[1]}) if start else pd.Series({launch: 0.0})
-    quarter = sec[(sec.fund == fund) & (sec.btc > 0)].set_index("trade_date")["btc"]
+    sec_fund = sec[(sec.fund == fund) & (sec.btc > 0)]
+    estimated_quarter = sec_fund[sec_fund.reported_btc.isna()].set_index("trade_date")["btc"]
+    reported_quarter = sec_fund[sec_fund.reported_btc.notna()].set_index("trade_date")["reported_btc"]
     exact = snapshots[snapshots.fund == fund].set_index("date")["btc_held"]
-    later = pd.concat([quarter, exact]).groupby(level=0).last()
+    # Audited SEC reported_btc wins over scraped snapshots, which win over estimated SEC rows.
+    later = pd.concat([estimated_quarter, exact, reported_quarter]).groupby(level=0).last()
     anchors = pd.concat([begin, later[later.index > begin.index[0]]])
     btc = pd.Series(_interpolate(calendar, anchors.index, anchors.to_numpy()), index=calendar)
     btc[calendar < launch] = np.nan
@@ -237,7 +291,7 @@ def _fill_provisional(frame: pd.DataFrame, flows: pd.Series | None, days: pd.Dat
     frame.loc[tail, "flow_usd"] = flow_usd.where(have, 0.0)
     frame.loc[tail, "other_change_btc"] = 0.0
     frame.loc[tail, "btc_source"] = np.where(have, label, "carried forward")
-    per_share = frame.loc[tail, "btc_per_share"]
+    per_share = frame["btc_per_share"].ffill().loc[tail]
     frame.loc[tail, "shares_outstanding"] = (frame.loc[tail, "btc_held"] / per_share).where(
         per_share > 0, frame.loc[tail, "shares_outstanding"])
     frame.loc[tail, "net_assets_usd"] = frame.loc[tail, "btc_held"] * price
@@ -287,7 +341,7 @@ def build_tables(inputs: dict[str, pd.DataFrame], through: pd.Timestamp) -> dict
         published = pd.DatetimeIndex(previous["date"].unique())
         calendar = calendar.union(published[published <= through])
     # A settlement-dated fund's file for the day after the cutoff holds the cutoff's trades.
-    snapshots = _trade_date_snapshots(snapshots, calendar.union(pd.DatetimeIndex([through + pd.offsets.BDay(1)])))
+    snapshots = _trade_date_snapshots(snapshots, calendar.union(pd.DatetimeIndex([next_us_trading_day(through)])))
     snapshots = snapshots[snapshots["date"] <= through]
     sec = sec[sec["quarter_end"] <= through]
     # A quarter end that falls on a weekend or holiday belongs to the last trading day before it.
@@ -361,19 +415,34 @@ def build_tables(inputs: dict[str, pd.DataFrame], through: pd.Timestamp) -> dict
             derived = frame["btc_held"] / (same_day_nav / frame["price_usd"])
             frame["shares_outstanding"] = frame["shares_outstanding"].fillna(derived)
             frame["btc_per_share"] = frame["btc_held"] / frame["shares_outstanding"]
+        shares_observed = (
+            frame.pop("shares_observed")
+            if "shares_observed" in frame
+            else frame["shares_outstanding"].notna()
+        )
+        nav_observed = (
+            frame.pop("nav_observed")
+            if "nav_observed" in frame
+            else frame["nav"].notna()
+        )
         change = frame["btc_held"].diff()
         split = frame.pop("split_factor") if "split_factor" in frame else pd.Series(1.0, index=frame.index)
-        created = frame["shares_outstanding"] - frame["shares_outstanding"].shift() * split
+        valid_share_pair = shares_observed & shares_observed.shift(fill_value=False)
+        created = (frame["shares_outstanding"] - frame["shares_outstanding"].shift() * split).where(valid_share_pair)
         # Creations and redemptions move shares; fees paid in bitcoin lower bitcoin per share.
-        frame["flow_btc"] = created * frame["btc_per_share"]
-        frame["flow_usd"] = created * frame["nav"]
-        if current_only:
-            # Exact where two consecutive days' share counts are known; otherwise the line's change.
-            frame["flow_btc"] = frame["flow_btc"].fillna(change)
-            frame["flow_usd"] = frame["flow_usd"].fillna(frame["flow_btc"] * frame["price_usd"])
+        # Never derive flows from stale forward-filled shares: fall back to holdings change net of fee.
+        day_gap = frame.index.to_series().diff().dt.days.fillna(1.0).clip(lower=0.0)
+        fee_rate = SPONSOR_FEE.get(fund, 0.0)
+        est_fee_btc = (frame["btc_held"].shift() * (fee_rate / 365.0) * day_gap).fillna(0.0) if fee_rate else 0.0
+        fallback_flow_btc = change + est_fee_btc
+        frame["flow_btc"] = (created * frame["btc_per_share"]).where(valid_share_pair, fallback_flow_btc)
+        share_flow_usd = (created * frame["nav"]).where(valid_share_pair & nav_observed)
+        frame["flow_usd"] = share_flow_usd.fillna(frame["flow_btc"] * frame["price_usd"])
         frame["other_change_btc"] = change - frame["flow_btc"]
-        frame["net_assets_usd"] = (frame["shares_outstanding"] * frame["nav"]).fillna(
-            frame["btc_held"] * frame["price_usd"])
+        # Use shares x NAV only when both are fresh observations for that trade date; else btc_held x price_usd.
+        frame["net_assets_usd"] = (frame["shares_outstanding"] * frame["nav"]).where(
+            shares_observed & nav_observed, frame["btc_held"] * frame["price_usd"]
+        )
         frame.insert(0, "fund", fund)
         frame = frame.rename_axis("date").reset_index()
         if fund in kept:
@@ -395,9 +464,23 @@ def build_tables(inputs: dict[str, pd.DataFrame], through: pd.Timestamp) -> dict
     totals = daily.groupby("date").agg(
         total_btc=("btc_held", "sum"), total_flow_btc=("flow_btc", "sum"), total_flow_usd=("flow_usd", "sum"),
         total_net_assets_usd=("net_assets_usd", "sum"), funds=("fund", "nunique"))
-    totals["cumulative_flow_btc"] = totals["total_flow_btc"].cumsum()
-    totals["cumulative_flow_usd"] = totals["total_flow_usd"].cumsum()
-    totals["flow_weighted_entry_price"] = totals["cumulative_flow_usd"] / totals["cumulative_flow_btc"]
+    published_btc = daily["btc_held"].where(daily["btc_source"] != "carried forward", 0.0).groupby(daily["date"]).sum()
+    coverage = published_btc.reindex(totals.index) / totals["total_btc"].where(totals["total_btc"] > 0)
+    low_coverage = coverage.lt(MIN_AUM_COVERAGE_FOR_FLOWS)
+    if low_coverage.any():
+        low_dates = [str(d.date()) for d in totals.index[low_coverage][-5:]]
+        warnings.warn(
+            f"ETF aggregate AUM coverage below {MIN_AUM_COVERAGE_FOR_FLOWS:.0%} on {low_dates}; "
+            "omitting daily aggregate flows for incomplete days",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        totals.loc[low_coverage, ["total_flow_btc", "total_flow_usd"]] = np.nan
+    totals["cumulative_flow_btc"] = totals["total_flow_btc"].fillna(0.0).cumsum()
+    totals["cumulative_flow_usd"] = totals["total_flow_usd"].fillna(0.0).cumsum()
+    totals["flow_weighted_entry_price"] = _running_average_cost_basis(
+        totals["total_flow_btc"], totals["total_flow_usd"]
+    )
     totals = totals.reset_index()
 
     quarterly = sec[sec["btc"] > 0].copy()

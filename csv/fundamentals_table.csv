@@ -1,7 +1,7 @@
 Section,Metric,Current Value,7 Days Ago,7 Day Change (%),Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday,52W Low,52W High
 Network Performance,Total Address Count,"57,153,376","57,217,111",-0.1113915031,"57,153,376",,,,,,,"54,724,092","57,242,676"
-Network Performance,Address Count > $10,"38,973,794","39,059,902",-0.2204511419,"38,973,794",,,,,,,"37,764,310","39,186,262"
-Network Performance,Active Addresses,"6,715","6,427",4.493221648,"6,715",,,,,,,"4,300","10,240"
+Network Performance,Addresses ≥ 10k Sats,"38,973,794","39,059,902",-0.2204511419,"38,973,794",,,,,,,"37,764,310","39,186,262"
+Network Performance,Active Addresses / Block (24h Avg),"6,715","6,427",4.493221648,"6,715",,,,,,,"4,300","10,240"
 Network Performance,Supply Held 1+ Year %,68.51%,64.71%,5.869624788,68.51%,,,,,,,58.37%,68.51%
 Network Performance,Transaction Count,"513,383","810,857",-36.6863701,"513,383",,,,,,,"289,144","963,618"
 Network Performance,Transaction Volume,"$73,276,766,294","$80,806,162,382",-9.31784887,"$73,276,766,294",,,,,,,"$27,382,450,833","$136,693,513,804"

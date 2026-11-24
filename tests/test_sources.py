@@ -722,6 +722,109 @@ class YahooMarketCapTests(unittest.TestCase):
             result.loc["2026-08-20", "2222.SR_market_cap"], 694.2
         )
 
+    def test_stale_trailing_shares_trigger_live_market_cap_fallback_for_aramco(self):
+        # Historical shares exist (>220 days old) so earlier dates are populated, while the
+        # trailing window is masked to NaN: fallback must still populate requested_end in USD.
+        dates = pd.date_range("2025-01-01", "2025-12-01", freq="D")
+        local_stock = FakeYahooTicker(
+            history=pd.DataFrame(
+                {"Close": 25.0, "Stock Splits": 0.0},
+                index=dates,
+            ),
+            shares=pd.Series([100.0], index=pd.to_datetime(["2025-01-01"])),
+            market_cap=6_000_000.0,
+        )
+        sar_usd = FakeYahooTicker(
+            history=pd.DataFrame({"Close": 0.266}, index=dates)
+        )
+        ticker_objects = {"2222.SR": local_stock, "SARUSD=X": sar_usd}
+
+        with patch.object(
+            sources.yf, "Ticker", side_effect=lambda symbol: ticker_objects[symbol]
+        ), warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            result = sources.get_market_caps(
+                {"stocks": ["2222.SR"]},
+                "2025-01-01",
+                end_date="2025-12-01",
+            ).set_index("date")
+
+        self.assertAlmostEqual(result.loc["2025-01-01", "2222.SR_market_cap"], 665.0)
+        self.assertTrue(pd.isna(result.loc["2025-11-30", "2222.SR_market_cap"]))
+        self.assertAlmostEqual(
+            result.loc["2025-12-01", "2222.SR_market_cap"], 6_000_000.0 * 0.266
+        )
+        self.assertTrue(any("live scalar market cap" in str(w.message) for w in caught))
+
+    def test_already_split_adjusted_shares_are_not_multiplied_again(self):
+        # Samsung 005930.KS 50:1 split where Yahoo already reports pre-split shares post-split.
+        split = pd.Series([50.0], index=pd.to_datetime(["2018-05-04"]), dtype="float64")
+        shares = pd.Series(
+            [6.0e9, 6.0e9, 6.0e9, 5.97e9, 5.97e9, 5.97e9],
+            index=pd.to_datetime(
+                ["2018-01-01", "2018-03-01", "2018-04-01", "2018-06-01", "2018-08-01", "2018-10-01"]
+            ),
+        )
+        adjusted = sources._split_adjust_yahoo_shares(shares, split)
+        self.assertAlmostEqual(adjusted.loc["2018-01-01"], 6.0e9)
+        self.assertAlmostEqual(adjusted.loc["2018-10-01"], 5.97e9)
+
+    def test_hampel_filter_drops_multi_day_share_outliers_without_dropping_splits(self):
+        shares = pd.Series(
+            [100.0, 100.0, 100.0, 5000.0, 5000.0, 100.0, 100.0, 100.0],
+            index=pd.date_range("2023-01-01", periods=8, freq="D"),
+        )
+        cleaned = sources._drop_isolated_yahoo_share_outliers(shares)
+        self.assertEqual(len(cleaned), 6)
+        self.assertTrue(cleaned.eq(100.0).all())
+
+        # A real step-change split is preserved intact.
+        step = pd.Series(
+            [25.0, 25.0, 100.0, 100.0, 100.0],
+            index=pd.date_range("2020-08-29", periods=5, freq="D"),
+        )
+        self.assertEqual(sources._drop_isolated_yahoo_share_outliers(step).tolist(), step.tolist())
+
+    def test_get_price_normalizes_tz_aware_index_and_honors_end_date(self):
+        index = pd.DatetimeIndex(
+            ["2024-01-02 16:00:00", "2024-01-03 16:00:00"], tz="America/New_York"
+        )
+        raw = pd.DataFrame(
+            [[100.0], [105.0]],
+            index=index,
+            columns=pd.MultiIndex.from_tuples([("SPY", "Close")]),
+        )
+        with patch.object(sources.yf, "download", return_value=raw):
+            result = sources.get_price(
+                {"etfs": ["SPY"]}, start_date="2024-01-02", end_date="2024-01-04"
+            ).set_index("date")
+        self.assertEqual(result.loc["2024-01-02", "SPY_close"], 100.0)
+        self.assertEqual(result.loc["2024-01-03", "SPY_close"], 105.0)
+        self.assertEqual(result.index.max(), pd.Timestamp("2024-01-04"))
+
+    def test_brk_ohlc_and_miner_data_retry_transient_http_errors(self):
+        base = dict(index="day1", start=10, end=12)
+        dates_ok = FakeResponse(json_data=dict(base, data=["2024-01-01", "2024-01-02"]))
+        ohlc_ok = FakeResponse(json_data=dict(base, data=[[100, 110, 90, 105]] * 2))
+        transient = FakeResponse(status_code=503, text="busy")
+        with patch.object(
+            sources.requests, "get", side_effect=[transient, dates_ok, ohlc_ok]
+        ) as get_mock, patch.object(sources.time, "sleep") as sleep_mock:
+            df = sources.get_brk_ohlc()
+        self.assertEqual(len(df), 2)
+        self.assertEqual(get_mock.call_count, 3)
+        sleep_mock.assert_called_once_with(1.0)
+
+        sheet_ok = FakeResponse(text="time,cm_efficiency_j_gh\n2024-01-01,0.03\n")
+        with patch.object(
+            sources.requests,
+            "get",
+            side_effect=[requests.ConnectionError("reset"), sheet_ok],
+        ), patch.object(sources.time, "sleep") as sleep_mock:
+            miner = sources.get_miner_data("https://example.test/sheet/edit")
+        self.assertEqual(len(miner), 1)
+        sleep_mock.assert_called_once_with(1.0)
+
 
 if __name__ == "__main__":
     unittest.main()
