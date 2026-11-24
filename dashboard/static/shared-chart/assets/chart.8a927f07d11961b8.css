@@ -89,10 +89,14 @@ main{padding-top:92px}.heading{margin-bottom:21px}.description{font-size:10px}.e
 .dashboard-legend:not(.capture) .panel-heading,.dashboard-legend:not(.capture) .reading-date,
 .dashboard-legend:not(.capture) .candle-reading,.dashboard-legend:not(.capture) .legend-hint{flex-shrink:0}
 .dashboard-legend.legend-two-columns:not(.capture) .chart-layout{grid-template-columns:minmax(0,1fr) min(360px,40%)}
+.dashboard-legend.legend-two-columns:not(.capture) .indicators{padding-top:16px;padding-bottom:12px}
+.dashboard-legend.legend-two-columns:not(.capture) .reading-date{margin:12px 0 6px}
 .dashboard-legend.legend-two-columns:not(.capture) #legend{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:max-content;column-gap:12px;align-content:start}
 .dashboard-legend.legend-two-columns:not(.capture) .indicator-row{min-width:0}
+.dashboard-legend.legend-two-columns:not(.capture) .indicator{padding:5px 0}
+.dashboard-legend.legend-two-columns:not(.capture) .indicator .value{margin-top:2px;line-height:1.35}
 .dashboard-legend.legend-two-columns:not(.capture) .indicator .name{overflow-wrap:anywhere}
-.dashboard-legend.legend-two-columns:not(.capture) .solo{font-size:8px}
+.dashboard-legend.legend-two-columns:not(.capture) .solo{font-size:8px;padding-top:5px}
 }
 
 /* Template-defined panels keep their proportions on every screen. */

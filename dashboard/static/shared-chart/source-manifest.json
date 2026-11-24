@@ -3,7 +3,7 @@
   "files": {
     "renderer.js": "e8dd9e6fd10d18c2567b256d0171e02e97564734a95da06635b05d07029901b9",
     "chart.html": "04acec88f951f38bad530fb828f66b3c6e4a5777146ef1e7bd11140f872b7f4f",
-    "chart.css": "ec7f5acbb84a78a97c267028a6da5080fc0582ee6d38cf7ed30d30201be5c7d8",
+    "chart.css": "dfa973971d619e451f99f0f2f3b9e53eeaae8a221efcd686c049d6c842282d68",
     "site.css": "e2fc113d159f7e2c2ea4c1f30200f92c8d35003b974adebf24acac6b43631487",
     "vendor-lock.json": "3b38781476f5ed3b5331e3710752e47c43b9e90c28931835f579765185a45c89",
     "fonts/JetBrainsMono-latin.woff2": "1e06740a02a443fb7f3eeda8fcaa685a0f6c620e3f01e6666e847295469ce3ad",
@@ -13,7 +13,7 @@
   "assets": {
     "FONT_MONO": "assets/JetBrainsMono-latin.1e06740a02a443fb.woff2",
     "FONT_DISPLAY": "assets/Syne-latin.cfff412005eed2f0.woff2",
-    "STYLE": "assets/chart.d527799960adc136.css",
+    "STYLE": "assets/chart.8a927f07d11961b8.css",
     "RENDERER": "assets/renderer.e8dd9e6fd10d18c2.js",
     "RUNTIME": "assets/lightweight-charts.e21cc5caa0226ef3.js",
     "LICENSE": "assets/LICENSE",
@@ -27,14 +27,14 @@
   "vendored_hashes": {
     "assets/JetBrainsMono-latin.1e06740a02a443fb.woff2": "1e06740a02a443fb7f3eeda8fcaa685a0f6c620e3f01e6666e847295469ce3ad",
     "assets/Syne-latin.cfff412005eed2f0.woff2": "cfff412005eed2f0152d1c110c78ac564642b943e64322fbd687083177d6fa70",
-    "assets/chart.d527799960adc136.css": "d527799960adc13622e7bf53ecb999db51cf4079a8088214a5d1bc060e95e7d5",
+    "assets/chart.8a927f07d11961b8.css": "8a927f07d11961b8fa8150bf6db3783fdf5d1da5e76defca57c76576eb7683c5",
     "assets/renderer.e8dd9e6fd10d18c2.js": "e8dd9e6fd10d18c2567b256d0171e02e97564734a95da06635b05d07029901b9",
     "assets/lightweight-charts.e21cc5caa0226ef3.js": "e21cc5caa0226ef30bd8549c50b9ef926615f2a4ee6b4e486353477a55f598cf",
     "assets/LICENSE": "70c9d5382506dd184465425c08a99ad9bd6d9ac1313c252968ba0b585e5ef823",
     "assets/NOTICE": "f76c6afab94884448f0426e30d6e9d555ca7247894cd3484e477d2f87513036e",
-    "frame.html": "f99aa2327c540fd382d353698785ae54d4564b8963ef2067644df25fe39a9ad3",
-    "seasonal-mtd.html": "8a94cd6bb024dfc3bc9c7a7a4441af19e63426b31d4605b26b6fcd16ec563b29",
-    "seasonal-ytd.html": "f2cb28dd3bd250bad4cbd85803d97b196972f32be50a78148eeaa0f29834c161",
+    "frame.html": "ec1f031744bfa29a9238bbae84b61779c18090d7873def15dcaecbe68276e009",
+    "seasonal-mtd.html": "e1403662b668a69610b59c0f8556f830e8a1624158624f7fc010ab356d4fae43",
+    "seasonal-ytd.html": "59cc3a11312a66645f1ee6005329c43f235a7e884f55f8ad4becbb6c32990215",
     "embed-host.js": "17aabb105a3959bcd5d43188607ebe3375c28c887f23ae9d38ccf53099fe7c30"
   }
 }
