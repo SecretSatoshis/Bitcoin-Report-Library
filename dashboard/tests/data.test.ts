@@ -235,24 +235,46 @@ test("dated technical levels retain their event dates and chart style without ch
     assert.throws(() => createDashboard(copy, release, colors, events), /Invalid outlook start date/);
   }
 });
-test("every seasonal observation, average and median agrees with the original aggregator", () => {
+test("every seasonal observation, average and median includes 2017 while hiding 2017 by default on the chart", () => {
   for (const p of data().charts.slice(1)) {
     const period = p.id.endsWith("mtd") ? "mtd" : "ytd",
-      expected = reference.seasonal[period + "_price_paths.csv"];
+      sourceRows = tables[period + "_price_paths.csv"],
+      expected = reference.seasonal[period + "_price_paths.csv"],
+      pastYears = Object.keys(sourceRows[0]).filter((k) => /^\d{4}$/.test(k) && k !== "2026").sort();
     for (const s of p.series) {
-      const name =
-        s.id === "mean" ? "Average" : s.id === "median" ? "Median" : s.id;
-      assert.deepEqual(
-        s.values,
-        expected.map((r: Row) => r[name]),
-        name,
-      );
+      if (s.id === "mean" || s.id === "median") {
+        const computed = sourceRows.map((row) => {
+          const vals = pastYears
+            .map((y) => num(row[y]))
+            .filter((n): n is number => n !== null)
+            .sort((a, b) => a - b);
+          if (!vals.length) return null;
+          if (s.id === "mean") return vals.reduce((a, b) => a + b, 0) / vals.length;
+          return vals.length % 2
+            ? vals[Math.floor(vals.length / 2)]
+            : (vals[vals.length / 2 - 1] + vals[vals.length / 2]) / 2;
+        });
+        assert.deepEqual(s.values, computed, `${period} ${s.id} includes 2017`);
+      } else if (s.id === "2017") {
+        assert.deepEqual(
+          s.values,
+          sourceRows.map((r: Row) => num(r["2017"])),
+          `${period} 2017`,
+        );
+      } else {
+        assert.deepEqual(
+          s.values,
+          expected.map((r: Row) => r[s.id]),
+          s.id,
+        );
+      }
     }
     assert.equal(p.x[0], 0);
     assert.equal(
       p.series.some((s) => s.id === "2017"),
-      false,
+      true,
     );
+    assert.deepEqual(p.defaultHiddenSeries, ["2017"]);
   }
 });
 test("all snapshot values and exact 30-calendar-day comparisons agree with the release", () => {
@@ -319,8 +341,14 @@ test("seasonal calendars use release cutoffs across month/year boundaries and le
       }));
     const p = seasonalPayload(rows, date, "ytd");
     assert.equal(p.readingPoint, position);
-    assert.equal(p.series.find((s) => s.id === "mean")!.values[0], 110);
-    assert.equal(p.series.find((s) => s.id === "median")!.values[0], 110);
+    assert.deepEqual(p.defaultHiddenSeries, ["2017"]);
+    assert.ok(
+      Math.abs(
+        p.series.find((s) => s.id === "mean")!.values[0]! -
+          (999999 + 100 + 120) / 3,
+      ) < 1e-6,
+    );
+    assert.equal(p.series.find((s) => s.id === "median")!.values[0], 120);
   }
   for (const date of ["2024-02-29", "2025-01-01", "2025-04-30", "2025-12-31"]) {
     const day = Number(date.slice(8)),

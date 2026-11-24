@@ -1,0 +1,357 @@
+@font-face{font-family:'JetBrains Mono';src:url('JetBrainsMono-latin.1e06740a02a443fb.woff2') format('woff2');font-style:normal;font-weight:100 800;font-display:swap}
+@font-face{font-family:Syne;src:url('Syne-latin.cfff412005eed2f0.woff2') format('woff2');font-style:normal;font-weight:400 800;font-display:swap}
+:root{color-scheme:dark;--bg:#08080c;--surface:#0e0e16;--surface2:#13131d;--border:#2a2a42;--text:#e4e4ef;--dim:#a4a4bc;--orange:#f7931a;font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--text)}
+*{box-sizing:border-box}body{margin:0}[hidden]{display:none!important}
+button,a{-webkit-tap-highlight-color:transparent}button{font:inherit;cursor:pointer}a{color:inherit;text-decoration:none}
+button:focus-visible,a:focus-visible,summary:focus-visible,select:focus-visible{outline:2px solid var(--orange);outline-offset:4px}button:disabled{cursor:wait;opacity:.5}
+
+/* Page heading; the content width matches the catalog viewer. */
+main{width:var(--chart-content-width);margin:0 auto;padding:106px 0 28px}
+.eyebrow{font-size:10px;letter-spacing:.13em;color:var(--dim);margin-bottom:17px}.eyebrow span{color:var(--orange);margin:0 10px}
+.heading{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:28px}
+h1{font-family:Syne,sans-serif;font-size:clamp(26px,3vw,43px);font-weight:700;line-height:1.15;letter-spacing:-.035em;margin:0 0 12px}
+.description{font-size:12px;line-height:1.8;color:var(--dim);margin:0}
+.asof{white-space:nowrap;text-align:right}.asof span{font-size:9px;letter-spacing:.1em;display:block;color:var(--dim);margin-bottom:10px}.asof strong{font-size:13px;font-weight:400}
+
+/* Chart card and toolbar. */
+.chart-card{border:1px solid var(--border);border-top:2px solid var(--orange);background:var(--surface)}
+.stale-banner{padding:10px 20px;background:#22180c;border-bottom:1px solid #6b4614;color:#ffd08a;font-size:11px;line-height:1.5}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid var(--border)}
+.button-group{display:flex;gap:3px}
+.toolbar button{border:1px solid transparent;padding:8px 12px;font-size:11px;border-radius:3px;color:var(--dim);background:transparent;min-height:34px}
+.toolbar button:hover{color:var(--text);background:var(--surface2)}.toolbar button[aria-pressed=true]{background:#211a12;color:var(--orange);border-color:#5c3e21}
+.chart-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.chart-actions .export{color:var(--text);border-color:var(--border)}.export span{color:var(--orange);padding-left:10px}
+#scales{gap:12px}#bitcoin-controls{gap:10px;flex-wrap:wrap}
+.axis-control{font-size:9px;color:var(--dim)}.axis-control select{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--border);padding:8px 5px;border-radius:3px}
+
+/* Plot area. */
+.chart-layout{display:grid;grid-template-columns:minmax(0,1fr) 286px}
+.plot-wrap{min-width:0;position:relative;height:620px;min-height:620px;padding:20px 16px 0 12px;background:var(--bg)}
+.plot-label{font-size:9px;line-height:1.5;letter-spacing:0;color:var(--dim);margin:0 0 10px 8px}
+#chart{position:absolute;inset:42px 16px 0 12px;touch-action:pan-y}
+#loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--dim);font-size:12px}
+.chart-pane{position:relative;width:100%;height:100%;min-height:0}.pane-label{position:absolute;top:8px;left:12px;font-size:9px;color:var(--dim);pointer-events:none}
+.stacked{display:grid;grid-template-rows:1fr 1fr;gap:12px}
+
+/* Series legend. */
+.indicators{border-left:1px solid var(--border);padding:23px 20px 16px}
+.panel-heading{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px}.panel-heading h2{font-size:10px;color:var(--dim);font-weight:400;letter-spacing:.1em;margin:0}
+.series-actions{display:flex;gap:8px}.text-button{background:none;border:0;color:var(--dim);font-size:9px;padding:5px 0}.text-button:hover{color:var(--orange)}
+.reading-date{display:flex;justify-content:space-between;align-items:center;margin:21px 0 7px}.reading-date span{font-size:8px;color:var(--dim);letter-spacing:.05em}.reading-date strong{font-size:10px;font-weight:400}
+.candle-reading{font-size:9px;line-height:1.8;color:var(--dim);padding:8px 0 12px;border-bottom:1px solid var(--border)}.candle-reading .ohlc-values{display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;margin-top:6px;color:var(--text)}
+#legend{max-height:440px;overflow:auto;scrollbar-color:var(--border) var(--surface)}
+#legend.more-below{-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 36px),transparent)}
+.indicator-row{display:flex;align-items:flex-start;gap:6px;border-bottom:1px solid #20202e}
+.indicator{display:grid;grid-template-columns:12px 1fr 12px;column-gap:9px;min-width:0;flex:1;text-align:left;width:100%;border:0;background:none;padding:10px 0;color:var(--text)}
+.swatch{height:3px;margin-top:6px;background:var(--series-color)}.indicator .name{font-size:10px;line-height:1.6}.indicator .value{display:block;font-size:14px;font-weight:600;margin-top:5px;color:var(--series-color)}.indicator .eye{font-size:10px;color:var(--dim);margin-top:2px}
+.indicator[aria-pressed=false]{opacity:.68}.indicator[aria-pressed=false] .name,.indicator[aria-pressed=false] .value{color:#b0b0c8}.indicator[aria-pressed=false] .swatch{background:none;border-top:1px dashed var(--series-color)}.indicator:hover{background:var(--surface2)}
+.solo{background:none;border:0;color:var(--dim);font-size:9px;line-height:1.6;padding:10px 2px 0;opacity:.9}.solo:hover{color:var(--orange);opacity:1}
+.legend-hint{font-size:8px;line-height:1.8;color:var(--dim);margin:18px 0 0}
+
+/* Below the chart. */
+.chart-foot{display:flex;justify-content:space-between;gap:15px;padding:12px 20px;border-top:1px solid var(--border);color:var(--dim);font-size:9px;line-height:1.5}
+.below-chart{display:flex;justify-content:space-between;gap:24px;color:var(--dim);font-size:10px;line-height:1.9;margin-top:14px}.below-chart p{margin:0}.below-chart a{color:var(--text);white-space:nowrap}.below-chart a span{color:var(--orange);margin-left:10px}
+.below-chart a.chart-credit{color:var(--dim);white-space:normal}.below-chart a.chart-credit:hover{color:var(--orange)}
+.events-list{font-size:10px;margin-top:20px;color:var(--dim)}summary{cursor:pointer}.events-list ul{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 20px;padding-left:18px;line-height:1.7}
+.status{font-size:10px;color:var(--orange);min-height:14px;margin:16px 0 0}
+footer{color:var(--dim)}footer details{margin-top:10px;line-height:1.7}footer a:hover{color:var(--orange)}
+
+/* Inside the catalog viewer or the dashboard: chart card only. */
+.embedded .site-nav,.embedded .eyebrow,.embedded .heading,.embedded footer{display:none}
+.embedded main{width:100%;padding:0}.embedded .below-chart{padding:0 16px}.embedded .events-list,.embedded .status{margin-left:16px;margin-right:16px}
+
+@media(max-width:1050px){
+.chart-layout{grid-template-columns:minmax(0,1fr) 250px}.indicators{padding:20px 14px}.asof{display:none}.chart-actions button{padding:8px 10px}.chart-foot{font-size:8px}
+}
+@media(max-width:760px){
+main{padding-top:92px}.heading{margin-bottom:21px}.description{font-size:10px}.eyebrow{font-size:8px}
+.toolbar{padding:10px 12px;gap:8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;justify-content:flex-start}.toolbar::-webkit-scrollbar{display:none}
+.toolbar.can-scroll-right{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 36px),transparent)}
+.toolbar button{padding:10px 12px;min-height:44px;min-width:44px;white-space:nowrap}.toolbar .button-group,.toolbar .chart-actions,#bitcoin-controls{flex:none;flex-wrap:nowrap}
+.chart-actions{gap:8px}#scales{gap:8px}.axis-control{font-size:10px;white-space:nowrap}.axis-control select{min-height:44px;padding:8px}.export{white-space:nowrap}
+.chart-layout{grid-template-columns:1fr}.plot-wrap{height:442px;min-height:442px;padding:14px 6px 0}.plot-wrap.dual-mobile{height:740px;min-height:740px}.plot-label{font-size:8px;max-width:100%}#chart{inset:42px 6px 0}
+.indicators{min-width:0;border-left:0;border-top:1px solid var(--border);padding:20px 16px}#legend{display:grid;grid-template-columns:1fr 1fr;column-gap:12px;max-height:400px}.indicator-row{min-width:0;align-items:center}
+.indicator{min-height:44px}.indicator .name{font-size:10px;overflow-wrap:anywhere}.indicator .value{font-size:12px}.solo{font-size:10px;min-height:44px;min-width:44px;padding:10px 6px;display:inline-flex;align-items:center;justify-content:center}.text-button{min-height:44px;padding:10px 6px;font-size:11px}.reading-date{justify-content:flex-start;gap:14px;margin-top:16px}.legend-hint{font-size:9px}
+.chart-foot{flex-direction:column;gap:6px}.below-chart{flex-direction:column;gap:10px}.events-list ul{grid-template-columns:1fr}
+}
+
+/* Compact dashboard legend: seven series remain visible beside the price chart. */
+.compact-legend .indicator{padding:8px 0}
+.compact-legend .indicator .name{font-size:9px;line-height:1.5}
+.compact-legend .indicator .value{font-size:12px;line-height:1.5;margin-top:3px}
+.compact-legend .legend-hint{margin-top:12px}
+
+/* Dashboard desktop only: use the plot's height, then a second column before scrolling.
+   Row flow preserves the sorted DOM order left to right, then down. */
+@media(min-width:761px){
+.dashboard-legend:not(.capture) .indicators{height:520px;min-height:0;min-width:0;display:flex;flex-direction:column}
+.dashboard-legend:not(.capture) #legend{min-height:0;max-height:none;flex:1;overflow:auto}
+.dashboard-legend:not(.capture) .panel-heading,.dashboard-legend:not(.capture) .reading-date,
+.dashboard-legend:not(.capture) .candle-reading,.dashboard-legend:not(.capture) .legend-hint{flex-shrink:0}
+.dashboard-legend.legend-two-columns:not(.capture) .chart-layout{grid-template-columns:minmax(0,1fr) min(360px,40%)}
+.dashboard-legend.legend-two-columns:not(.capture) #legend{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:max-content;column-gap:12px;align-content:start}
+.dashboard-legend.legend-two-columns:not(.capture) .indicator-row{min-width:0}
+.dashboard-legend.legend-two-columns:not(.capture) .indicator .name{overflow-wrap:anywhere}
+.dashboard-legend.legend-two-columns:not(.capture) .solo{font-size:8px}
+}
+
+/* Template-defined panels keep their proportions on every screen. */
+.panel-layout .chart-card{scroll-margin-top:80px}
+.panel-layout .plot-wrap{height:clamp(570px,calc(var(--chart-viewport-height,100svh) - 110px),710px);min-height:0}
+.panel-layout.embedded{--chart-viewport-height:800px}
+.panel-layout .stacked{grid-template-columns:minmax(0,1fr)}
+.panel-layout .chart-pane{min-width:0}
+.panel-layout .plot-label{display:none}
+.panel-layout #chart{inset:12px 16px 0 12px;min-height:0}
+.panel-layout .pane-label{z-index:4;font-weight:600;background:var(--bg);padding:4px 6px;top:4px;left:6px;max-width:calc(100% - 120px);line-height:1.5}
+.legend-group h3{font-size:9px;font-weight:600;line-height:1.6;color:var(--dim);margin:18px 0 4px}
+.legend-group:first-child h3{margin-top:0}
+.panel-layout #legend{max-height:590px}
+.panel-layout .indicators{padding-top:16px;padding-bottom:12px}
+.panel-layout .indicator{padding:8px 0}
+.panel-layout .reading-date{margin-top:12px}
+.panel-layout .legend-group h3{margin-top:12px}
+.panel-layout .legend-group:first-child h3{margin-top:0}
+@media(max-width:760px){.panel-layout #chart{inset:12px 6px 0}.panel-layout #legend{display:block;max-height:500px}.panel-layout .pane-label{font-size:8px}}
+
+/* Capture mode: the still image used in newsletters. No controls or hints, and every
+   visible series is listed in full instead of scrolling. */
+.capture .toolbar,.capture .chart-foot,.capture .series-actions,.capture .solo,.capture .indicator .eye,
+.capture .legend-hint,.capture #download-data,.capture .events-list,.capture .status{display:none!important}
+.capture .indicator-row:has(.indicator[aria-pressed=false]){display:none}
+.capture .indicator{grid-template-columns:12px 1fr;cursor:default}.capture .indicator:hover{background:none}
+.capture #legend{max-height:none;overflow:visible;-webkit-mask-image:none;mask-image:none}
+.capture #legend.many-series{display:grid;grid-template-columns:1fr 1fr;column-gap:14px}
+.capture #legend.many-series .indicator{padding:7px 0}.capture #legend.many-series .indicator .value{font-size:12px}
+
+/* Standard Secret Satoshis site navigation and footer, shared by chart pages and the catalog. */
+:root {
+  --chart-content-width: calc(min(100vw, 1680px) - 7.6vw);
+  --nav-height: 64px;
+  --max-width: 1120px;
+  --gutter: clamp(20px, 5vw, 60px);
+  --white: #fff;
+  --text-dim: #a4a4bc;
+  --text-mute: #9696b0;
+  --accent: #f7931a;
+  --mono: 'JetBrains Mono', monospace;
+}
+
+.accent {
+  color: var(--accent);
+}
+
+.site-nav {
+  position: fixed;
+  z-index: 1000;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: flex;
+  height: var(--nav-height);
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--gutter);
+  border-bottom: 1px solid var(--border);
+  background: rgba(8, 8, 12, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.site-nav ul,
+.site-footer ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nav-logo,
+.footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--white);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.nav-links {
+  display: flex;
+  gap: clamp(12px, 2vw, 28px);
+  list-style: none;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.nav-links a {
+  color: var(--text-dim);
+  transition: color 0.2s;
+}
+
+.nav-links a:hover {
+  color: var(--white);
+}
+
+.nav-toggle {
+  display: none;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  margin-right: -10px;
+  cursor: pointer;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* Chart pages carry the catalog's footer with this class added. */
+.site-footer {
+  display: block;
+  margin: 0;
+  padding: 80px var(--gutter) 40px;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+  line-height: 1.7;
+  letter-spacing: normal;
+}
+
+.site-footer > div {
+  text-align: left;
+}
+
+.site-footer h2,
+.site-footer p {
+  margin-top: 0;
+}
+
+.site-footer .footer-tagline {
+  margin-top: 8px;
+}
+
+.footer-inner {
+  max-width: var(--max-width);
+  margin: 0 auto;
+}
+
+.footer-top {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.5fr) repeat(3, minmax(130px, 1fr));
+  gap: 40px;
+  margin-bottom: 60px;
+}
+
+.footer-tagline {
+  margin-top: 8px;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.footer-col-title {
+  margin-bottom: 16px;
+  color: var(--text-mute);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.footer-links {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+}
+
+.footer-links a {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.footer-links a:hover {
+  color: var(--white);
+}
+
+.footer-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+  color: var(--text-mute);
+  font-size: 11px;
+}
+
+/* Chart pages add the TradingView attribution here, so it wraps. */
+.site-footer .footer-bottom {
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.chart-attribution {
+  font-size: 11px;
+}
+
+.chart-attribution details {
+  max-width: 650px;
+  text-align: left;
+}
+
+@media (max-width: 680px) {
+  .site-nav {
+    gap: 16px;
+  }
+
+  /* !important beats `.site-nav ul`, which is more specific. */
+  .nav-links {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    display: none !important;
+    padding: 16px 0 !important;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+
+  .nav-links.open {
+    display: flex !important;
+    flex-direction: column;
+  }
+
+  .nav-links li {
+    padding: 12px var(--gutter);
+  }
+
+  .nav-links a {
+    display: block;
+    padding: 8px 0;
+    font-size: 16px;
+  }
+
+  .nav-toggle {
+    display: flex;
+  }
+
+  .site-footer {
+    padding: 48px var(--gutter) 32px;
+  }
+
+  .footer-top {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
+  .footer-bottom {
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+  }
+}

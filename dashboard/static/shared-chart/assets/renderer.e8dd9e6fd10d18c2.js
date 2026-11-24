@@ -1,8 +1,22 @@
 /* Shared chart renderer. All market calculations happen in Python before the page is built. */
 (() => {
   'use strict';
-  const THEME={bg:'#08080c',surface:'#0e0e16',border:'#2a2a42',text:'#e4e4ef',dim:'#9090a8',accent:'#F7931A',candleUp:'#78C99A',candleDown:'#E87878'};
+  const THEME={bg:'#08080c',surface:'#0e0e16',border:'#2a2a42',text:'#e4e4ef',dim:'#a4a4bc',eventLabel:'#b2b2c8',accent:'#F7931A',candleUp:'#78C99A',candleDown:'#E87878'};
+  const TRUSTED_EMBED_ORIGINS=new Set([
+    'https://secretsatoshis.com',
+    'https://dashboard.secretsatoshis.com',
+    'https://charts.secretsatoshis.com',
+    'https://agent21.secretsatoshis.com',
+  ]);
   const $=id=>document.getElementById(id);
+  const domId=(prefix,id)=>prefix+String(id).replace(/[^A-Za-z0-9_-]/g,'_');
+  function isTrustedOrigin(origin){
+    if(!origin||origin==='null')return false;
+    if(origin===location.origin||TRUSTED_EMBED_ORIGINS.has(origin))return true;
+    try{const u=new URL(origin);return u.hostname==='localhost'||u.hostname==='127.0.0.1';}
+    catch{return false;}
+  }
+
   // Independent of any series: hiding Bitcoin does not hide the historical events.
   class EventLines {
     constructor(events, labels = true, labelOffset = 12) {
@@ -24,13 +38,13 @@
           const x=this.chart.timeScale().timeToCoordinate(event.date);
           if (x===null || x<0 || x>mediaSize.width) continue;
           ctx.save();
-          // Background context: faint lines and labels that the series draw over.
-          ctx.globalAlpha=.6;ctx.strokeStyle=THEME.border; ctx.lineWidth=1; ctx.setLineDash([3,5]);
+          // Background context: faint lines with high-contrast legible labels.
+          ctx.globalAlpha=.65;ctx.strokeStyle=THEME.border; ctx.lineWidth=1; ctx.setLineDash([3,5]);
           ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,mediaSize.height);ctx.stroke();
           // Keep every line; nearby labels remain available in the event list.
           if (this.labels && x-lastLabel>22 && x<mediaSize.width-18) {
             ctx.translate(x+7,this.labelOffset);ctx.rotate(Math.PI/2);
-            ctx.globalAlpha=.6;ctx.font='10px "JetBrains Mono"';ctx.fillStyle=THEME.dim;
+            ctx.globalAlpha=.85;ctx.font='10px "JetBrains Mono"';ctx.fillStyle=THEME.eventLabel;
             ctx.fillText(event.name,0,0);lastLabel=x;
           }
           ctx.restore();
@@ -74,9 +88,9 @@
         const start=Math.max(0,coordinate),right=level.labelAlign==='right';
         // Keep the full right-aligned label readable even when the dated line is short.
         ctx.save();ctx.beginPath();ctx.rect(0,0,mediaSize.width,mediaSize.height);ctx.clip();
-        ctx.strokeStyle=level.color;ctx.globalAlpha=.5;ctx.lineWidth=1;ctx.setLineDash(level.lineStyle==='solid'?[]:[4,5]);
+        ctx.strokeStyle=level.color;ctx.globalAlpha=.55;ctx.lineWidth=1;ctx.setLineDash(level.lineStyle==='solid'?[]:[4,5]);
         ctx.beginPath();ctx.moveTo(start,y);ctx.lineTo(mediaSize.width,y);ctx.stroke();
-        ctx.globalAlpha=.85;ctx.fillStyle=level.color;ctx.font='10px "JetBrains Mono"';
+        ctx.globalAlpha=.9;ctx.fillStyle=level.color;ctx.font='10px "JetBrains Mono"';
         ctx.textAlign=right?'right':'left';
         const label=level.label||`${level.name} · ${readout(level.price,'USD')}`;
         ctx.fillText(label,right?mediaSize.width-8:start+8,Math.max(12,y-6));ctx.restore();
@@ -147,7 +161,7 @@
           if(dynamic&&band.lower===null)y=Math.min(height-12,upper+16);
           if(dynamic&&band.upper===null)y=Math.max(14,lower-16);
           if(lower-upper<11)continue;
-          ctx.globalAlpha=.9;ctx.font='9px "JetBrains Mono"';ctx.textAlign=dynamic?'center':'right';
+          ctx.globalAlpha=.92;ctx.font='9px "JetBrains Mono"';ctx.textAlign=dynamic?'center':'right';
           const textWidth=ctx.measureText(band.label).width;
           if(dynamic)labelX=Math.max(textWidth/2+5,Math.min(width-textWidth/2-5,labelX));
           const left=dynamic?labelX-textWidth/2:labelX-textWidth;
@@ -270,6 +284,62 @@
     const [year,month]=dateString(time).split('-').map(Number);
     return type===lwc.TickMarkType.Year?String(year):type===lwc.TickMarkType.Month?MONTHS[month-1]:null;
   }
+
+  // Reconstruct daily/weekly/monthly candleViews from the shared hashed candles.<hash>.json bundle.
+  function buildCandleViewsFromBundle(bundle,source){
+    const startDate=source.x[0],endDate=source.x.at(-1);
+    const dateIndex=new Map(source.x.map((d,i)=>[d,i]));
+    const views={};
+    for(const interval of ['daily','weekly','monthly']){
+      const raw=bundle[interval];
+      if(!raw||!raw.x?.length)continue;
+      const picked=[];
+      for(let i=0;i<raw.x.length;i++){
+        const time=raw.x[i],obs=interval==='daily'?time:raw.observationDate[i];
+        if(time>=startDate&&obs<=endDate)picked.push(i);
+      }
+      if(!picked.length)continue;
+      const x=picked.map(i=>raw.x[i]);
+      const ohlc=picked.map(i=>raw.ohlc[i]);
+      const candles=picked.map(i=>{
+        const [open,high,low,close]=raw.ohlc[i];
+        const time=raw.x[i];
+        return {
+          time,open,high,low,close,
+          periodEnd:interval==='daily'?time:raw.periodEnd[i],
+          observationDate:interval==='daily'?time:raw.observationDate[i],
+          complete:interval==='daily'?true:Boolean(raw.complete[i]),
+        };
+      });
+      const events=[];
+      for(const event of (source.events||[])){
+        const candle=candles.find(c=>c.time<=event.date&&event.date<=c.observationDate);
+        if(candle)events.push({...event,originalDate:event.date,date:candle.time,name:event.name+' · '+event.date});
+      }
+      const view={x,events,readingPoint:x.at(-1),interval};
+      if(interval==='daily'){
+        const offset=dateIndex.get(x[0]);
+        if(offset===undefined)continue;
+        view.offset=offset;
+        view.ohlc=ohlc;
+      }else{
+        view.candles=candles;
+        view.series=source.series.map(s=>({
+          ...s,
+          start:0,
+          values:candles.map(c=>{
+            const idx=dateIndex.get(c.observationDate);
+            if(idx===undefined)return null;
+            const local=idx-s.start;
+            return local>=0&&local<s.values.length?s.values[local]:null;
+          }),
+        }));
+      }
+      views[interval]=view;
+    }
+    return views;
+  }
+
   function createView(host,payload,state,stacked=false,onHover=()=>{},onRange=()=>{}) {
     // A linear axis whose series never go negative and reach down near zero gets no
     // margin below its range, so it never shows negative tick labels.
@@ -281,6 +351,7 @@
     const axes=Object.keys(payload.axes), panels=payload.panels;
     const configs=panels?panels.map(panel=>[panel.axis]):stacked&&axes.length>1?[['right'],['left']]:[axes];
     const charts=[],nodes=[],events=[],references=[],bands=[],stacks=[],entries=payload.series.map(definition=>({definition,parts:[]}));
+    const edgeTimes=payload.x.length>1?[payload.x[0],payload.x.at(-1)]:payload.x.slice(0,1);
     let syncing=false,rangeRevision=0;
     const pendingRanges=new Map();
     const sameRange=(a,b)=>a&&b&&Math.abs(a.from-b.from)<1e-6&&Math.abs(a.to-b.to)<1e-6;
@@ -379,7 +450,7 @@
         const levels=lines.map(line=>({price:line.value,label:line.label,color:line.color||THEME.dim}));
         const anchor=chart.addSeries(lwc.LineSeries,{priceScaleId:scale,color:'transparent',lineVisible:false,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:false,
           autoscaleInfoProvider:()=>({priceRange:{minValue:Math.min(...levels.map(l=>l.price)),maxValue:Math.max(...levels.map(l=>l.price))}})});
-        anchor.setData([payload.x[0],payload.x.at(-1)].map(time=>({time,value:levels[0].price})));
+        anchor.setData(edgeTimes.map(time=>({time,value:levels[0].price})));
         chart.panes()[0].attachPrimitive(new ReferenceLevels(levels,anchor,payload.x));
       }
       for(const id of visibleAxes){
@@ -390,7 +461,7 @@
           :axis.band_range):null;
         const anchor=chart.addSeries(lwc.LineSeries,{priceScaleId:scale,color:'transparent',lineVisible:false,crosshairMarkerVisible:false,priceLineVisible:false,lastValueVisible:false,
           ...(bounds?{autoscaleInfoProvider:()=>({priceRange:{minValue:Math.min(...bounds),maxValue:Math.max(...bounds)}})}:{autoscaleInfoProvider:()=>null})});
-        anchor.setData([payload.x[0],payload.x.at(-1)].map(time=>({time,value:bounds?Math.min(...bounds):1})));
+        anchor.setData(edgeTimes.map(time=>({time,value:bounds?Math.min(...bounds):1})));
         const overlay=new ValueBands(axis,payload,anchor,state);chart.panes()[0].attachPrimitive(overlay);bands.push(overlay);
       }
       if(payload.referenceLines?.length && visibleAxes.includes('right')){
@@ -401,7 +472,7 @@
             const visible=overlay?.visibleLevels()||levels;
             return visible.length?{priceRange:{minValue:Math.min(...visible.map(l=>l.price)),maxValue:Math.max(...visible.map(l=>l.price))}}:null;
           }});
-        anchor.setData([payload.x[0],payload.x.at(-1)].map(time=>({time,value:levels[0].price})));
+        anchor.setData(edgeTimes.map(time=>({time,value:levels[0].price})));
         overlay=new ReferenceLevels(levels,anchor,payload.x);overlay.setSupportResistance(state.supportResistance!==false);
         chart.panes()[0].attachPrimitive(overlay);references.push({overlay,anchor});
       }
@@ -479,34 +550,92 @@
     if(payload.schemaVersion!==2)throw new Error('Unsupported chart schema');
     await Promise.all([document.fonts.load('400 12px "JetBrains Mono"'),document.fonts.load('600 12px "JetBrains Mono"'),document.fonts.load('700 32px Syne')]);
     const defaultHidden=new Set(source.defaultHiddenSeries||[]);
-    const state={modes:Object.fromEntries(Object.entries(payload.axes).map(([id,a])=>[id,a.mode])),visible:new Set(payload.series.filter(s=>!defaultHidden.has(s.id)).map(s=>s.id)),events:true,supportResistance:true,presentation:'line',interval:'daily',flowInterval:source.defaultFlowInterval||null,requestedRange:null};
+    const state={modes:Object.fromEntries(Object.entries(payload.axes).map(([id,a])=>[id,a.mode])),visible:new Set(payload.series.filter(s=>!defaultHidden.has(s.id)).map(s=>s.id)),events:true,supportResistance:true,presentation:'line',interval:'daily',flowInterval:source.defaultFlowInterval||null,requestedRange:null,activePreset:payload.defaultRange};
     const numeric=payload.axisKind==='days';let reading=payload.readingPoint,view,exporting=false;
     const params=new URL(location.href).searchParams;
-    const mobile=matchMedia('(max-width:760px)'),embedded=document.body.classList.contains('embedded')||params.get('embed')==='1';
+    const mobile=matchMedia('(max-width:760px)'),coarsePointer=matchMedia('(pointer: coarse)'),embedded=document.body.classList.contains('embedded')||params.get('embed')==='1';
     document.body.classList.toggle('embedded',embedded);
     // Capture mode is the still image for newsletters: no controls, every visible series listed.
     document.body.classList.toggle('capture',document.body.classList.contains('capture')||params.get('capture')==='1');
     // Phones start without event lines; the Events button turns them on.
     const defaultEvents=!mobile.matches;state.events=defaultEvents;
     document.body.classList.toggle('panel-layout',Boolean(payload.panels));
+
+    const staleBanner=$('stale-banner');
+    if(staleBanner&&payload.staleBanner){
+      staleBanner.textContent=payload.staleBanner;
+      staleBanner.hidden=false;
+    }
+
+    const hint=$('chart-hint');
+    if(hint&&coarsePointer.matches){
+      hint.textContent='Pinch to zoom · Drag to explore · Double-tap price axis to fit';
+    }
+
+    const toolbar=document.querySelector('.toolbar');
+    function updateToolbarFade(){
+      if(!toolbar)return;
+      toolbar.classList.toggle('can-scroll-right',toolbar.scrollWidth-toolbar.scrollLeft-toolbar.clientWidth>6);
+    }
+    if(toolbar){
+      toolbar.addEventListener('scroll',updateToolbarFade,{passive:true});
+      window.addEventListener('resize',updateToolbarFade);
+      updateToolbarFade();
+    }
+
     const navToggle=$('navToggle'),navLinks=$('navLinks');
     if(navToggle&&navLinks){
-    function closeNavigation(){navLinks.classList.remove('open');navToggle.setAttribute('aria-expanded','false');navToggle.setAttribute('aria-label','Open menu');}
-    navToggle.onclick=()=>{const open=navToggle.getAttribute('aria-expanded')!=='true';navLinks.classList.toggle('open',open);navToggle.setAttribute('aria-expanded',String(open));navToggle.setAttribute('aria-label',open?'Close menu':'Open menu');};
-    navLinks.addEventListener('click',e=>{if(e.target.closest('a'))closeNavigation();});
-    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&navToggle.getAttribute('aria-expanded')==='true'){closeNavigation();navToggle.focus();}});
+      function closeNavigation(){navLinks.classList.remove('open');navToggle.setAttribute('aria-expanded','false');navToggle.setAttribute('aria-label','Open menu');}
+      navToggle.onclick=()=>{const open=navToggle.getAttribute('aria-expanded')!=='true';navLinks.classList.toggle('open',open);navToggle.setAttribute('aria-expanded',String(open));navToggle.setAttribute('aria-label',open?'Close menu':'Open menu');};
+      navLinks.addEventListener('click',e=>{if(e.target.closest('a'))closeNavigation();});
+      document.addEventListener('keydown',e=>{if(e.key==='Escape'&&navToggle.getAttribute('aria-expanded')==='true'){closeNavigation();navToggle.focus();}});
     }
-    function reportHeight(){if(embedded&&parent!==window)parent.postMessage({type:'ss-chart-size',id:payload.id,height:Math.ceil(document.documentElement.getBoundingClientRect().height)},location.protocol==='file:'?'*':location.origin);}
+
+    let parentOrigin=location.origin;
+    if(document.referrer){
+      try{const refOrigin=new URL(document.referrer).origin;if(isTrustedOrigin(refOrigin))parentOrigin=refOrigin;}catch{}
+    }
+    let heightFrame=0,lastReportedHeight=0;
+    function flushHeight(){
+      if(!embedded||parent===window)return;
+      const height=Math.ceil(document.documentElement.getBoundingClientRect().height);
+      if(!Number.isFinite(height)||height===lastReportedHeight)return;
+      lastReportedHeight=height;
+      parent.postMessage({type:'ss-chart-size',id:payload.id,height},parentOrigin);
+    }
+    function reportHeight(){
+      if(!embedded||parent===window)return;
+      cancelAnimationFrame(heightFrame);
+      heightFrame=requestAnimationFrame(flushHeight);
+    }
     if(embedded&&parent!==window)window.addEventListener('message',event=>{
-      if(event.source!==parent)return;
-      if(location.protocol==='file:'?event.origin!=='null':event.origin!==location.origin)return;
+      if(event.source!==parent||!isTrustedOrigin(event.origin))return;
       const message=event.data;
       if(message?.type!=='ss-chart-viewport'||message.id!==payload.id||!Number.isFinite(message.height)||message.height<100||message.height>10000)return;
+      parentOrigin=event.origin;
       const height=message.height+'px';
       if(document.body.style.getPropertyValue('--chart-viewport-height')===height)return;
       document.body.style.setProperty('--chart-viewport-height',height);
       reportHeight();
     });
+
+    // Lazy loader for shared externalized candles.<hash>.json asset.
+    let candlesPromise=null;
+    async function ensureCandleViews(){
+      if(source.candleViews)return source.candleViews;
+      if(!source.candlesUrl)return null;
+      if(!candlesPromise){
+        candlesPromise=fetch(source.candlesUrl).then(response=>{
+          if(!response.ok)throw new Error(`Unable to load candle data (${response.status})`);
+          return response.json();
+        }).then(bundle=>{
+          source.candleViews=buildCandleViewsFromBundle(bundle,source);
+          return source.candleViews;
+        });
+      }
+      return candlesPromise;
+    }
+
     // A fade at the bottom of the series list while more rows sit below the fold.
     function legendFade(){const legend=$('legend');legend.classList.toggle('more-below',legend.scrollHeight-legend.scrollTop-legend.clientHeight>4);}
     let legendFrame;
@@ -528,8 +657,8 @@
       $('reading-date').textContent=xLabel(reading,payload);
       $('reading-mode').textContent=time===null?(payload.family==='seasonal'?'REPORT DAY':numeric?'CURRENT CYCLE DAY':payload.dataDate?'LATEST DATA':'REPORT DATE'):(numeric?'CURSOR DAY':'CURSOR DATE');
       for(const s of payload.series){
-        const value=valueAt(s,reading,payload),unit=payload.axes[s.axis].unit,cell=$('value-'+s.id);
-        cell.textContent=readout(value,unit);cell.title=format(value,unit);
+        const value=valueAt(s,reading,payload),unit=payload.axes[s.axis].unit,cell=$(domId('value-',s.id));
+        if(cell){cell.textContent=readout(value,unit);cell.title=format(value,unit);}
       }
       legendFade();
       const sorted=orderedSeries(payload,reading),order=sorted.map(s=>s.id).join('|');
@@ -565,24 +694,43 @@
     }
     // Column capacity belongs to chart/layout changes, not cursor updates. Otherwise
     // changing the plot width changes the hovered date and can trigger a resize loop.
-    function rebuild(requested){const range=requested||view?.range();view?.destroy();view=createView($('chart'),payload,state,mobile.matches,readingAt,onRange);document.querySelector('.plot-wrap').classList.toggle('dual-mobile',mobile.matches&&Object.keys(payload.axes).length>1);if(range){const target=view,bounded=calendarRange(range);target.setRange(bounded);const revision=target.rangeRevision;requestAnimationFrame(()=>{if(view===target&&target.rangeRevision===revision)target.setRange(bounded);});}reportHeight();scheduleLegendLayout();}
+    function rebuild(requested){
+      const range=requested||view?.range();
+      view?.destroy();
+      view=createView($('chart'),payload,state,mobile.matches,readingAt,onRange);
+      document.querySelector('.plot-wrap').classList.toggle('dual-mobile',mobile.matches&&Object.keys(payload.axes).length>1);
+      if(range){
+        const target=view,bounded=calendarRange(range);
+        target.setRange(bounded);
+        const revision=target.rangeRevision;
+        requestAnimationFrame(()=>{if(view===target&&target.rangeRevision===revision)target.setRange(bounded);});
+      }
+      reportHeight();scheduleLegendLayout();updateToolbarFade();
+    }
     // The payload is the default flow frequency; flowViews holds the others.
     const flowPayload=interval=>interval===source.defaultFlowInterval?source:{...source,...source.flowViews[interval]};
-    function setFlowInterval(interval){
-      if(!source.flowIntervals?.includes(interval))throw new Error('Flow frequency unavailable');
-      const range=state.requestedRange||view.range();
-      const activeRange=$('ranges').querySelector('button[aria-pressed="true"]')?.dataset.range;
+    function applyFlowPayload(interval){
       state.flowInterval=interval;payload=flowPayload(interval);
       $('observation-note').textContent=payload.note;
       document.querySelector('.plot-label').textContent=Object.entries(payload.axes).map(([id,a])=>`${id.toUpperCase()}: ${a.label}`).join(' · ');
       for(const s of payload.series){
-        const name=$('series-'+s.id).querySelector('.name');name.firstChild.textContent=s.name;
-        $('series-'+s.id).setAttribute('aria-label',`${state.visible.has(s.id)?'Hide':'Show'} ${s.name}`);
-        legendRows.get(s.id).querySelector('.solo').setAttribute('aria-label',`Show only ${s.name}`);
+        const btn=$(domId('series-',s.id));
+        if(btn){
+          const name=btn.querySelector('.name');name.firstChild.textContent=s.name;
+          btn.setAttribute('aria-label',`${state.visible.has(s.id)?'Hide':'Show'} ${s.name}`);
+        }
+        legendRows.get(s.id)?.querySelector('.solo')?.setAttribute('aria-label',`Show only ${s.name}`);
       }
-      for(const [id,a] of Object.entries(payload.axes))$('scale-'+id).setAttribute('aria-label',a.label+' scale');
+      for(const [id,a] of Object.entries(payload.axes))$('scale-'+id)?.setAttribute('aria-label',a.label+' scale');
       $('flow-intervals').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.interval===interval)));
-      legendOrder='';rebuild(range);if(activeRange)selectRange(activeRange);readingAt(null);
+      legendOrder='';
+    }
+    function setFlowInterval(interval){
+      if(!source.flowIntervals?.includes(interval))throw new Error('Flow frequency unavailable');
+      const range=state.requestedRange||view.range();
+      const activeRange=$('ranges').querySelector('button[aria-pressed="true"]')?.dataset.range;
+      applyFlowPayload(interval);
+      rebuild(range);if(activeRange)selectRange(activeRange);readingAt(null);
     }
     const flowControls=$('flow-intervals');
     if(flowControls&&source.flowIntervals){
@@ -592,10 +740,16 @@
         b.setAttribute('aria-pressed',String(interval===state.flowInterval));b.onclick=()=>setFlowInterval(interval);flowControls.append(b);
       }
     }
-    function setPresentation(kind,interval=state.interval){
-      if(!['line','candles'].includes(kind)||kind==='candles'&&!source.candleViews?.[interval])throw new Error('Candle presentation unavailable');
-      const range=state.requestedRange||view.range();state.requestedRange=range;
-      state.presentation=kind;state.interval=interval;payload=kind==='line'?(source.flowIntervals?flowPayload(state.flowInterval):source):{...source,...source.candleViews[interval]};
+    async function setPresentation(kind,interval=state.interval,{skipRebuild=false}={}){
+      if(!['line','candles'].includes(kind))throw new Error('Candle presentation unavailable');
+      if(kind==='candles'){
+        await ensureCandleViews();
+        if(!source.candleViews?.[interval])throw new Error('Candle presentation unavailable');
+      }
+      const range=state.requestedRange||view?.range();
+      if(range)state.requestedRange=range;
+      state.presentation=kind;state.interval=interval;
+      payload=kind==='line'?(source.flowIntervals?flowPayload(state.flowInterval):source):{...source,...source.candleViews[interval]};
       if(kind==='candles'&&interval==='daily'){
         const prepared=source.candleViews.daily;
         payload.series=source.series.map(s=>({...s,start:0,values:Array.from({length:prepared.x.length},(_,i)=>s.values[prepared.offset+i-s.start]??null)}));
@@ -603,13 +757,20 @@
       }
       $('bitcoin-style').value=kind;$('candle-interval').value=interval;$('interval-control').hidden=kind!=='candles';
       $('observation-note').textContent=kind==='line'?payload.note:interval==='daily'?'Daily candles.':`${interval==='weekly'?'Weekly':'Monthly'} candles and period-end observations. ${payload.candles.at(-1).complete?'Through':'Latest unfinished period through'} ${source.reportDate}.`;
-      rebuild(range);readingAt(null);
+      if(!skipRebuild){rebuild(range);readingAt(null);}
     }
-    $('bitcoin-controls').hidden=!source.candleViews||!Object.keys(source.candleViews).length;
-    for(const option of $('candle-interval').options)option.disabled=!source.candleViews?.[option.value];
-    $('bitcoin-style').onchange=()=>setPresentation($('bitcoin-style').value);
-    $('candle-interval').onchange=()=>setPresentation('candles',$('candle-interval').value);
-    function setVisible(s,visible){s=payload.series.find(item=>item.id===s.id)||s;if(visible)state.visible.add(s.id);else state.visible.delete(s.id);view.visibility(s.id,visible);const b=$('series-'+s.id);b.setAttribute('aria-pressed',String(visible));b.querySelector('.eye').textContent=visible?'●':'○';b.setAttribute('aria-label',`${visible?'Hide':'Show'} ${s.name}`);}
+    const availableCandleIntervals=source.candleViews?Object.keys(source.candleViews):(source.candleIntervals||[]);
+    $('bitcoin-controls').hidden=!availableCandleIntervals.length;
+    for(const option of $('candle-interval').options)option.disabled=!availableCandleIntervals.includes(option.value);
+    $('bitcoin-style').onchange=()=>setPresentation($('bitcoin-style').value).catch(e=>{$('status').textContent=`Candles unavailable: ${e.message}`;});
+    $('candle-interval').onchange=()=>setPresentation('candles',$('candle-interval').value).catch(e=>{$('status').textContent=`Candles unavailable: ${e.message}`;});
+    function setVisible(s,visible){
+      s=payload.series.find(item=>item.id===s.id)||s;
+      if(visible)state.visible.add(s.id);else state.visible.delete(s.id);
+      view.visibility(s.id,visible);
+      const b=$(domId('series-',s.id));
+      if(b){b.setAttribute('aria-pressed',String(visible));b.querySelector('.eye').textContent=visible?'●':'○';b.setAttribute('aria-label',`${visible?'Hide':'Show'} ${s.name}`);}
+    }
     const legendGroups=new Map(),legendRows=new Map();let legendOrder='';
     if(payload.panels)for(const panel of payload.panels){
       const section=document.createElement('section');section.className='legend-group';
@@ -619,9 +780,9 @@
     const legendSeries=orderedSeries(payload);
     for(const s of legendSeries){
       const row=document.createElement('div');row.className='indicator-row';
-      const b=document.createElement('button');b.id='series-'+s.id;b.className='indicator';b.style.setProperty('--series-color',s.color);
+      const b=document.createElement('button');b.id=domId('series-',s.id);b.dataset.seriesId=s.id;b.className='indicator';b.style.setProperty('--series-color',s.color);
       const swatch=document.createElement('span');swatch.className='swatch';const label=document.createElement('span');label.className='name';label.textContent=s.name;
-      const val=document.createElement('strong');val.id='value-'+s.id;val.className='value';label.append(val);const eye=document.createElement('span');eye.className='eye';b.append(swatch,label,eye);
+      const val=document.createElement('strong');val.id=domId('value-',s.id);val.className='value';label.append(val);const eye=document.createElement('span');eye.className='eye';b.append(swatch,label,eye);
       const solo=document.createElement('button');solo.className='solo';solo.textContent='Only';solo.setAttribute('aria-label',`Show only ${s.name}`);
       solo.onclick=()=>{for(const other of payload.series)setVisible(other,other.id===s.id);};
       b.onclick=()=>{if(state.visible.has(s.id)&&state.visible.size===1){$('status').textContent='Keep at least one series visible.';return;}setVisible(s,!state.visible.has(s.id));};
@@ -642,10 +803,15 @@
         else if(/^\d+M$/.test(label)){const day=start.getUTCDate();start.setUTCMonth(start.getUTCMonth()-parseInt(label));if(start.getUTCDate()!==day)start.setUTCDate(0);}
         else{const month=start.getUTCMonth();start.setUTCFullYear(start.getUTCFullYear()-(/^\d+Y$/.test(label)?parseInt(label):4));if(start.getUTCMonth()!==month)start.setUTCDate(0);}
         range={from:[payload.x[0],start.toISOString().slice(0,10)].sort().at(-1),to:payload.rangeEndDate||payload.reportDate};}
+      state.activePreset=label;
       state.requestedRange=range;view.setRange(calendarRange(range));$('ranges').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.range===label)));
     }
     $('ranges').replaceChildren();for(const label of ranges){const b=document.createElement('button');b.dataset.range=label;b.textContent=label==='CURRENT'?'Current cycle':label;b.onclick=()=>selectRange(label);$('ranges').append(b);}
-    function setScale(axis,mode){state.modes[axis]=mode;rebuild();$('scale-'+axis).value=mode;}
+    function setScale(axis,mode){
+      const allowed=payload.axes[axis]?.modes||['linear','log'];
+      if(!allowed.includes(mode))return;
+      state.modes[axis]=mode;rebuild();$('scale-'+axis).value=mode;
+    }
     $('scales').replaceChildren();for(const [id,axis] of Object.entries(payload.axes)){
       const label=document.createElement('label');label.className='axis-control';label.textContent=(payload.panels?.find(p=>p.axis===id)?.control_label||(id==='right'?'Right':'Left'))+' ';
       const select=document.createElement('select');select.id='scale-'+id;select.setAttribute('aria-label',axis.label+' scale');
@@ -662,25 +828,108 @@
     const retainedSeries=payload.series.find(s=>s.id==='price_close') || payload.series.find(s=>s.id.startsWith('price_close')) || payload.series.find(s=>s.role==='highlight') || payload.series[0];
     $('remove-all').title=`Keep only ${retainedSeries.name}`;
     $('remove-all').onclick=()=>{for(const s of payload.series)setVisible(s,s.id===retainedSeries.id);$('status').textContent='';};
-    $('reset').onclick=()=>{state.events=defaultEvents;state.supportResistance=true;state.modes=Object.fromEntries(Object.entries(source.axes).map(([k,a])=>[k,a.mode]));setPresentation(source.defaultPresentation||'line',source.defaultInterval||'daily');if(source.flowIntervals)setFlowInterval(source.defaultFlowInterval);for(const s of payload.series)setVisible(s,!defaultHidden.has(s.id));for(const [id,a] of Object.entries(payload.axes))$('scale-'+id).value=a.mode;for(const e of view.events)e.setVisible(state.events);$('events').setAttribute('aria-pressed',String(state.events));$('support-resistance').setAttribute('aria-pressed','true');selectRange(payload.defaultRange);readingAt(null);};
-    const clearPreset=()=>{state.requestedRange=null;$('ranges').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed','false'));};
+
+    async function resetChart(){
+      state.events=defaultEvents;
+      state.supportResistance=true;
+      state.modes=Object.fromEntries(Object.entries(source.axes).map(([k,a])=>[k,a.mode]));
+      state.visible=new Set(source.series.filter(s=>!defaultHidden.has(s.id)).map(s=>s.id));
+      state.requestedRange=null;
+      if(source.flowIntervals){
+        applyFlowPayload(source.defaultFlowInterval);
+      }
+      await setPresentation(source.defaultPresentation||'line',source.defaultInterval||'daily',{skipRebuild:true});
+      for(const [id,a] of Object.entries(payload.axes)){
+        const el=$('scale-'+id);if(el)el.value=a.mode;
+      }
+      $('events').setAttribute('aria-pressed',String(state.events));
+      $('support-resistance').setAttribute('aria-pressed','true');
+      rebuild();
+      for(const s of payload.series)setVisible(s,!defaultHidden.has(s.id));
+      for(const e of view.events)e.setVisible(state.events);
+      selectRange(payload.defaultRange);
+      readingAt(null);
+      $('status').textContent='';
+    }
+    $('reset').onclick=()=>resetChart().catch(e=>{$('status').textContent=`Reset failed: ${e.message}`;});
+
+    const clearPreset=()=>{state.activePreset=null;state.requestedRange=null;$('ranges').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed','false'));};
     $('chart').addEventListener('wheel',clearPreset,{passive:true});$('chart').addEventListener('pointerdown',clearPreset);
+
+    function csvCell(value){
+      const text=value===null||value===undefined?'':String(value);
+      return /[",\n\r]/.test(text)?`"${text.replace(/"/g,'""')}"`:text;
+    }
+    function exportCsv(){
+      const activeSeries=orderedSeries(payload).filter(s=>state.visible.has(s.id));
+      const header=[numeric?(payload.xAxisLabel||'day'):'date',...activeSeries.map(s=>s.name)];
+      const lines=[header.map(csvCell).join(',')];
+      for(let i=0;i<payload.x.length;i++){
+        const row=[payload.x[i]];
+        for(const s of activeSeries){
+          const local=i-s.start;
+          const v=local>=0&&local<s.values.length?s.values[local]:null;
+          row.push(Number.isFinite(v)?v:'');
+        }
+        lines.push(row.map(csvCell).join(','));
+      }
+      const blob=new Blob([lines.join('\n')+'\n'],{type:'text/csv;charset=utf-8'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url;a.download=`${payload.id}_${payload.dataDate||payload.reportDate}.csv`;a.click();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+      $('status').textContent='CSV exported.';
+    }
+    if($('export-csv'))$('export-csv').onclick=exportCsv;
+
+    function buildShareUrl(){
+      const url=new URL(location.href);
+      for(const key of ['embed','capture','range','style','interval','flow','scale_right','scale_left','events','sr','hidden']){
+        url.searchParams.delete(key);
+      }
+      if(state.activePreset&&state.activePreset!==payload.defaultRange)url.searchParams.set('range',state.activePreset);
+      if(state.presentation!==(source.defaultPresentation||'line'))url.searchParams.set('style',state.presentation);
+      if(state.presentation==='candles'&&state.interval!==(source.defaultInterval||'daily'))url.searchParams.set('interval',state.interval);
+      if(source.flowIntervals&&state.flowInterval!==source.defaultFlowInterval)url.searchParams.set('flow',state.flowInterval);
+      for(const [id,axis] of Object.entries(source.axes)){
+        if(state.modes[id]&&state.modes[id]!==axis.mode)url.searchParams.set('scale_'+id,state.modes[id]);
+      }
+      if(payload.events.length&&state.events!==defaultEvents)url.searchParams.set('events',state.events?'1':'0');
+      if((source.referenceLines||[]).some(l=>['support','resistance'].includes(l.type))&&!state.supportResistance)url.searchParams.set('sr','0');
+      const hidden=payload.series.filter(s=>!state.visible.has(s.id)).map(s=>s.id).sort();
+      const defaultHiddenSorted=[...defaultHidden].filter(id=>payload.series.some(s=>s.id===id)).sort();
+      if(hidden.join(',')!==defaultHiddenSorted.join(','))url.searchParams.set('hidden',hidden.join(','));
+      return url.toString();
+    }
+    async function copyShareLink(){
+      const shareUrl=buildShareUrl();
+      try{
+        await navigator.clipboard.writeText(shareUrl);
+      }catch{
+        const input=document.createElement('textarea');input.value=shareUrl;input.style.cssText='position:fixed;opacity:0';
+        document.body.append(input);input.select();document.execCommand('copy');input.remove();
+      }
+      $('status').textContent='Link copied to clipboard.';
+    }
+    if($('copy-link'))$('copy-link').onclick=()=>copyShareLink().catch(e=>{$('status').textContent=`Copy failed: ${e.message}`;});
+
     async function exportImage(download=true){
       if(exporting)throw new Error('Export already in progress');exporting=true;$('export').disabled=true;
       let host,exportView;
       const scenarios=(payload.referenceLines||[]).filter(level=>!level.type||level.type==='case'),plotTop=scenarios.length?410:300,plotHeight=1155-plotTop;
       try{
+        const range=view.range()||{from:payload.x[0],to:payload.x.at(-1)};
         host=document.createElement('div');host.style.cssText=`position:fixed;left:-10000px;top:0;width:1690px;height:${plotHeight}px`;host.setAttribute('aria-hidden','true');document.body.append(host);
         exportView=createView(host,payload,state,false);
         await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
-        exportView.setRange(view.range());
+        exportView.setRange(range);
         for(const c of exportView.charts)c.applyOptions({layout:{fontSize:14}});
         await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
         const canvas=document.createElement('canvas');canvas.width=2400;canvas.height=1350;const ctx=canvas.getContext('2d');ctx.fillStyle=THEME.bg;ctx.fillRect(0,0,2400,1350);
         function text(value,x,y,size=20,color=THEME.text,font='JetBrains Mono',weight=400,maxWidth){ctx.font=`${weight} ${size}px "${font}"`;ctx.fillStyle=color;if(maxWidth)ctx.fillText(value,x,y,maxWidth);else ctx.fillText(value,x,y);}
         function rule(y,color=THEME.border){ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(64,y);ctx.lineTo(2336,y);ctx.stroke();}
         ctx.fillStyle=THEME.accent;ctx.fillRect(64,51,10,20);text('SECRET SATOSHIS',94,70,22,THEME.text,'JetBrains Mono',600);text(payload.category.toUpperCase(),1790,70,16,THEME.dim);rule(103);
-        text(payload.title,64,178,50,THEME.text,'Syne',700,2240);const range=view.range();
+        text(payload.title,64,178,50,THEME.text,'Syne',700,2240);
         text(`${xLabel(range.from,payload)} — ${xLabel(rangeEnd(range),payload)}${payload.candles?'  /  '+state.interval.toUpperCase()+' CANDLES':''}${payload.flowInterval?'  /  '+payload.flowInterval.toUpperCase()+' FLOWS':''}  /  ${Object.entries(state.modes).map(([k,v])=>`${payload.panels?.find(p=>p.axis===k)?.control_label||k}: ${v}`).join(' · ')}`,64,223,18,THEME.dim);
         text(`Data through ${payload.dataDate||payload.reportDate}`,1870,223,18,THEME.dim);
         if(scenarios.length){
@@ -704,8 +953,9 @@
           }
         }
         text(numeric?`AT DAY ${payload.readingPoint}`:payload.dataDate?'AT LATEST DATA':'AT REPORT DATE',1800,plotTop,15,THEME.dim);
-        const selected=orderedSeries(payload).filter(s=>state.visible.has(s.id)),step=Math.min(100,(plotHeight-40)/selected.length),dense=selected.length>12;
-        function legendEntry(s,y){ctx.fillStyle=s.color;ctx.fillRect(1800,y-7,18,3);
+        const selected=orderedSeries(payload).filter(s=>state.visible.has(s.id));
+        function legendEntry(s,y,dense){
+          ctx.fillStyle=s.color;ctx.fillRect(1800,y-7,18,3);
           text(s.name,1830,y,dense?13:16,THEME.dim,'JetBrains Mono',400,dense?245:485);
           text(readout(valueAt(s,payload.readingPoint,payload),payload.axes[s.axis].unit),dense?2090:1830,dense?y:y+30,dense?16:24,s.color,'JetBrains Mono',600,dense?230:485);
         }
@@ -713,27 +963,67 @@
           for(const [i,panel] of payload.panels.entries()){
             const bounds=exportView.nodes[i].getBoundingClientRect(),top=plotTop+bounds.top-hostBounds.top;
             text(panel.control_label.toUpperCase(),1800,top+28,14,THEME.dim,'JetBrains Mono',600);
-            const group=selected.filter(s=>s.axis===panel.axis),spacing=Math.min(100,(bounds.height-90)/Math.max(1,group.length));
-            group.forEach((s,j)=>legendEntry(s,top+65+j*spacing));
+            const group=selected.filter(s=>s.axis===panel.axis);
+            const available=Math.max(40,bounds.height-80);
+            const spacing=Math.min(100,available/Math.max(1,group.length));
+            const panelDense=group.length>1&&spacing<56;
+            group.forEach((s,j)=>legendEntry(s,top+65+j*spacing,panelDense));
           }
-        }else selected.forEach((s,i)=>legendEntry(s,plotTop+40+i*step));
+        }else{
+          const step=Math.min(100,(plotHeight-40)/Math.max(1,selected.length));
+          const singleDense=selected.length>12||step<56;
+          selected.forEach((s,i)=>legendEntry(s,plotTop+40+i*step,singleDense));
+        }
         rule(1193);text(`${payload.source} · Bitcoin Report Library`,64,1230,17,THEME.dim);
         text(Object.values(payload.axes).map(a=>a.label).join(' · ')+(payload.candles?' · '+periodLabel(payload.candles.at(-1))+' through '+payload.candles.at(-1).observationDate:''),64,1260,15,THEME.dim,'JetBrains Mono',400,2150);
         text('SecretSatoshis.com',64,1310,18);text('TradingView Lightweight Charts™ · © 2025 TradingView, Inc. · tradingview.com',1130,1310,14,THEME.dim);
         const dataUrl=canvas.toDataURL('image/png');
-        if(download){const a=document.createElement('a');a.href=dataUrl;a.download=`${payload.id}_${payload.reportDate}.png`;a.click();$('status').textContent='PNG exported.';}
+        if(download){const a=document.createElement('a');a.href=dataUrl;a.download=`${payload.id}_${payload.dataDate||payload.reportDate}.png`;a.click();$('status').textContent='PNG exported.';}
         return dataUrl;
       }finally{exportView?.destroy();host?.remove();exporting=false;$('export').disabled=false;}
     }
     $('export').onclick=()=>exportImage().catch(e=>{$('status').textContent=`Export failed: ${e.message}`;});
     $('download-data').onclick=e=>{e.preventDefault();const url=URL.createObjectURL(new Blob([JSON.stringify(payload)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=payload.id+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
     await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
-    selectRange(payload.defaultRange);
-    if(source.defaultPresentation==='candles')setPresentation('candles',source.defaultInterval||'daily');
+
+    // Apply initial defaults + optional URL view-state overrides.
+    const urlFlow=params.get('flow');
+    if(urlFlow&&source.flowIntervals?.includes(urlFlow)&&urlFlow!==state.flowInterval){
+      applyFlowPayload(urlFlow);rebuild();
+    }
+    for(const [id,axis] of Object.entries(payload.axes)){
+      const requestedScale=params.get('scale_'+id);
+      if(requestedScale&&(axis.modes||['linear','log']).includes(requestedScale)&&requestedScale!==state.modes[id]){
+        state.modes[id]=requestedScale;$('scale-'+id).value=requestedScale;rebuild();
+      }
+    }
+    const urlEvents=params.get('events');
+    if(urlEvents==='0'||urlEvents==='1'){
+      state.events=urlEvents==='1';for(const e of view.events)e.setVisible(state.events);$('events').setAttribute('aria-pressed',String(state.events));
+    }
+    if(params.get('sr')==='0'){
+      state.supportResistance=false;view.supportResistance(false);$('support-resistance').setAttribute('aria-pressed','false');
+    }
+    if(params.has('hidden')){
+      const hiddenParam=new Set(params.get('hidden').split(',').filter(Boolean));
+      if(payload.series.some(s=>!hiddenParam.has(s.id))){
+        for(const s of payload.series)setVisible(s,!hiddenParam.has(s.id));
+      }
+    }
+    const urlRange=params.get('range');
+    selectRange(urlRange&&ranges.includes(urlRange)?urlRange:payload.defaultRange);
+    const urlStyle=params.get('style'),urlInterval=params.get('interval');
+    if(urlStyle==='candles'||(!urlStyle&&source.defaultPresentation==='candles')){
+      const targetInterval=urlInterval&&availableCandleIntervals.includes(urlInterval)?urlInterval:(source.defaultInterval||'daily');
+      await setPresentation('candles',targetInterval);
+    }else if(urlStyle==='line'&&source.defaultPresentation==='candles'){
+      await setPresentation('line');
+    }
+
     $('loading').hidden=true;
     if(payload.unavailable.length)$('status').textContent=`Unavailable: ${payload.unavailable.join(', ')}`;
     function setCapture(on){document.body.classList.toggle('capture',Boolean(on));layoutLegend();legendFade();reportHeight();}
-    const api={ready,get payload(){return payload;},exportImage,selectRange,setScale,setPresentation,setFlowInterval,setCapture,get readingPoint(){return reading;},get view(){return view;},get state(){return state;}};
+    const api={ready,get payload(){return payload;},exportImage,exportCsv,buildShareUrl,selectRange,setScale,setPresentation,setFlowInterval,setCapture,resetChart,get readingPoint(){return reading;},get view(){return view;},get state(){return state;}};
     window.SecretSatoshisChart=api;new ResizeObserver(reportHeight).observe(document.body);reportHeight();await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));resolveReady(api);
   }
   initialize().catch(error=>{$('loading').textContent=`Unable to load chart: ${error.message}`;$('status').textContent='Chart could not be rendered.';console.error(error);rejectReady(error);});

@@ -79,6 +79,7 @@ export interface ChartPayload {
   >;
   xAxisLabel?: string;
   seriesOrder?: string[];
+  defaultHiddenSeries?: string[];
 }
 export interface EtfFundRow {
   fund: string;
@@ -720,8 +721,10 @@ export function pricePayload(
   }
   return p;
 }
-// Years left off the seasonal charts and their averages; 2017's scale flattens every other year.
-export const HIDDEN_SEASONAL_YEARS = ["2017"];
+// Outlier years included in Average/Median calculations but hidden by default on initial chart load
+// so their scale does not flatten every other year until toggled on in the legend.
+export const DEFAULT_HIDDEN_SEASONAL_YEARS = ["2017"];
+export const HIDDEN_SEASONAL_YEARS = DEFAULT_HIDDEN_SEASONAL_YEARS;
 export function seasonalPayload(
   rows: Row[],
   date: string,
@@ -730,7 +733,7 @@ export function seasonalPayload(
   const key = period === "mtd" ? "day" : "day_of_year",
     year = date.slice(0, 4);
   const years = Object.keys(rows[0])
-    .filter((k) => /^\d{4}$/.test(k) && !HIDDEN_SEASONAL_YEARS.includes(k))
+    .filter((k) => /^\d{4}$/.test(k))
     .sort();
   if (years.at(-1) !== year)
     throw new Error(`${period} paths do not match the report year`);
@@ -766,6 +769,12 @@ export function seasonalPayload(
   if (last !== position)
     throw new Error(`${period} current path must end at the report cutoff`);
   const past = years.filter((y) => y !== year);
+  const hiddenByDefault = DEFAULT_HIDDEN_SEASONAL_YEARS.filter((y) =>
+    past.includes(y),
+  );
+  if (hiddenByDefault.length) {
+    p.defaultHiddenSeries = hiddenByDefault;
+  }
   p.series = years.map((y, i) =>
     series(
       y,
@@ -816,7 +825,7 @@ export function seasonalPayload(
       ? "Indexed to Month Start ($)"
       : "Indexed to Year Start ($)";
   p.note =
-    `Historical paths are rebased comparisons. Average and Median exclude ${HIDDEN_SEASONAL_YEARS.join(", ")} and the current year. YTD removes February 29.`;
+    `Historical paths are rebased comparisons. Average and Median include all prior years (${DEFAULT_HIDDEN_SEASONAL_YEARS.join(", ")} hidden by default on the chart; toggle in legend) and exclude the current year. YTD removes February 29.`;
   p.coverage = `2014/${date}`;
   return p;
 }
