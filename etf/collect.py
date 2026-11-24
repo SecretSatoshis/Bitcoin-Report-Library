@@ -23,7 +23,7 @@ import warnings
 import pandas as pd
 
 from . import funds
-from .build import UNPUBLISHED, FILLED, _trading_days_behind, build_tables
+from .build import _trading_days_behind, build_tables
 from .sec import quarter_ends
 
 CARRIED_FILES = ("etf_snapshots.csv", "etf_nav_history.csv", "etf_filing_counts.csv")

@@ -22,7 +22,7 @@ from pathlib import Path
 import pandas as pd
 
 from .common import (
-    CHROME_HEADERS, Snapshot, excel_date, get, iso_date, json_after, number, post_json,
+    CHROME_HEADERS, Snapshot, excel_date, get, iso_date, number, post_json,
     previous_us_trading_day, spreadsheet2003_rows, xlsx_rows,
 )
 
