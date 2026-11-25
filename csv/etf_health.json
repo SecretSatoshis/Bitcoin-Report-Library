@@ -1,18 +1,18 @@
 {
   "funds": {
     "ARKB": {
-      "consecutive_stale_days": 1,
+      "consecutive_stale_days": 0,
       "errors": {},
-      "last_issuer_date": "2026-11-23",
-      "last_snapshot_date": "2026-11-23",
+      "last_issuer_date": "2026-11-24",
+      "last_snapshot_date": "2026-11-24",
       "status": "ok"
     },
     "BITB": {
-      "consecutive_stale_days": 7,
+      "consecutive_stale_days": 0,
       "errors": {},
-      "last_issuer_date": "2026-11-13",
-      "last_snapshot_date": "2026-11-23",
-      "status": "stale"
+      "last_issuer_date": "2026-11-24",
+      "last_snapshot_date": "2026-11-24",
+      "status": "ok"
     },
     "BRRR": {
       "consecutive_stale_days": 1,
@@ -29,10 +29,10 @@
       "status": "ok"
     },
     "BTCO": {
-      "consecutive_stale_days": 1,
+      "consecutive_stale_days": 0,
       "errors": {},
-      "last_issuer_date": "2026-11-23",
-      "last_snapshot_date": "2026-11-23",
+      "last_issuer_date": "2026-11-24",
+      "last_snapshot_date": "2026-11-24",
       "status": "ok"
     },
     "BTCW": {
@@ -46,10 +46,10 @@
       "status": "error"
     },
     "EZBC": {
-      "consecutive_stale_days": 1,
+      "consecutive_stale_days": 0,
       "errors": {},
-      "last_issuer_date": "2026-11-23",
-      "last_snapshot_date": "2026-11-23",
+      "last_issuer_date": "2026-11-24",
+      "last_snapshot_date": "2026-11-24",
       "status": "ok"
     },
     "FBTC": {
@@ -67,9 +67,9 @@
       "status": "ok"
     },
     "HODL": {
-      "consecutive_stale_days": 2,
+      "consecutive_stale_days": 1,
       "errors": {},
-      "last_issuer_date": "2026-11-20",
+      "last_issuer_date": "2026-11-23",
       "last_snapshot_date": "2026-11-23",
       "status": "ok"
     },
@@ -91,7 +91,7 @@
       "status": "error"
     }
   },
-  "generated_at_utc": "2026-11-25T00:26:09+00:00",
+  "generated_at_utc": "2026-11-25T08:59:58+00:00",
   "other_errors": {},
   "report_date": "2026-11-24",
   "schema_version": 1,
@@ -100,11 +100,6 @@
       "consecutive_stale_days": 39,
       "fund": "FBTC",
       "last_issuer_date": "2026-09-30"
-    },
-    {
-      "consecutive_stale_days": 7,
-      "fund": "BITB",
-      "last_issuer_date": "2026-11-13"
     }
   ],
   "top5_stale_threshold_days": 5
