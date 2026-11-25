@@ -18,11 +18,6 @@ concurrency:
   group: update-reports-${{ github.ref }}
   cancel-in-progress: false
 
-# Use the runner's refreshed CA bundle rather than Node's embedded roots.
-env:
-  NODE_OPTIONS: --use-openssl-ca
-  SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
-
 jobs:
   dashboard:
     if: github.event_name == 'pull_request' || github.event_name == 'push'
@@ -35,17 +30,7 @@ jobs:
         working-directory: dashboard
     steps:
       - name: Refresh TLS certificate trust
-        working-directory: ${{ runner.temp }}
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install --only-upgrade -y ca-certificates
-          # Enforce the emergency distrust even if this runner's apt mirror lags.
-          sudo sed -i \
-            -e 's|^mozilla/emSign_ECC_Root_CA_-_G3.crt$|!&|' \
-            -e 's|^mozilla/emSign_Root_TLS_CA_-_G3.crt$|!&|' \
-            -e 's|^mozilla/Comodo_AAA_Services_root.crt$|!&|' \
-            /etc/ca-certificates.conf
-          sudo update-ca-certificates
+        uses: SecretSatoshis/.github/actions/refresh-tls-trust@deb19758624b41175b649a18223ee978bab34bcc
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -93,30 +78,16 @@ jobs:
       contents: read
     steps:
       - name: Refresh TLS certificate trust
-        working-directory: ${{ runner.temp }}
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install --only-upgrade -y ca-certificates
-          # Enforce the emergency distrust even if this runner's apt mirror lags.
-          sudo sed -i \
-            -e 's|^mozilla/emSign_ECC_Root_CA_-_G3.crt$|!&|' \
-            -e 's|^mozilla/emSign_Root_TLS_CA_-_G3.crt$|!&|' \
-            -e 's|^mozilla/Comodo_AAA_Services_root.crt$|!&|' \
-            /etc/ca-certificates.conf
-          sudo update-ca-certificates
+        uses: SecretSatoshis/.github/actions/refresh-tls-trust@deb19758624b41175b649a18223ee978bab34bcc
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      - name: Set up Python and uv
+        uses: SecretSatoshis/.github/actions/setup-python-uv@deb19758624b41175b649a18223ee978bab34bcc
         with:
-          python-version-file: .python-version
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-        with:
-          version: "0.13.4"
+          python-version: "3.12"
+          uv-version: "0.13.4"
 
       - name: Install locked dependencies
         run: uv sync --locked
@@ -178,16 +149,7 @@ jobs:
         working-directory: dashboard
     steps:
       - name: Refresh TLS certificate trust
-        working-directory: ${{ runner.temp }}
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install --only-upgrade -y ca-certificates
-          sudo sed -i \
-            -e 's|^mozilla/emSign_ECC_Root_CA_-_G3.crt$|!&|' \
-            -e 's|^mozilla/emSign_Root_TLS_CA_-_G3.crt$|!&|' \
-            -e 's|^mozilla/Comodo_AAA_Services_root.crt$|!&|' \
-            /etc/ca-certificates.conf
-          sudo update-ca-certificates
+        uses: SecretSatoshis/.github/actions/refresh-tls-trust@deb19758624b41175b649a18223ee978bab34bcc
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -237,17 +199,7 @@ jobs:
       generated_at: ${{ steps.release.outputs.generated_at }}
     steps:
       - name: Refresh TLS certificate trust
-        working-directory: ${{ runner.temp }}
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install --only-upgrade -y ca-certificates
-          # Enforce the emergency distrust even if this runner's apt mirror lags.
-          sudo sed -i \
-            -e 's|^mozilla/emSign_ECC_Root_CA_-_G3.crt$|!&|' \
-            -e 's|^mozilla/emSign_Root_TLS_CA_-_G3.crt$|!&|' \
-            -e 's|^mozilla/Comodo_AAA_Services_root.crt$|!&|' \
-            /etc/ca-certificates.conf
-          sudo update-ca-certificates
+        uses: SecretSatoshis/.github/actions/refresh-tls-trust@deb19758624b41175b649a18223ee978bab34bcc
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -287,17 +239,7 @@ jobs:
     permissions: {}
     steps:
       - name: Refresh TLS certificate trust
-        working-directory: ${{ runner.temp }}
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install --only-upgrade -y ca-certificates
-          # Enforce the emergency distrust even if this runner's apt mirror lags.
-          sudo sed -i \
-            -e 's|^mozilla/emSign_ECC_Root_CA_-_G3.crt$|!&|' \
-            -e 's|^mozilla/emSign_Root_TLS_CA_-_G3.crt$|!&|' \
-            -e 's|^mozilla/Comodo_AAA_Services_root.crt$|!&|' \
-            /etc/ca-certificates.conf
-          sudo update-ca-certificates
+        uses: SecretSatoshis/.github/actions/refresh-tls-trust@deb19758624b41175b649a18223ee978bab34bcc
       - name: Wait for GitHub Pages to serve the release
         env:
           GENERATED_AT: ${{ needs.publish.outputs.generated_at }}
