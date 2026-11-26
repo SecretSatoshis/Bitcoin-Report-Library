@@ -33,10 +33,12 @@
     },
     "BTCO": {
       "consecutive_stale_days": 1,
-      "errors": {},
+      "errors": {
+        "current": "ValueError: BTCO: holdings and prices are dated differently"
+      },
       "last_issuer_date": "2026-11-24",
       "last_snapshot_date": "2026-11-24",
-      "status": "ok"
+      "status": "error"
     },
     "BTCW": {
       "consecutive_stale_days": 40,
@@ -49,10 +51,10 @@
       "status": "error"
     },
     "EZBC": {
-      "consecutive_stale_days": 1,
+      "consecutive_stale_days": 0,
       "errors": {},
-      "last_issuer_date": "2026-11-24",
-      "last_snapshot_date": "2026-11-24",
+      "last_issuer_date": "2026-11-25",
+      "last_snapshot_date": "2026-11-25",
       "status": "ok"
     },
     "FBTC": {
@@ -70,9 +72,9 @@
       "status": "ok"
     },
     "HODL": {
-      "consecutive_stale_days": 2,
+      "consecutive_stale_days": 1,
       "errors": {},
-      "last_issuer_date": "2026-11-23",
+      "last_issuer_date": "2026-11-24",
       "last_snapshot_date": "2026-11-24",
       "status": "ok"
     },
@@ -94,7 +96,7 @@
       "status": "error"
     }
   },
-  "generated_at_utc": "2026-11-26T00:26:23+00:00",
+  "generated_at_utc": "2026-11-26T08:47:43+00:00",
   "other_errors": {},
   "report_date": "2026-11-25",
   "schema_version": 1,
