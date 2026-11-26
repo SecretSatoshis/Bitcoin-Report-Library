@@ -1,0 +1,7 @@
+{
+  "git": {
+    "deploymentEnabled": {
+      "chart-data": false
+    }
+  }
+}
