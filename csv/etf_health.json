@@ -1,9 +1,9 @@
 {
   "funds": {
     "ARKB": {
-      "consecutive_stale_days": 1,
+      "consecutive_stale_days": 0,
       "errors": {},
-      "last_issuer_date": "2026-11-24",
+      "last_issuer_date": "2026-11-25",
       "last_snapshot_date": "2026-11-24",
       "status": "ok"
     },
@@ -18,10 +18,10 @@
       "status": "error"
     },
     "BRRR": {
-      "consecutive_stale_days": 1,
+      "consecutive_stale_days": 0,
       "errors": {},
-      "last_issuer_date": "2026-11-24",
-      "last_snapshot_date": "2026-11-24",
+      "last_issuer_date": "2026-11-25",
+      "last_snapshot_date": "2026-11-25",
       "status": "ok"
     },
     "BTC": {
@@ -79,10 +79,10 @@
       "status": "ok"
     },
     "IBIT": {
-      "consecutive_stale_days": 1,
+      "consecutive_stale_days": 0,
       "errors": {},
-      "last_issuer_date": "2026-11-24",
-      "last_snapshot_date": "2026-11-24",
+      "last_issuer_date": "2026-11-25",
+      "last_snapshot_date": "2026-11-25",
       "status": "ok"
     },
     "MSBT": {
@@ -96,9 +96,9 @@
       "status": "error"
     }
   },
-  "generated_at_utc": "2026-11-26T08:47:43+00:00",
+  "generated_at_utc": "2026-11-27T00:26:37+00:00",
   "other_errors": {},
-  "report_date": "2026-11-25",
+  "report_date": "2026-11-26",
   "schema_version": 1,
   "top5_stale": [
     {
