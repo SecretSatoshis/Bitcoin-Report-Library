@@ -51,10 +51,10 @@
       "status": "error"
     },
     "EZBC": {
-      "consecutive_stale_days": 2,
+      "consecutive_stale_days": 0,
       "errors": {},
-      "last_issuer_date": "2026-11-25",
-      "last_snapshot_date": "2026-11-25",
+      "last_issuer_date": "2026-11-27",
+      "last_snapshot_date": "2026-11-27",
       "status": "ok"
     },
     "FBTC": {
@@ -72,16 +72,16 @@
       "status": "ok"
     },
     "HODL": {
-      "consecutive_stale_days": 2,
+      "consecutive_stale_days": 1,
       "errors": {},
-      "last_issuer_date": "2026-11-25",
+      "last_issuer_date": "2026-11-26",
       "last_snapshot_date": "2026-11-26",
       "status": "ok"
     },
     "IBIT": {
-      "consecutive_stale_days": 2,
+      "consecutive_stale_days": 1,
       "errors": {},
-      "last_issuer_date": "2026-11-25",
+      "last_issuer_date": "2026-11-26",
       "last_snapshot_date": "2026-11-25",
       "status": "ok"
     },
@@ -96,7 +96,7 @@
       "status": "error"
     }
   },
-  "generated_at_utc": "2026-11-28T00:26:25+00:00",
+  "generated_at_utc": "2026-11-28T08:18:06+00:00",
   "other_errors": {},
   "report_date": "2026-11-27",
   "schema_version": 1,
