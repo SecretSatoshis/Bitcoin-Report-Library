@@ -1,14 +1,14 @@
 {
   "funds": {
     "ARKB": {
-      "consecutive_stale_days": 0,
+      "consecutive_stale_days": 2,
       "errors": {},
       "last_issuer_date": "2026-11-25",
       "last_snapshot_date": "2026-11-25",
       "status": "ok"
     },
     "BITB": {
-      "consecutive_stale_days": 1,
+      "consecutive_stale_days": 3,
       "errors": {
         "current": "ValueError: page data has no 'walletBalances'",
         "nav_history": "ValueError: page data has no 'navMarketPrice'"
@@ -18,7 +18,7 @@
       "status": "error"
     },
     "BRRR": {
-      "consecutive_stale_days": 0,
+      "consecutive_stale_days": 2,
       "errors": {},
       "last_issuer_date": "2026-11-25",
       "last_snapshot_date": "2026-11-25",
@@ -27,12 +27,12 @@
     "BTC": {
       "consecutive_stale_days": 1,
       "errors": {},
-      "last_issuer_date": "2026-11-24",
-      "last_snapshot_date": "2026-11-25",
+      "last_issuer_date": "2026-11-26",
+      "last_snapshot_date": "2026-11-27",
       "status": "ok"
     },
     "BTCO": {
-      "consecutive_stale_days": 1,
+      "consecutive_stale_days": 3,
       "errors": {
         "current": "ValueError: BTCO: holdings and prices are dated differently"
       },
@@ -41,7 +41,7 @@
       "status": "error"
     },
     "BTCW": {
-      "consecutive_stale_days": 40,
+      "consecutive_stale_days": 42,
       "errors": {
         "current": "RuntimeError: BTCW browser read failed: Error: BTCW page returned HTTP 403 for https://www.wisdomtree.com/us/products/crypto/btcw",
         "history": "RuntimeError: BTCW browser read failed: Error: BTCW page returned HTTP 403 for https://www.wisdomtree.com/us/products/crypto/btcw"
@@ -51,14 +51,14 @@
       "status": "error"
     },
     "EZBC": {
-      "consecutive_stale_days": 0,
+      "consecutive_stale_days": 2,
       "errors": {},
       "last_issuer_date": "2026-11-25",
       "last_snapshot_date": "2026-11-25",
       "status": "ok"
     },
     "FBTC": {
-      "consecutive_stale_days": 40,
+      "consecutive_stale_days": 42,
       "errors": {},
       "last_issuer_date": "2026-09-30",
       "last_snapshot_date": "2026-09-30",
@@ -67,26 +67,26 @@
     "GBTC": {
       "consecutive_stale_days": 1,
       "errors": {},
-      "last_issuer_date": "2026-11-24",
-      "last_snapshot_date": "2026-11-25",
+      "last_issuer_date": "2026-11-26",
+      "last_snapshot_date": "2026-11-27",
       "status": "ok"
     },
     "HODL": {
-      "consecutive_stale_days": 1,
+      "consecutive_stale_days": 2,
       "errors": {},
-      "last_issuer_date": "2026-11-24",
-      "last_snapshot_date": "2026-11-24",
+      "last_issuer_date": "2026-11-25",
+      "last_snapshot_date": "2026-11-26",
       "status": "ok"
     },
     "IBIT": {
-      "consecutive_stale_days": 0,
+      "consecutive_stale_days": 2,
       "errors": {},
       "last_issuer_date": "2026-11-25",
       "last_snapshot_date": "2026-11-25",
       "status": "ok"
     },
     "MSBT": {
-      "consecutive_stale_days": 40,
+      "consecutive_stale_days": 42,
       "errors": {
         "current": "HTTPError: 403 Client Error: Forbidden for url: https://www.morganstanley.com/im/json/imwebdata/data/product/EF/100761/chart/etfTradeDateHoldingsCurrent.json",
         "nav_history": "HTTPError: 403 Client Error: Forbidden for url: https://www.morganstanley.com/im/json/imwebdata/data/product/EF/100761/chart/historicalNav.json"
@@ -96,13 +96,13 @@
       "status": "error"
     }
   },
-  "generated_at_utc": "2026-11-27T08:56:32+00:00",
+  "generated_at_utc": "2026-11-28T00:26:25+00:00",
   "other_errors": {},
-  "report_date": "2026-11-26",
+  "report_date": "2026-11-27",
   "schema_version": 1,
   "top5_stale": [
     {
-      "consecutive_stale_days": 40,
+      "consecutive_stale_days": 42,
       "fund": "FBTC",
       "last_issuer_date": "2026-09-30"
     }
